@@ -13,7 +13,9 @@
     environment = {
       WEBUI_AUTH_TRUSTED_EMAIL_HEADER = "Remote-Email";
       WEBUI_AUTH_TRUSTED_NAME_HEADER = "Remote-Name";
-      WEBUI_DEFAULT_USER_ROLE = "admin";
+      DEFAULT_USER_ROLE = "admin";
+      ENABLE_SIGNUP = "true";
+      BYPASS_MODEL_ACCESS_CONTROL = "true";
     };
   };
 
