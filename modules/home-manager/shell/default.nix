@@ -66,7 +66,11 @@
     };
   };
 
-  home.sessionVariables.EDITOR = "nvim";
+  home.sessionVariables = {
+    EDITOR = "nvim";
+    PAGER = "less -FRX";
+  };
+
   home.file = {
     ".zshrc-extra".source = ./initextra;
   };
