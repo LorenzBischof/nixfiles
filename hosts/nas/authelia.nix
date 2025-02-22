@@ -148,6 +148,20 @@ in
               ];
               consent_mode = "implicit";
             }
+            {
+              client_id = "hedgedoc";
+              client_secret = secrets.authelia-clients-hedgedoc;
+              authorization_policy = "one_factor";
+              redirect_uris = [
+                "https://hedgedoc.${domain}/auth/oauth2/callback"
+              ];
+              grant_types = [
+                "refresh_token"
+                "authorization_code"
+              ];
+              token_endpoint_auth_method = "client_secret_post";
+              consent_mode = "implicit";
+            }
           ];
         };
       };

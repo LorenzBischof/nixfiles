@@ -27,6 +27,7 @@ in
     ./open-webui.nix
     ./homeassistant.nix
     ./mealie.nix
+    ./hedgedoc.nix
   ];
 
   homelab.domain = lib.mkDefault secrets.prod-domain;
