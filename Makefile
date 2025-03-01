@@ -11,19 +11,11 @@ update:
 
 .PHONY: switch
 switch: add
-	sudo nixos-rebuild switch --flake .
-
-.PHONY: switch-override
-switch-override: add
-	sudo nixos-rebuild switch --flake . --override-input nix-secrets ../nix-secrets --override-input neovim-config ../neovim-config --override-input numen ../numen-nix
+	sudo nixos-rebuild switch --flake . $(shell ./override-input.sh)
 
 .PHONY: deploy
 deploy: add
-	nixos-rebuild switch --flake .#nas --target-host nas --use-remote-sudo
-
-.PHONY: deploy-override
-deploy-override: add
-	nixos-rebuild switch --flake .#nas --override-input nix-secrets ../nix-secrets --target-host nas --use-remote-sudo
+	nixos-rebuild switch --flake .#nas --target-host nas --use-remote-sudo $(shell ./override-input.sh)
 
 .PHONY: dry-build-nas
 dry-build-nas: add
