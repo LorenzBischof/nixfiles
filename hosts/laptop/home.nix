@@ -28,6 +28,10 @@
     xkbLayout = "de";
     xkbVariant = "adnw";
     subtitles.enable = true;
+    updateCommand = pkgs.writeShellApplication {
+      name = "reload-i3status";
+      text = "pkill -SIGRTMIN+4 i3status-rs";
+    };
   };
 
   services.safeeyes = {

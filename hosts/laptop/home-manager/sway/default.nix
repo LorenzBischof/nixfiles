@@ -86,6 +86,22 @@
         icons = "awesome6";
         blocks = [
           {
+            block = "custom";
+            signal = 4;
+            command = ''
+              if ! systemctl --user is-active numen > /dev/null; then 
+                  echo 
+              else 
+                if [ -f "$HOME/.local/state/numen/paused" ]; then 
+                  echo 
+                else 
+                  echo 
+                fi; 
+              fi
+            '';
+            interval = 5;
+          }
+          {
             block = "net";
             device = "wlp2s0";
             format = "$ssid";
@@ -212,9 +228,12 @@
             [app_id="Logseq" tiling] focus; [app_id="Logseq" floating] scratchpad show
           '';
           "${mod}+x" = "exec warpd --hint";
-          "XF86AudioRaiseVolume" = "exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+ && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
-          "XF86AudioLowerVolume" = "exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
-          "XF86AudioMute" = "exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && (wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo 0 > $WOBSOCK) || wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
+          "XF86AudioRaiseVolume" =
+            "exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+ && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
+          "XF86AudioLowerVolume" =
+            "exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
+          "XF86AudioMute" =
+            "exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && (wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo 0 > $WOBSOCK) || wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
 
           "XF86MonBrightnessUp" = "exec brillo -equ 200000 -A 10 && brillo -G | cut -d'.' -f1 > $WOBSOCK";
           "XF86MonBrightnessDown" = "exec brillo -equ 200000 -U 10 && brillo -G | cut -d'.' -f1 > $WOBSOCK";
