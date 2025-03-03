@@ -129,6 +129,9 @@
     enable = true;
     pulse.enable = true;
   };
+  # Set a higher priority, so that the headset port activates automatically
+  environment.etc."alsa-card-profile/mixer/paths/analog-input-headset-mic.conf".source =
+    ./analog-input-headset-mic.conf;
   programs.noisetorch.enable = true;
 
   services.syncthing = {
