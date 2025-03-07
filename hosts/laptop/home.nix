@@ -47,7 +47,7 @@
     firefox
     keepassxc
     gnumake
-    logseq
+    (pkgs.callPackage ../../packages/logseq.nix { })
     pavucontrol
     jellyfin-media-player
     xournalpp
