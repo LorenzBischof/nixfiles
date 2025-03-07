@@ -32,13 +32,14 @@
         "working_copy commit_id" = "bright black";
         "working_copy author" = "bright black";
         "working_copy timestamp" = "bright black";
+        "working_copy empty description placeholder" = "bright black";
       };
       ui = {
         diff-editor = ":builtin";
         default-command = "log";
       };
       template-aliases = {
-        "format_short_change_id(id)" = "id.shortest()";
+        "format_short_change_id(id)" = "id.shortest(7)";
         "format_short_commit_id(id)" = "id.short(7)";
         "format_short_signature(signature)" = "signature.name()";
         "format_timestamp(timestamp)" = "timestamp.ago()";
