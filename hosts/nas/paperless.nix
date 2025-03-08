@@ -54,6 +54,7 @@ in
     };
   services.restic.backups.daily.paths = [ backupDir ];
 
+  homelab.ports = [ config.services.paperless.port ];
   homelab.dashboard.Services.Paperless.href = "https://paperless.${config.homelab.domain}";
 
 }

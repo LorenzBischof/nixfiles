@@ -27,5 +27,6 @@
     };
   };
 
+  homelab.ports = [ config.services.tiddlywiki.listenOptions.port ];
   homelab.dashboard.Services.Wiki.href = "https://wiki.${config.homelab.domain}";
 }

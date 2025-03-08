@@ -114,8 +114,14 @@ in
         enableAuthelia = true;
       };
     };
-
   };
+
+  homelab.ports = [
+    config.services.prometheus.port
+    config.services.grafana.settings.server.http_port
+    config.services.prometheus.exporters.restic.port
+    config.services.prometheus.exporters.node.port
+  ];
   homelab.dashboard.Monitoring = {
     Grafana = {
       href = "https://${config.services.grafana.settings.server.domain}";

@@ -83,5 +83,8 @@
 
   services.restic.backups.daily.paths = [ config.services.syncthing.dataDir ];
 
+  homelab.ports = [
+    (builtins.elemAt (builtins.split ":" config.services.syncthing.guiAddress) 1)
+  ];
   homelab.dashboard.Services.Syncthing.href = "https://syncthing.${config.homelab.domain}";
 }

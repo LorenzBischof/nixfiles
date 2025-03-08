@@ -170,6 +170,7 @@ in
       enable = true;
       user = "authelia-main";
     };
+    homelab.ports = [ 9091 ];
     services.nginx.virtualHosts."auth.${domain}" = {
       forceSSL = true;
       useACMEHost = domain;
