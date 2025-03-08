@@ -29,5 +29,6 @@
     };
   };
 
+  homelab.ports = [ config.services.hedgedoc.settings.port ];
   homelab.dashboard.Monitoring.Hedgedoc.href = "https://hedgedoc.${config.homelab.domain}";
 }

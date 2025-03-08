@@ -68,7 +68,7 @@
     useACMEHost = config.homelab.domain;
     enableAuthelia = true;
     locations."/" = {
-      proxyPass = "http://127.0.0.1:7878";
+      proxyPass = "http://127.0.0.1:${toString config.services.radarr.settings.server.port}";
       enableAuthelia = true;
       proxyWebsockets = true;
       recommendedProxySettings = true;
@@ -80,7 +80,7 @@
     useACMEHost = config.homelab.domain;
     enableAuthelia = true;
     locations."/" = {
-      proxyPass = "http://127.0.0.1:8989";
+      proxyPass = "http://127.0.0.1:${toString config.services.sonarr.settings.server.port}";
       enableAuthelia = true;
       proxyWebsockets = true;
       recommendedProxySettings = true;
@@ -92,7 +92,7 @@
     useACMEHost = config.homelab.domain;
     enableAuthelia = true;
     locations."/" = {
-      proxyPass = "http://127.0.0.1:8787";
+      proxyPass = "http://127.0.0.1:${toString config.services.readarr.settings.server.port}";
       enableAuthelia = true;
       proxyWebsockets = true;
       recommendedProxySettings = true;
@@ -122,6 +122,15 @@
       recommendedProxySettings = true;
     };
   };
+
+  homelab.ports = [
+    config.services.audiobookshelf.port
+    config.services.radarr.settings.server.port
+    config.services.sonarr.settings.server.port
+    config.services.readarr.settings.server.port
+    6789
+    8096
+  ];
 
   homelab.dashboard.Media = {
     Jellyfin.href = "https://jellyfin.${config.homelab.domain}";

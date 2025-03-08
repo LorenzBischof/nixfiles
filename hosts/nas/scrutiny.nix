@@ -19,5 +19,6 @@
     };
   };
 
+  homelab.ports = [ config.services.scrutiny.settings.web.listen.port ];
   homelab.dashboard.Monitoring.Scrutiny.href = "https://scrutiny.${config.homelab.domain}";
 }

@@ -31,5 +31,6 @@
     };
   };
 
+  homelab.ports = [ config.services.open-webui.port ];
   homelab.dashboard.Services.Chat.href = "https://chat.${config.homelab.domain}";
 }

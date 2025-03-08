@@ -27,5 +27,6 @@
     };
   };
 
+  homelab.ports = [ config.services.mealie.port ];
   homelab.dashboard.Services.Mealie.href = "https://mealie.${config.homelab.domain}";
 }

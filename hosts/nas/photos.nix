@@ -49,5 +49,6 @@ in
     };
   };
 
+  homelab.ports = [ config.services.immich.port ];
   homelab.dashboard.Services.Immich.href = "https://immich.${config.homelab.domain}";
 }
