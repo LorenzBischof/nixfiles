@@ -21,38 +21,29 @@
   };
   config =
     let
-      # The entries could contain multiple ports per file
-      # We want every entry to have a single port
-      flattened = lib.flatten (
-        map (
+      duplicatePorts = lib.pipe options.homelab.ports.definitionsWithLocations [
+        # Expand entries with multiple ports into individual port entries
+        (lib.concatMap (
           entry:
           map (port: {
             file = entry.file;
             port = port;
           }) entry.value
-        ) options.homelab.ports.definitionsWithLocations # We could probably just get all the virtualhost proxyPass options
-      );
-
-      # Group entries by port
-      groupedByPort = lib.groupBy (entry: toString entry.port) flattened;
-
-      # Find ports that appear more than once
-      duplicateEntries = lib.filterAttrs (port: entries: builtins.length entries > 1) groupedByPort;
-
-      # Format error messages for duplicates
-      formatDuplicateError =
-        port: entries:
-        "Duplicate port ${port} found in:\n" + lib.concatMapStrings (entry: "  - ${entry.file}\n") entries;
-
-      duplicateErrors = lib.mapAttrsToList formatDuplicateError duplicateEntries;
-
-      errorMsg = lib.concatStrings duplicateErrors;
+        ))
+        (lib.groupBy (entry: toString entry.port))
+        (lib.filterAttrs (port: entries: builtins.length entries > 1))
+        (lib.mapAttrsToList (
+          port: entries:
+          "Duplicate port ${port} found in:\n" + lib.concatMapStrings (entry: "  - ${entry.file}\n") entries
+        ))
+        (lib.concatStrings)
+      ];
     in
     {
       assertions = [
         {
-          assertion = duplicateErrors == [ ];
-          message = errorMsg;
+          assertion = duplicatePorts == "";
+          message = duplicatePorts;
         }
       ];
 
