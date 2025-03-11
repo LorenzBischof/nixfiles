@@ -22,7 +22,6 @@
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.tiddlywiki.listenOptions.port}";
       proxyWebsockets = true;
-      recommendedProxySettings = true;
       enableAuthelia = true;
     };
   };

@@ -98,7 +98,6 @@ in
       locations."/" = {
         proxyPass = "http://127.0.0.1:${toString config.services.grafana.settings.server.http_port}";
         proxyWebsockets = true;
-        recommendedProxySettings = true;
         enableAuthelia = true;
       };
     };
@@ -110,7 +109,6 @@ in
       locations."/" = {
         proxyPass = "http://127.0.0.1:${toString config.services.prometheus.port}";
         proxyWebsockets = true;
-        recommendedProxySettings = true;
         enableAuthelia = true;
       };
     };

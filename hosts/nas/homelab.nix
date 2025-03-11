@@ -49,6 +49,10 @@
 
       services.nginx = {
         enable = true;
+        recommendedProxySettings = true;
+        recommendedGzipSettings = true;
+        recommendedOptimisation = true;
+        recommendedTlsSettings = true;
 
         virtualHosts."_" = {
           useACMEHost = config.homelab.domain;

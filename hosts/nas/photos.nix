@@ -36,7 +36,6 @@ in
       proxyPass = "http://localhost:${toString config.services.immich.port}";
       enableAuthelia = true;
       proxyWebsockets = true;
-      recommendedProxySettings = true;
       extraConfig = ''
         # allow large file uploads
         client_max_body_size 1000M;

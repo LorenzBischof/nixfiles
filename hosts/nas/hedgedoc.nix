@@ -24,7 +24,6 @@
     locations."/" = {
       proxyPass = "http://localhost:${toString config.services.hedgedoc.settings.port}";
       proxyWebsockets = true;
-      recommendedProxySettings = true;
       enableAuthelia = true;
     };
   };

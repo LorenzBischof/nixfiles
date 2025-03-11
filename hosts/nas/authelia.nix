@@ -70,7 +70,6 @@ let
       };
       config = lib.mkIf config.enableAuthelia {
         locations."/authelia" = {
-          recommendedProxySettings = false;
           extraConfig = ''
             include ${autheliaLocation};
           '';
@@ -177,7 +176,6 @@ in
       locations."/" = {
         proxyPass = "http://127.0.0.1:9091";
         proxyWebsockets = true;
-        recommendedProxySettings = true;
       };
     };
   };

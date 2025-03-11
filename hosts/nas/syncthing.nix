@@ -74,7 +74,6 @@
     locations."/" = {
       proxyPass = "http://${toString config.services.syncthing.guiAddress}";
       proxyWebsockets = true;
-      recommendedProxySettings = true;
       enableAuthelia = true;
     };
   };

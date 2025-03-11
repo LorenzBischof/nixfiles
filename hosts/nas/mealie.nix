@@ -23,7 +23,6 @@
     locations."/" = {
       proxyPass = "http://localhost:${toString config.services.mealie.port}";
       proxyWebsockets = true;
-      recommendedProxySettings = true;
     };
   };
 

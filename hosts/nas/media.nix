@@ -59,7 +59,6 @@
     locations."/" = {
       proxyPass = "http://127.0.0.1:8096";
       proxyWebsockets = true;
-      recommendedProxySettings = true;
     };
   };
 
@@ -71,7 +70,6 @@
       proxyPass = "http://127.0.0.1:${toString config.services.radarr.settings.server.port}";
       enableAuthelia = true;
       proxyWebsockets = true;
-      recommendedProxySettings = true;
     };
   };
 
@@ -83,7 +81,6 @@
       proxyPass = "http://127.0.0.1:${toString config.services.sonarr.settings.server.port}";
       enableAuthelia = true;
       proxyWebsockets = true;
-      recommendedProxySettings = true;
     };
   };
 
@@ -95,7 +92,6 @@
       proxyPass = "http://127.0.0.1:${toString config.services.readarr.settings.server.port}";
       enableAuthelia = true;
       proxyWebsockets = true;
-      recommendedProxySettings = true;
     };
   };
 
@@ -107,7 +103,6 @@
       proxyPass = "http://127.0.0.1:6789";
       enableAuthelia = true;
       proxyWebsockets = true;
-      recommendedProxySettings = true;
     };
   };
 
@@ -119,7 +114,6 @@
       proxyPass = "http://127.0.0.1:${toString config.services.audiobookshelf.port}";
       enableAuthelia = true;
       proxyWebsockets = true;
-      recommendedProxySettings = true;
     };
   };
 
