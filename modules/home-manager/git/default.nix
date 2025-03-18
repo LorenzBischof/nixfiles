@@ -16,14 +16,15 @@
   programs.jujutsu = {
     enable = true;
     settings = {
-      signing = {
-        sign-all = true;
-        backend = "ssh";
-        key = "~/.ssh/id_ed25519_github.com_lorenzbischof_signing.pub";
-      };
       user = {
         name = "LorenzBischof";
         email = "1837725+LorenzBischof@users.noreply.github.com";
+      };
+      git.private-commits = "description(glob:'wip:*') | description(glob:'private:*')";
+      signing = {
+        behavior = "own";
+        backend = "ssh";
+        key = "~/.ssh/id_ed25519_github.com_lorenzbischof_signing.pub";
       };
       colors = {
         commit_id = "bright black";
@@ -44,7 +45,6 @@
         "format_short_signature(signature)" = "signature.name()";
         "format_timestamp(timestamp)" = "timestamp.ago()";
       };
-      git.subprocess = true;
     };
   };
 
