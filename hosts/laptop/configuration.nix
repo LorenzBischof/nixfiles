@@ -27,8 +27,10 @@
     };
     cursor = {
       size = 28;
-      #  package = pkgs.breeze-qt5;
-      #  name = "Breeze";
+      name = "Adwaita";
+      package = pkgs.adwaita-icon-theme;
+      #package = pkgs.breeze-qt5;
+      #name = "Breeze";
     };
   };
 
