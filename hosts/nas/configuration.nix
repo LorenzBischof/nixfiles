@@ -13,7 +13,7 @@ in
     ./hardware-configuration.nix
     ./monitoring.nix
     ./homelab.nix
-    ./homepage.nix
+    ./nixhome.nix
     ./authelia.nix
     ./backup.nix
     ./paperless.nix

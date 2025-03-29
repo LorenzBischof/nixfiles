@@ -44,6 +44,10 @@
       url = "github:LorenzBischof/neovim-config";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nixhome = {
+      url = "github:eblechschmidt/nixhome";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -60,6 +64,7 @@
       nixos-generators,
       treefmt-nix,
       neovim-config,
+      nixhome,
       ...
     }@inputs:
     let
@@ -111,6 +116,7 @@
           modules = [
             ./hosts/nas/configuration.nix
             nix-secrets.nixosModules.nas
+            nixhome.nixosModules.nixhome
           ];
           specialArgs = {
             secrets = import nix-secrets;
