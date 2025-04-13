@@ -23,10 +23,13 @@ in
       proxyWebsockets = true;
     };
   };
+  networking.hosts = {
+    "100.91.84.39" = [ "webhook.${domain}" ];
+  };
   services.nginx.virtualHosts."webhook.${domain}" = {
     forceSSL = true;
 
-    listenAddresses = [ "10.0.0.238" ];
+    listenAddresses = [ "10.0.0.238" ] ++ config.services.nginx.defaultListenAddresses;
     useACMEHost = domain;
     locations."/webhook-test/" = {
       proxyPass = "http://localhost:5678";

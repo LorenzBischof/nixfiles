@@ -43,6 +43,10 @@ in
     flake = "github:LorenzBischof/nixfiles";
   };
 
+  networking.hosts = {
+    "100.91.84.39" = [ "webhook.${secrets.vps-domain}" ];
+  };
+
   boot = {
     loader.systemd-boot.enable = true;
     loader.efi.canTouchEfiVariables = true;

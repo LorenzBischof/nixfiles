@@ -12,6 +12,9 @@ in
   services.atticd = {
     enable = true;
     environmentFile = config.age.secrets.atticd-env.path;
+    settings = {
+      listen = "127.0.0.1:8080";
+    };
   };
   services.nginx.virtualHosts."cache.${domain}" = {
     forceSSL = true;
