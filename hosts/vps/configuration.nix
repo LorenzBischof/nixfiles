@@ -10,8 +10,10 @@
     ./hardware-configuration.nix
     ./disk-config.nix
     ./attic.nix
+    ./n8n.nix
     ../../modules/nixos
   ];
+  nixpkgs.config.allowUnfree = true;
 
   my.services.nixpkgs-age-monitor = {
     enable = true;
@@ -36,6 +38,7 @@
       };
     };
   };
+  services.nginx.defaultListenAddresses = [ "100.91.84.39" ];
 
   boot = {
     loader = {
