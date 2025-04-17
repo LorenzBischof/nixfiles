@@ -48,6 +48,10 @@
       url = "github:eblechschmidt/nixhome";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    alertmanager-ntfy = {
+      url = "github:alexbakker/alertmanager-ntfy";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -65,6 +69,7 @@
       treefmt-nix,
       neovim-config,
       nixhome,
+      alertmanager-ntfy,
       ...
     }@inputs:
     let
@@ -117,6 +122,7 @@
             ./hosts/nas/configuration.nix
             nix-secrets.nixosModules.nas
             nixhome.nixosModules.nixhome
+            alertmanager-ntfy.nixosModules.${system}.default
           ];
           specialArgs = {
             secrets = import nix-secrets;
