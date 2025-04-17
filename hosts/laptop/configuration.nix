@@ -85,9 +85,6 @@
     networkmanager.enable = true; # Easiest to use and most distros use this by default.
   };
 
-  # Set your time zone.
-  time.timeZone = "Europe/Zurich";
-
   # AppArmor
   # Disabled for now, because I get an error when switching
   #security.apparmor.enable = true;
@@ -167,38 +164,6 @@
       "docker"
     ];
     shell = pkgs.zsh;
-  };
-
-  nix = {
-    package = pkgs.lix;
-    settings = {
-      experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
-      auto-optimise-store = true;
-      http-connections = 128;
-      max-substitution-jobs = 128;
-      trusted-users = [
-        "root"
-        "@wheel"
-      ];
-      substituters = [
-        "https://nix-community.cachix.org?priority=41"
-        "https://billowing-darkness-4823.fly.dev/system?priority=42"
-      ];
-      trusted-public-keys = [
-        "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-        "system:8c8bXDuMT8ZPBj+//XtB6JXJWrZQf7IdOPHhoWL8Pr8="
-      ];
-
-      netrc-file = config.age.secrets.netrc.path;
-    };
-    gc = {
-      automatic = true;
-      dates = "weekly";
-      options = "--delete-older-than 14d";
-    };
   };
 
   environment.systemPackages = with pkgs; [
@@ -323,10 +288,6 @@
 
     # Firmware updater
     fwupd.enable = true;
-
-    # Power optimization
-    auto-cpufreq.enable = true;
-    thermald.enable = true;
   };
 
   # https://github.com/NixOS/nixpkgs/issues/180175

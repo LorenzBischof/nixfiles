@@ -28,6 +28,7 @@ in
     ./homeassistant.nix
     ./mealie.nix
     ./hedgedoc.nix
+    ../../modules/nixos/common.nix
   ];
 
   homelab.domain = lib.mkDefault secrets.prod-domain;
@@ -95,16 +96,10 @@ in
 
   networking.hostName = "nas";
   networking.hostId = "115d4c0d";
-  networking.nameservers = [
-    "1.1.1.1"
-    "9.9.9.9"
-  ];
 
   services.zfs.autoScrub.enable = true;
 
   networking.useDHCP = true;
-
-  time.timeZone = "Europe/Zurich";
 
   i18n.defaultLocale = "en_GB.UTF-8";
 
@@ -165,18 +160,6 @@ in
       '';
     };
 
-  services.thermald.enable = true;
-  # https://github.com/NixOS/nixpkgs/issues/347804
-  services.auto-cpufreq = {
-    enable = true;
-    settings = {
-      charger = {
-        governor = "powersave";
-        turbo = "auto";
-      };
-    };
-  };
-
   virtualisation.vmVariant = {
     homelab.domain = secrets.test-domain;
     security.acme.defaults.server = "https://acme-staging-v02.api.letsencrypt.org/directory";
@@ -220,26 +203,6 @@ in
         prefixLength = 24;
       }
     ];
-  };
-
-  nix = {
-    package = pkgs.lix;
-    settings = {
-      experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
-      auto-optimise-store = true;
-      trusted-users = [
-        "root"
-        "@wheel"
-      ];
-    };
-    gc = {
-      automatic = true;
-      dates = "weekly";
-      options = "--delete-older-than 14d";
-    };
   };
 
   # This value determines the NixOS release from which the default
