@@ -126,6 +126,10 @@ in
         storage.local.path = "/var/lib/authelia-main/db.sqlite3";
         notifier.filesystem.filename = "/var/lib/authelia-main/notification.txt";
         identity_providers.oidc = {
+          claims_policies.default.id_token = [
+            "email"
+            "name"
+          ];
           clients = [
             {
               client_id = "audiobookshelf";
@@ -146,6 +150,7 @@ in
                 "https://mealie.${domain}/login"
               ];
               consent_mode = "implicit";
+              claims_policy = "default"; # https://www.authelia.com/integration/openid-connect/openid-connect-1.0-claims/#restore-functionality-prior-to-claims-parameter
             }
             {
               client_id = "hedgedoc";
