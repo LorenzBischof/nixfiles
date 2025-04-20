@@ -51,6 +51,10 @@ in
     }
   ];
 
+  services.restic.backups.daily.paths = [
+    config.services.hedgedoc.settings.db.storage
+    config.services.hedgedoc.settings.uploadsPath
+  ];
   homelab.ports = [ config.services.hedgedoc.settings.port ];
-  homelab.dashboard.Monitoring.Hedgedoc.href = "https://${hedgedocDomain}";
+  homelab.dashboard.Services.Notes.href = "https://${hedgedocDomain}";
 }

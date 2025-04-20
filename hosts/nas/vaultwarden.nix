@@ -6,6 +6,7 @@
   ...
 }:
 let
+  vaultwardenDomain = "bitwarden.${config.homelab.domain}";
   backupDir = "/var/cache/vaultwarden-backup";
 in
 {
@@ -14,12 +15,12 @@ in
     # TODO: this sets up a timer at 23:00, however it might make sense to run it before the backup service
     backupDir = backupDir;
     config = {
-      DOMAIN = "https://bitwarden.${config.homelab.domain}";
+      DOMAIN = "https://${vaultwardenDomain}";
       SIGNUPS_ALLOWED = false;
       ROCKET_PORT = 8222;
     };
   };
-  services.nginx.virtualHosts."bitwarden.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."${vaultwardenDomain}" = {
     forceSSL = true;
     useACMEHost = config.homelab.domain;
     locations."/" = {
@@ -35,5 +36,5 @@ in
   services.restic.backups.daily.paths = [ backupDir ];
 
   homelab.ports = [ config.services.vaultwarden.config.ROCKET_PORT ];
-  homelab.dashboard.Services.Vaultwarden.href = "https://bitwarden.${config.homelab.domain}";
+  homelab.dashboard.Services.Bitwarden.href = "https://${vaultwardenDomain}";
 }

@@ -5,6 +5,9 @@
   secrets,
   ...
 }:
+let
+  mealieDomain = "recipes.${config.homelab.domain}";
+in
 {
   services.mealie = {
     enable = true;
@@ -17,7 +20,8 @@
     };
     credentialsFile = config.age.secrets.mealie-credentials.path;
   };
-  services.nginx.virtualHosts."mealie.${config.homelab.domain}" = {
+
+  services.nginx.virtualHosts."${mealieDomain}" = {
     forceSSL = true;
     useACMEHost = config.homelab.domain;
     locations."/" = {
@@ -26,6 +30,26 @@
     };
   };
 
+  services.authelia.instances.main.settings.identity_providers.oidc = {
+    claims_policies.mealie.id_token = [
+      "email"
+      "name"
+    ];
+    clients = [
+      {
+        client_id = "mealie";
+        client_secret = secrets.authelia-clients-mealie;
+        authorization_policy = "one_factor";
+        redirect_uris = [
+          "https://${mealieDomain}/login"
+        ];
+        consent_mode = "implicit";
+        claims_policy = "mealie"; # https://www.authelia.com/integration/openid-connect/openid-connect-1.0-claims/#restore-functionality-prior-to-claims-parameter
+      }
+    ];
+  };
+
+  services.restic.backups.daily.paths = [ "/var/lib/mealie/mealie.db" ];
   homelab.ports = [ config.services.mealie.port ];
-  homelab.dashboard.Services.Mealie.href = "https://mealie.${config.homelab.domain}";
+  homelab.dashboard.Services.Recipes.href = "https://${mealieDomain}";
 }

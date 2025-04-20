@@ -7,6 +7,7 @@
 }:
 let
   photosDir = "/data/photos";
+  immichDomain = "photos.${config.homelab.domain}";
 in
 {
   users.groups.photos = { };
@@ -28,7 +29,7 @@ in
     machine-learning.enable = false;
   };
 
-  services.nginx.virtualHosts."immich.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."${immichDomain}" = {
     forceSSL = true;
     useACMEHost = config.homelab.domain;
     enableAuthelia = true;
@@ -49,5 +50,5 @@ in
   };
 
   homelab.ports = [ config.services.immich.port ];
-  homelab.dashboard.Services.Immich.href = "https://immich.${config.homelab.domain}";
+  homelab.dashboard.Media.Photos.href = "https://${immichDomain}";
 }
