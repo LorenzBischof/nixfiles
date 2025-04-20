@@ -22,7 +22,6 @@ in
     ./media.nix
     ./photos.nix
     ./offline-backup.nix
-    ./tiddlywiki.nix
     ./scrutiny.nix
     ./open-webui.nix
     ./homeassistant.nix
