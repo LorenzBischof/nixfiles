@@ -80,7 +80,7 @@ in
                 labels:
                   severity: warning
                 annotations:
-                  summary: Systemd service is down
+                  summary: "Systemd {{ $labels.name }} has failed"
                   description: Service failed
         ''
       ];
