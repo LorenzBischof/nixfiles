@@ -14,6 +14,7 @@
     ./system/detect-syncthing-conflicts.nix
     ./system/nas.nix
     ../../modules/nixos/common.nix
+    ./system/incus.nix
   ];
 
   stylix = {
