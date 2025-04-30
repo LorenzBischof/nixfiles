@@ -7,6 +7,7 @@
 }:
 let
   backupDir = "/var/cache/paperless-backup";
+  paperlessDomain = "paperless.${config.homelab.domain}";
 in
 {
   services.paperless = {
@@ -17,9 +18,10 @@ in
       PAPERLESS_AUTO_LOGIN_USERNAME = "paperless";
       PAPERLESS_OCR_LANGUAGE = "deu+eng";
       PAPERLESS_IGNORE_DATES = secrets.paperless-ignore-dates;
+      PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://${paperlessDomain}";
     };
   };
-  services.nginx.virtualHosts."paperless.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."${paperlessDomain}" = {
     forceSSL = true;
     useACMEHost = config.homelab.domain;
     enableAuthelia = true;
@@ -54,6 +56,6 @@ in
   services.restic.backups.daily.paths = [ backupDir ];
 
   homelab.ports = [ config.services.paperless.port ];
-  homelab.dashboard.Services.Paperless.href = "https://paperless.${config.homelab.domain}";
+  homelab.dashboard.Services.Paperless.href = "https://${paperlessDomain}";
 
 }
