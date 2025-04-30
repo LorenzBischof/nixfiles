@@ -13,6 +13,10 @@ update:
 switch: add
 	sudo nixos-rebuild switch --flake . $(shell ./override-input.sh)
 
+.PHONY: test
+test: add
+	sudo nixos-rebuild test --flake . $(shell ./override-input.sh)
+
 .PHONY: deploy
 deploy: add
 	nixos-rebuild switch --flake .#nas --target-host nas --use-remote-sudo $(shell ./override-input.sh)
