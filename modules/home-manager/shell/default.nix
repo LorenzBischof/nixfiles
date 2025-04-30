@@ -38,7 +38,7 @@
         "k" = "kubectl";
         "tt" = "jj";
       };
-      initExtra = ''
+      initContent = ''
         source ~/.zshrc-extra
       '';
     };
