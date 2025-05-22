@@ -65,6 +65,7 @@
     # fonts
     font-awesome
     nerd-fonts.dejavu-sans-mono
+    citrix_workspace
   ];
 
   systemd.user.startServices = true;

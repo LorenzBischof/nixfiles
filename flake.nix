@@ -88,6 +88,21 @@
           ];
         };
         overlays = [
+          (final: prev: {
+            citrix_workspace =
+              (prev.citrix_workspace.overrideAttrs (attrs: {
+                # Required by newer version
+                buildInputs = attrs.buildInputs ++ [ pkgs.sane-backends ];
+                src = attrs.src.overrideAttrs (srcAttrs: {
+                  # So that I can push the tar.gz to the Nix cache
+                  allowSubstitutes = true;
+                });
+              })).override
+                {
+                  version = "25.03.0.66";
+                  hash = "052zibykhig9091xl76z2x9vn4f74w5q8i9frlpc473pvfplsczk";
+                };
+          })
           neovim-config.overlays.default
         ];
       };
