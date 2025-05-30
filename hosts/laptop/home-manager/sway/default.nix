@@ -211,7 +211,7 @@
             [con_id="__focused__" app_id="org.keepassxc.KeePassXC"] exec wtype -M ctrl u -m ctrl
           '';
           "${mod}+q" = ''
-            [con_id="__focused__" app_id="^(?!foot|org.keepassxc.KeePassXC).*$" class="^(?!Logseq).*$"] kill; [con_id="__focused__" app_id="foot"] exec wtype -M ctrl d -m ctrl; [con_id=__focused__ app_id="org.keepassxc.KeePassXC" tiling] move scratchpad; [con_id=__focused__ class="Logseq" tiling] move scratchpad; [con_id=__focused__ floating] floating disable
+            [con_id="__focused__" app_id="^(?!foot|org.keepassxc.KeePassXC|Logseq).*$"] kill; [con_id="__focused__" app_id="foot"] exec wtype -M ctrl d -m ctrl; [con_id=__focused__ app_id="org.keepassxc.KeePassXC" tiling] move scratchpad; [con_id=__focused__ app_id="Logseq" tiling] move scratchpad; [con_id=__focused__ floating] floating disable
           '';
           "${mod}+a" = "exec ${pkgs.fuzzel}/bin/fuzzel";
           "${mod}+n" = "exec ${pkgs.swaylock}/bin/swaylock";
@@ -225,7 +225,7 @@
             [app_id="org.keepassxc.KeePassXC" tiling] focus; [app_id="org.keepassxc.KeePassXC" floating] scratchpad show
           '';
           "${mod}+g" = ''
-            [class="Logseq" tiling] focus; [class="Logseq" floating] scratchpad show
+            [app_id="Logseq" tiling] focus; [app_id="Logseq" floating] scratchpad show
           '';
           "${mod}+x" = "exec warpd --hint";
           "XF86AudioRaiseVolume" =
