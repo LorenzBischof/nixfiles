@@ -42,6 +42,6 @@ jobs:
       #- uses: DeterminateSystems/magic-nix-cache-action@main
       - name: Build and push system
         run: |
-          nix build .#nixosConfigurations.${{ matrix.machine.host }}.config.system.build.toplevel
           nix run github:zhaofengli/attic#default login fly https://billowing-darkness-4823.fly.dev ${{ secrets.ATTIC_TOKEN }}
+          nix build .#nixosConfigurations.${{ matrix.machine.host }}.config.system.build.toplevel
           nix run github:zhaofengli/attic#default push system result -j 2
