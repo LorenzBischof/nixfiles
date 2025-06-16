@@ -11,6 +11,9 @@ let
 in
 {
   services.paperless = {
+    package = pkgs.paperless-ngx.overrideAttrs (oldAttrs: {
+      doCheck = false;
+    });
     enable = true;
     passwordFile = config.age.secrets.paperless-password.path;
     settings = {
