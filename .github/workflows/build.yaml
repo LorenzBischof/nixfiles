@@ -26,6 +26,9 @@ jobs:
       - run: |
           sudo mkdir -p /etc/nix
           echo "machine billowing-darkness-4823.fly.dev password ${{ secrets.ATTIC_TOKEN }}" | sudo tee /etc/nix/netrc > /dev/null
+      - uses: wimpysworld/nothing-but-nix@main
+        with:
+          hatchet-protocol: holster
       - uses: DeterminateSystems/nix-installer-action@main
         with:
           # We set our custom GitHub token for any private flake inputs we might have
