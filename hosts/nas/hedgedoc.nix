@@ -6,7 +6,7 @@
   ...
 }:
 let
-  hedgedocDomain = "notes.${config.homelab.domain}";
+  hedgedocDomain = "hedgedoc.${config.homelab.domain}";
 in
 {
   services.hedgedoc = {
@@ -56,5 +56,5 @@ in
     config.services.hedgedoc.settings.uploadsPath
   ];
   homelab.ports = [ config.services.hedgedoc.settings.port ];
-  homelab.dashboard.Services.Notes.href = "https://${hedgedocDomain}";
+  #homelab.dashboard.Services.Notes.href = "https://${hedgedocDomain}";
 }

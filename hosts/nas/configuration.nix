@@ -27,6 +27,7 @@ in
     ./homeassistant.nix
     ./mealie.nix
     ./hedgedoc.nix
+    ./outline.nix
     ../../modules/nixos/common.nix
   ];
 
