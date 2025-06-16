@@ -64,7 +64,11 @@
         unbind -n MouseDrag1Pane
       '';
     };
+    zellij = {
+      enable = true;
+    };
   };
+  stylix.targets.zellij.enable = true;
 
   home.sessionVariables = {
     EDITOR = "nvim";
