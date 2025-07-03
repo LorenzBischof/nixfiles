@@ -24,6 +24,17 @@
     };
   };
 
+  system.activationScripts.diff = {
+    supportsDryActivation = true;
+    text = # bash
+      ''
+        if [[ -e /run/current-system ]]; then
+          ${pkgs.nix}/bin/nix store \
+            diff-closures /run/current-system "$systemConfig"
+        fi
+      '';
+  };
+
   nix = {
     # https://discourse.nixos.org/t/general-question-how-to-avoid-running-out-of-memory-or-freezing-when-building-nix-derivations/55351/2
     daemonIOSchedClass = lib.mkDefault "idle";

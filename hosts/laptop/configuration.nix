@@ -45,16 +45,6 @@
 
     tailscale.enable = true;
   };
-  system.activationScripts.diff = {
-    supportsDryActivation = true;
-    text = # bash
-      ''
-        if [[ -e /run/current-system ]]; then
-          ${pkgs.nix}/bin/nix store \
-            diff-closures /run/current-system "$systemConfig"
-        fi
-      '';
-  };
 
   boot = {
     binfmt.emulatedSystems = [ "aarch64-linux" ];
