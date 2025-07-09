@@ -19,7 +19,11 @@ test: add
 
 .PHONY: deploy
 deploy: add
-	nixos-rebuild switch --flake .#nas --target-host nas --use-remote-sudo $(shell ./override-input.sh)
+	nixos-rebuild switch --flake .#nas --target-host nas --sudo $(shell ./override-input.sh)
+
+.PHONY: oracle
+oracle: add
+	nixos-rebuild switch --flake .#oracle --target-host oracle --build-host oracle --sudo $(shell ./override-input.sh)
 
 .PHONY: dry-build-nas
 dry-build-nas: add

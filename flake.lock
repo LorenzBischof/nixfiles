@@ -114,6 +114,26 @@
         "type": "github"
       }
     },
+    "disko": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1753140376,
+        "narHash": "sha256-7lrVrE0jSvZHrxEzvnfHFE/Wkk9DDqb+mYCodI5uuB8=",
+        "owner": "nix-community",
+        "repo": "disko",
+        "rev": "545aba02960caa78a31bd9a8709a0ad4b6320a5c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "disko",
+        "type": "github"
+      }
+    },
     "firefox-gnome-theme": {
       "flake": false,
       "locked": {
@@ -386,11 +406,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1751527701,
-        "narHash": "sha256-+1odig3gIjpp5DTSTBYwTMekw40r5hqrTWBOqKjq1eU=",
+        "lastModified": 1754590504,
+        "narHash": "sha256-3l5etN/XMQXvikB2uIXAO5RYZ3VIwMR8SFgsII0+CA4=",
         "owner": "lorenzbischof",
         "repo": "nix-secrets",
-        "rev": "4d446f831b5d0c12c2a2d3c8625a0a9313bf1b3a",
+        "rev": "bc3412771a3528382a1d020eb6c8339e5461a432",
         "type": "github"
       },
       "original": {
@@ -558,6 +578,7 @@
     "root": {
       "inputs": {
         "alertmanager-ntfy": "alertmanager-ntfy",
+        "disko": "disko",
         "home-manager": "home-manager",
         "neovim-config": "neovim-config",
         "nix-index-database": "nix-index-database",

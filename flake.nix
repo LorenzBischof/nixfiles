@@ -52,6 +52,10 @@
       url = "github:alexbakker/alertmanager-ntfy";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -70,6 +74,7 @@
       neovim-config,
       nixhome,
       alertmanager-ntfy,
+      disko,
       ...
     }@inputs:
     let
@@ -145,6 +150,14 @@
           specialArgs = {
             secrets = import nix-secrets;
           };
+        };
+        oracle = nixpkgs.lib.nixosSystem {
+          system = "aarch64-linux";
+          modules = [
+            disko.nixosModules.disko
+            nix-secrets.nixosModules.oracle
+            ./hosts/oracle/configuration.nix
+          ];
         };
         rpi2 = nixpkgs.lib.nixosSystem {
           modules = [
