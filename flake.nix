@@ -85,6 +85,9 @@
             "aspnetcore-runtime-wrapped-6.0.36"
             "dotnet-sdk-6.0.428"
             "dotnet-sdk-wrapped-6.0.428"
+            # Citrix Workspace
+            "libsoup-2.74.3"
+            "libxml2-2.13.8"
           ];
         };
         overlays = [
