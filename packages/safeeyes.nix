@@ -20,6 +20,8 @@ with python3.pkgs;
 buildPythonApplication rec {
   pname = "safeeyes";
   version = "2.2.2";
+  pyproject = true;
+  build-system = [ setuptools ];
 
   src = fetchPypi {
     inherit pname version;
