@@ -9,6 +9,7 @@
   imports = [
     ./hardware-configuration.nix
     ./disk-config.nix
+    ./attic.nix
     ../../modules/nixos/nginx.nix
   ];
 
