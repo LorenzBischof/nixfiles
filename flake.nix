@@ -164,6 +164,9 @@
             nix-secrets.nixosModules.oracle
             ./hosts/oracle/configuration.nix
           ];
+          specialArgs = {
+            secrets = import nix-secrets;
+          };
         };
         rpi2 = nixpkgs.lib.nixosSystem {
           modules = [

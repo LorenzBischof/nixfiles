@@ -2,13 +2,28 @@
   config,
   lib,
   pkgs,
+  secrets,
   ...
 }:
 {
   imports = [
     ./hardware-configuration.nix
     ./disk-config.nix
+    ../../modules/nixos/nginx.nix
   ];
+
+  # Configure homelab nginx
+  homelab = {
+    domain = secrets.oracle-domain;
+    nginx = {
+      enable = true;
+      acme = {
+        enable = true;
+        dnsProvider = "cloudflare";
+        environmentFile = config.age.secrets.cloudflare-token.path;
+      };
+    };
+  };
 
   boot = {
     loader = {

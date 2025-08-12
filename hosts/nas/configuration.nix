@@ -29,9 +29,8 @@ in
     ./hedgedoc.nix
     ./outline.nix
     ../../modules/nixos/common.nix
+    ../../modules/nixos/nginx.nix
   ];
-
-  homelab.domain = lib.mkDefault secrets.prod-domain;
 
   boot = {
     loader.systemd-boot.enable = true;
