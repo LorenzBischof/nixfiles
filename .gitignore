@@ -5,3 +5,4 @@ nas.qcow2
 nas-efi-vars.fd
 .aider*
 .env
+.crush

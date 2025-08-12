@@ -42,31 +42,36 @@
 
   # The home.packages option allows you to install Nix packages into your
   # environment.
-  home.packages = with pkgs; [
-    mullvad-browser
-    firefox
-    keepassxc
-    gnumake
-    logseq
-    pavucontrol
-    jellyfin-media-player
-    xournalpp
-    simple-scan
-    mpv
-    gramps
-    imv
-    wl-mirror
-    sshfs
+  home.packages =
+    with inputs.nix-ai-tools.packages.${pkgs.system};
+    [
+      crush
+    ]
+    ++ (with pkgs; [
+      mullvad-browser
+      firefox
+      keepassxc
+      gnumake
+      logseq
+      pavucontrol
+      jellyfin-media-player
+      xournalpp
+      simple-scan
+      mpv
+      gramps
+      imv
+      wl-mirror
+      sshfs
 
-    # Required so that Logseq can open links
-    # There is probably a NixOS option for this...
-    xdg-utils
+      # Required so that Logseq can open links
+      # There is probably a NixOS option for this...
+      xdg-utils
 
-    # fonts
-    font-awesome
-    nerd-fonts.dejavu-sans-mono
-    citrix_workspace
-  ];
+      # fonts
+      font-awesome
+      nerd-fonts.dejavu-sans-mono
+      citrix_workspace
+    ]);
 
   systemd.user.startServices = true;
   gtk = {

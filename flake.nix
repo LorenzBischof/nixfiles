@@ -56,6 +56,11 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nix-ai-tools = {
+      url = "github:numtide/nix-ai-tools";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.treefmt-nix.follows = "treefmt-nix";
+    };
   };
 
   outputs =
@@ -75,6 +80,7 @@
       nixhome,
       alertmanager-ntfy,
       disko,
+      nix-ai-tools,
       ...
     }@inputs:
     let
