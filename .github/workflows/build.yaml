@@ -9,6 +9,10 @@ on:
     branches:
       - main
 
+concurrency: 
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,14 +25,23 @@ jobs:
             platform: x86-64-linux
           - host: nas
             platform: x86-64-linux
+          - host: oracle
+            platform: aarch64-linux
     steps:
       - uses: actions/checkout@v4
+
+      # We only run this if we are building an aarch64-linux system
+      - if: matrix.machine.platform == 'aarch64-linux'
+        uses: docker/setup-qemu-action@v3
+
       - run: |
           sudo mkdir -p /etc/nix
-          echo "machine billowing-darkness-4823.fly.dev password ${{ secrets.ATTIC_TOKEN }}" | sudo tee /etc/nix/netrc > /dev/null
+          echo "machine cache.lorenzbischof.com password ${{ secrets.ATTIC_TOKEN }}" | sudo tee /etc/nix/netrc > /dev/null
+
       - uses: wimpysworld/nothing-but-nix@main
         with:
           hatchet-protocol: holster
+
       - uses: DeterminateSystems/nix-installer-action@main
         with:
           # We set our custom GitHub token for any private flake inputs we might have
@@ -39,12 +52,14 @@ jobs:
             http-connections = 128
             max-substitution-jobs = 128
             extra-platforms = aarch64-linux
-            substituters = https://billowing-darkness-4823.fly.dev/system?priority=42 https://nix-community.cachix.org?priority=41 https://cache.nixos.org/
-            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= system:8c8bXDuMT8ZPBj+//XtB6JXJWrZQf7IdOPHhoWL8Pr8= nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=
+            substituters = https://cache.lorenzbischof.com/system?priority=42 https://nix-community.cachix.org?priority=41 https://cache.nixos.org/
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= system:DAJL6xmsmoUmZOeGL8XxrEWF5pdtFGMW2+cOGyYaqgU= nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=
+
       # https://determinate.systems/posts/magic-nix-cache-free-tier-eol/
       #- uses: DeterminateSystems/magic-nix-cache-action@main
+
       - name: Build and push system
         run: |
-          nix run github:zhaofengli/attic#default login fly https://billowing-darkness-4823.fly.dev ${{ secrets.ATTIC_TOKEN }}
+          nix run github:zhaofengli/attic#default login oracle https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
           nix build .#nixosConfigurations.${{ matrix.machine.host }}.config.system.build.toplevel
-          nix run github:zhaofengli/attic#default push system result -j 2
+          nix run github:zhaofengli/attic#default push system result
