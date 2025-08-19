@@ -60,6 +60,12 @@
       url = "github:numtide/nix-ai-tools";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.treefmt-nix.follows = "treefmt-nix";
+      inputs.blueprint.inputs.nixpkgs.follows = "nixpkgs";
+    };
+    mcp-nixos = {
+      url = "github:utensils/mcp-nixos";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.devshell.inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
@@ -81,6 +87,7 @@
       alertmanager-ntfy,
       disko,
       nix-ai-tools,
+      mcp-nixos,
       ...
     }@inputs:
     let
