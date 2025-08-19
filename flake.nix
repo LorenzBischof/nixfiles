@@ -248,23 +248,5 @@
         };
       };
       formatter.${system} = treefmtEval.config.build.wrapper;
-      checks.${system} = {
-        formatting = treefmtEval.config.build.check self;
-
-        pre-commit-check = pre-commit-hooks.lib.${system}.run {
-          src = ./.;
-          hooks = {
-            nixfmt-rfc-style.enable = true;
-            check-merge-conflicts.enable = true;
-          };
-        };
-      };
-      devShells.${system}.default = pkgs.mkShell {
-        inherit (self.checks.${system}.pre-commit-check) shellHook;
-        buildInputs = self.checks.${system}.pre-commit-check.enabledPackages ++ [
-          pkgs.flyctl
-          pkgs.attic-client
-        ];
-      };
     };
 }
