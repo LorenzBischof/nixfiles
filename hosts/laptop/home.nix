@@ -45,7 +45,7 @@
   home.packages =
     with inputs.nix-ai-tools.packages.${pkgs.system};
     [
-      crush
+      opencode
     ]
     ++ (with pkgs; [
       mullvad-browser
