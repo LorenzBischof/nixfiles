@@ -93,6 +93,17 @@ in
     startAt = "21:00";
   };
 
+  services.thermald.enable = true;
+  services.auto-cpufreq = {
+    enable = true;
+    settings = {
+      charger = {
+        governor = "powersave";
+        turbo = "auto";
+      };
+    };
+  };
+
   networking.hostName = "nas";
   networking.hostId = "115d4c0d";
 

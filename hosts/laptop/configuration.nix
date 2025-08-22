@@ -107,6 +107,9 @@
     opentabletdriver.enable = true;
   };
 
+  services.thermald.enable = true;
+  services.auto-cpufreq.enable = true;
+
   services.logind.extraConfig = ''
     # don’t shutdown when power button is short-pressed
     HandlePowerKey=ignore

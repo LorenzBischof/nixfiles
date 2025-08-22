@@ -11,6 +11,7 @@
     ./disk-config.nix
     ./attic.nix
     ../../modules/nixos/nginx.nix
+    ../../modules/nixos/common.nix
   ];
 
   # Configure homelab nginx

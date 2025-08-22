@@ -13,17 +13,6 @@
 
   time.timeZone = "Europe/Zurich";
 
-  services.thermald.enable = true;
-  services.auto-cpufreq = {
-    enable = true;
-    settings = {
-      charger = {
-        governor = "powersave";
-        turbo = "auto";
-      };
-    };
-  };
-
   system.activationScripts.diff = {
     supportsDryActivation = true;
     text = # bash
