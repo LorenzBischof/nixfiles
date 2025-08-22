@@ -11,6 +11,7 @@
     ripgrep
     dtrx
     nvim-pkg
+    just
   ];
   programs = {
     direnv = {
