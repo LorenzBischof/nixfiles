@@ -511,11 +511,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1755892270,
-        "narHash": "sha256-ODHN2Rk694uKPmF7vbK6d0hY91f5ZzzHcH8UyzNDnVo=",
+        "lastModified": 1755895325,
+        "narHash": "sha256-77B+rWpabUJNf8+w37Dp/fOyvh2Rhi3L1toc983fqmM=",
         "owner": "lorenzbischof",
         "repo": "nix-secrets",
-        "rev": "f5547b9d9aeeb17a28773b41e3cee216fb13890d",
+        "rev": "582c3acf4c64c8a6e4e87cf177cfc3487d248e6c",
         "type": "github"
       },
       "original": {

@@ -131,7 +131,7 @@
           user = "lbischof";
           identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
-        "oracle" = {
+        "vps" = {
           hostname = "140.238.171.222";
           user = "lbischof";
           identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";

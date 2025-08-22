@@ -16,7 +16,7 @@
 
   # Configure homelab nginx
   homelab = {
-    domain = secrets.oracle-domain;
+    domain = secrets.vps-domain;
     nginx = {
       enable = true;
       acme = {
@@ -40,7 +40,7 @@
 
   systemd.targets.multi-user.enable = true;
 
-  networking.hostName = "oracle";
+  networking.hostName = "vps";
   networking.networkmanager.enable = true;
 
   time.timeZone = "Europe/Zurich";

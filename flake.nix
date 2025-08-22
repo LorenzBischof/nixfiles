@@ -164,12 +164,12 @@
             secrets = import nix-secrets;
           };
         };
-        oracle = nixpkgs.lib.nixosSystem {
+        vps = nixpkgs.lib.nixosSystem {
           system = "aarch64-linux";
           modules = [
             disko.nixosModules.disko
-            nix-secrets.nixosModules.oracle
-            ./hosts/oracle/configuration.nix
+            nix-secrets.nixosModules.vps
+            ./hosts/vps/configuration.nix
           ];
           specialArgs = {
             secrets = import nix-secrets;

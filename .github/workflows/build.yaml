@@ -25,7 +25,7 @@ jobs:
             platform: x86-64-linux
           - host: nas
             platform: x86-64-linux
-          - host: oracle
+          - host: vps
             platform: aarch64-linux
     steps:
       - uses: actions/checkout@v4
@@ -60,6 +60,6 @@ jobs:
 
       - name: Build and push system
         run: |
-          nix run github:zhaofengli/attic#default login oracle https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
+          nix run github:zhaofengli/attic#default login cache https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
           nix build .#nixosConfigurations.${{ matrix.machine.host }}.config.system.build.toplevel
           nix run github:zhaofengli/attic#default push system result
