@@ -48,11 +48,17 @@
       git = true;
       icons = "auto";
     };
-    fzf = {
+    atuin = {
       enable = true;
-      defaultCommand = "fd --type f";
-      changeDirWidgetCommand = "fd --type d";
-      fileWidgetCommand = "fd --type f";
+      enableZshIntegration = true;
+      flags = [ "--disable-up-arrow" ];
+      daemon.enable = true; # https://github.com/atuinsh/atuin/issues/952
+      settings = {
+        style = "compact";
+        inline_height = 10;
+        enter_accept = true;
+        prefers_reduced_motion = true;
+      };
     };
     fd.enable = true;
     jq.enable = true;
