@@ -70,13 +70,6 @@
   ];
 
   systemd.user.startServices = true;
-  gtk = {
-    enable = true;
-    theme = {
-      package = pkgs.gnome-themes-extra;
-      name = "Adwaita-dark";
-    };
-  };
 
   fonts.fontconfig.enable = true;
   programs = {

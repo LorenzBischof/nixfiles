@@ -21,7 +21,7 @@
     enable = true;
     image = ./home-manager/sway/wallpaper_cropped_1.png;
     base16Scheme = "${pkgs.base16-schemes}/share/themes/eighties.yaml";
-    autoEnable = false;
+    autoEnable = true;
     fonts.sizes = {
       popups = 18;
       desktop = 14;
@@ -30,8 +30,6 @@
       size = 28;
       name = "Adwaita";
       package = pkgs.adwaita-icon-theme;
-      #package = pkgs.breeze-qt5;
-      #name = "Breeze";
     };
   };
 

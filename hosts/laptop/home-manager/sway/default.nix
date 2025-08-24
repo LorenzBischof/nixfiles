@@ -6,11 +6,6 @@
 }:
 
 {
-  imports = [
-    ./colors.nix
-  ];
-  theme.sway.enable = true;
-
   home.packages = with pkgs; [
     wob
     #autotiling-rs
@@ -51,7 +46,7 @@
   #    };
   #  };
 
-  stylix.targets.fuzzel.enable = true;
+  stylix.targets.swaylock.useWallpaper = false;
   programs = {
     fuzzel = {
       enable = true;
@@ -73,7 +68,7 @@
     swaylock = {
       enable = true;
       settings = {
-        color = "000000";
+        color = lib.mkForce "000000";
         hide-keyboard-layout = true;
         show-failed-attempts = true;
         indicator-idle-visible = true;
@@ -183,15 +178,18 @@
         titlebar = false;
       };
       bars = [
-        {
+        (lib.attrsets.recursiveUpdate config.stylix.targets.sway.exportedBarConfig {
           statusCommand = "i3status-rs ~/.config/i3status-rust/config-default.toml";
           position = "top";
+          extraConfig = ''
+            separator_symbol ""
+          '';
           fonts = {
             names = [ "DejaVu Sans Mono" ];
             size = 12.0;
           };
-          inherit (config.lib.theme.sway.bar) colors;
-        }
+          colors.statusline = config.lib.stylix.colors.withHashtag.base04;
+        })
       ];
       up = "k";
       down = "j";
