@@ -50,7 +50,7 @@
     gnumake
     logseq
     pavucontrol
-    jellyfin-media-player
+
     xournalpp
     simple-scan
     mpv

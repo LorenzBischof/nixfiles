@@ -108,10 +108,10 @@
   services.thermald.enable = true;
   services.auto-cpufreq.enable = true;
 
-  services.logind.extraConfig = ''
-    # don’t shutdown when power button is short-pressed
-    HandlePowerKey=ignore
-  '';
+  services.logind.settings.Login = {
+    # don't shutdown when power button is short-pressed
+    HandlePowerKey = "ignore";
+  };
 
   security.polkit.enable = true;
 
