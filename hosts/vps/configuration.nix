@@ -77,6 +77,8 @@
     };
   };
 
+  services.tailscale.enable = true;
+
   # Disable autologin.
   services.getty.autologinUser = null;
 
