@@ -29,6 +29,7 @@
     daemonIOSchedClass = lib.mkDefault "idle";
     daemonCPUSchedPolicy = lib.mkDefault "idle";
 
+    channel.enable = false;
     package = pkgs.lix;
     settings = {
       experimental-features = [
