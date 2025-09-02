@@ -89,10 +89,11 @@
         recommendedTlsSettings = true;
 
         virtualHosts."_" = {
-          useACMEHost = lib.mkIf config.homelab.nginx.acme.enable config.homelab.domain;
-          addSSL = config.homelab.nginx.acme.enable;
           default = true;
-          locations."/".return = 404;
+          extraConfig = ''
+            ssl_reject_handshake on;
+          '';
+          locations."/".return = 444;
         };
       };
 
