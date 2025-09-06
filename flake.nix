@@ -92,6 +92,7 @@
     }@inputs:
     let
       system = "x86_64-linux";
+      lib = nixpkgs.lib;
       pkgs = import nixpkgs {
         inherit system;
         config = {
@@ -175,47 +176,47 @@
             secrets = import nix-secrets;
           };
         };
-        rpi2 = nixpkgs.lib.nixosSystem {
-          modules = [
-            "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-raspberrypi.nix"
-            {
-              nixpkgs = {
-                config.allowUnsupportedSystem = true;
-                hostPlatform.system = "armv7l-linux";
-                buildPlatform.system = "x86_64-linux"; # If you build on x86 other wise changes this.
-                # ... extra configs as above
-              };
-            }
-          ];
-        };
-        rpi3 = nixpkgs.lib.nixosSystem {
-          system = "aarch64-linux";
-          modules = [
-            "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
-            {
-              environment.systemPackages = [ pkgs.git ];
-              users.users.nixos = {
-                isNormalUser = true;
-                extraGroups = [
-                  "wheel"
-                  "networkmanager"
-                ];
-                openssh.authorizedKeys.keys = [
-                  "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIDSKZEtyhueGqUow/G2ewR5TuccLqhrgwWd5VUnd6ImqAAAAC3NzaDpob21lbGFi"
-                ];
-              };
-              services.openssh.enable = true;
-              security.sudo.wheelNeedsPassword = false;
-              nix.settings.trusted-users = [
-                "nixos"
-                "root"
-              ];
+        #  rpi2 = nixpkgs.lib.nixosSystem {
+        #    modules = [
+        #      "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-raspberrypi.nix"
+        #      {
+        #        nixpkgs = {
+        #          config.allowUnsupportedSystem = true;
+        #          hostPlatform.system = "armv7l-linux";
+        #          buildPlatform.system = "x86_64-linux"; # If you build on x86 other wise changes this.
+        #          # ... extra configs as above
+        #        };
+        #      }
+        #    ];
+        #  };
+        #  rpi3 = nixpkgs.lib.nixosSystem {
+        #    system = "aarch64-linux";
+        #    modules = [
+        #      "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
+        #      {
+        #        environment.systemPackages = [ pkgs.git ];
+        #        users.users.nixos = {
+        #          isNormalUser = true;
+        #          extraGroups = [
+        #            "wheel"
+        #            "networkmanager"
+        #          ];
+        #          openssh.authorizedKeys.keys = [
+        #            "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIDSKZEtyhueGqUow/G2ewR5TuccLqhrgwWd5VUnd6ImqAAAAC3NzaDpob21lbGFi"
+        #          ];
+        #        };
+        #        services.openssh.enable = true;
+        #        security.sudo.wheelNeedsPassword = false;
+        #        nix.settings.trusted-users = [
+        #          "nixos"
+        #          "root"
+        #        ];
 
-              # bzip2 compression takes loads of time with emulation, skip it.
-              sdImage.compressImage = false;
-            }
-          ];
-        };
+        #        # bzip2 compression takes loads of time with emulation, skip it.
+        #        sdImage.compressImage = false;
+        #      }
+        #    ];
+        #  };
       };
       homeConfigurations.bischoflo = home-manager.lib.homeManagerConfiguration {
         inherit pkgs;
@@ -248,5 +249,53 @@
         };
       };
       formatter.${system} = treefmtEval.config.build.wrapper;
+      checks.${system} =
+        let
+          testFiles = builtins.readDir ./tests;
+          testNames = builtins.attrNames (
+            lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) testFiles
+          );
+          removeExtension = name: lib.removeSuffix ".nix" name;
+        in
+        lib.listToAttrs (
+          map (testFile: {
+            name = removeExtension testFile;
+            value = pkgs.testers.runNixOSTest {
+              interactive.sshBackdoor.enable = true;
+              globalTimeout = 300;
+
+              name = removeExtension testFile;
+
+              defaults = {
+                # I could not get this to work another way. If I directly set the options, there is an eval error.
+                # Including the full module means that we need a mocked private key etc.
+                options.age = with lib; {
+                  secrets = mkOption {
+                    type = types.attrsOf (
+                      types.submodule (
+                        { config, ... }:
+                        {
+                          options = {
+                            file = mkOption {
+                              type = types.path;
+                            };
+                            path = mkOption {
+                              type = types.str;
+                              default = "${config.file}";
+                            };
+                          };
+                        }
+                      )
+                    );
+                    default = { };
+                  };
+                };
+              };
+              imports = [
+                (./tests + "/${testFile}")
+              ];
+            };
+          }) testNames
+        );
     };
 }

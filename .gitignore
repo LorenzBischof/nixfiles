@@ -6,3 +6,4 @@ nas-efi-vars.fd
 .aider*
 .env
 .crush
+.nixos-test-history
