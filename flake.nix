@@ -152,6 +152,9 @@
             }
             nix-index-database.nixosModules.nix-index
           ];
+          specialArgs = {
+            inherit inputs;
+          };
         };
         nas = nixpkgs.lib.nixosSystem {
           inherit system pkgs;

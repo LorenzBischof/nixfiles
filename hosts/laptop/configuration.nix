@@ -9,11 +9,11 @@
     # Include the results of the hardware scan.
     ./system/hardware-configuration.nix
     ./system/suspend.nix
-    #./system/autoupgrade.nix
     ./system/detect-reboot-needed.nix
     ./system/detect-syncthing-conflicts.nix
     ./system/nas.nix
     ../../modules/nixos/common.nix
+    ../../modules/nixos/autoupgrade.nix
     ./system/incus.nix
   ];
 
