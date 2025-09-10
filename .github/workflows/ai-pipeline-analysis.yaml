@@ -1,0 +1,19 @@
+name: AI Pipeline Analysis
+on:
+  workflow_run:
+    workflows: ["build"]
+    types: [completed]
+    
+permissions:
+  models: read
+  actions: read
+
+jobs:
+  analyze-failure:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: AI Pipeline Analysis
+        run: |
+          curl -H "Authorization: Bearer $GITHUB_TOKEN" -s "https://api.github.com/repos/${{github.repository}}/actions/runs/${{github.event.workflow_run.id}}/logs" 
+          
