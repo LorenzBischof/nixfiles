@@ -50,7 +50,7 @@
     gnumake
     logseq
     pavucontrol
-    jellyfin-media-player
+    #jellyfin-media-player   # insecure because of qtwebengine-5.15.19
     xournalpp
     simple-scan
     mpv

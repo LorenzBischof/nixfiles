@@ -108,10 +108,7 @@
   services.thermald.enable = true;
   services.auto-cpufreq.enable = true;
 
-  services.logind.extraConfig = ''
-    # don’t shutdown when power button is short-pressed
-    HandlePowerKey=ignore
-  '';
+  services.logind.settings.Login.HandlePowerKey = "ignore";
 
   security.polkit.enable = true;
 
@@ -185,7 +182,7 @@
   services.greetd = {
     enable = true;
     settings.default_session = {
-      command = "${pkgs.greetd.tuigreet}/bin/tuigreet --xsessions ${config.services.displayManager.sessionData.desktops}/share/xsessions --sessions ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions --remember --remember-user-session";
+      command = "${pkgs.tuigreet}/bin/tuigreet --xsessions ${config.services.displayManager.sessionData.desktops}/share/xsessions --sessions ${config.services.displayManager.sessionData.desktops}/share/wayland-sessions --remember --remember-user-session";
       user = "greeter";
     };
   };
