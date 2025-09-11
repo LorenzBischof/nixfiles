@@ -15,5 +15,7 @@ jobs:
     steps:
       - name: AI Pipeline Analysis
         run: |
-          curl -H "Authorization: Bearer $GITHUB_TOKEN" -s "https://api.github.com/repos/${{github.repository}}/actions/runs/${{github.event.workflow_run.id}}/logs" 
+          gh run view ${{github.event.workflow_run.id}} --log-failed
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           
