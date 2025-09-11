@@ -61,5 +61,12 @@ jobs:
       - name: Build and push system
         run: |
           nix run github:zhaofengli/attic#default login cache https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
-          nix build .#nixosConfigurations.${{ matrix.machine.host }}.config.system.build.toplevel
+          nix build .#nixosConfigurations.${{ matrix.machine.host }}.config.system.build.toplevel 2>&1 | tee "${{ matrix.machine.host }}.log"
           nix run github:zhaofengli/attic#default push system result
+          echo "${{ matrix.machine.host }}" > host.txt
+
+      - name: Process failure
+        if: failure()
+        run: |
+          cat "${{ matrix.machine.host }}.log"
+          cat host.txt
