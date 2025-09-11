@@ -42,12 +42,12 @@ jobs:
         with:
           hatchet-protocol: holster
 
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/install-nix-action@v31
         with:
           # We set our custom GitHub token for any private flake inputs we might have
-          github-token: ${{ secrets.GH_TOKEN }}
+          github_access_token: ${{ secrets.GH_TOKEN }}
           # We add all the config for extra platforms, other binary caches and to raise the number of connections that can be made
-          extra-conf: |
+          extra_nix_config: |
             fallback = true
             http-connections = 128
             max-substitution-jobs = 128
