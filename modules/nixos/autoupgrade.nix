@@ -158,6 +158,7 @@ in
           config.nix.package.out
           config.programs.ssh.package
           jq
+          curl
         ];
 
         script = ''
