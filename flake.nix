@@ -166,6 +166,7 @@
           ];
           specialArgs = {
             secrets = import nix-secrets;
+            inherit inputs;
           };
         };
         vps = nixpkgs.lib.nixosSystem {

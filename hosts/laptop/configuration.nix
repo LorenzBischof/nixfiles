@@ -12,8 +12,8 @@
     ./system/detect-reboot-needed.nix
     ./system/detect-syncthing-conflicts.nix
     ./system/nas.nix
+    ./system/autoupgrade.nix
     ../../modules/nixos/common.nix
-    ../../modules/nixos/autoupgrade.nix
     ./system/incus.nix
   ];
 

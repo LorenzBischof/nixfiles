@@ -30,7 +30,14 @@ in
     ./outline.nix
     ../../modules/nixos/common.nix
     ../../modules/nixos/nginx.nix
+    ../../modules/nixos/autoupgrade.nix
   ];
+
+  autoUpgrade = {
+    enable = true;
+    dates = "hourly";
+    flake = "github:LorenzBischof/nixfiles";
+  };
 
   boot = {
     loader.systemd-boot.enable = true;
