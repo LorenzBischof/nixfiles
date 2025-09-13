@@ -46,8 +46,50 @@
   #    };
   #  };
 
+  xdg.configFile."niri/config.kdl".source = ./niri.kdl;
   stylix.targets.swaylock.useWallpaper = false;
   programs = {
+    waybar = {
+      enable = true;
+      settings.mainBar = {
+        layer = "top";
+        height = 20;
+        modules-left = [
+          "niri/workspaces"
+          "custom/niri-windows"
+        ];
+        modules-right = [
+          "battery"
+          "clock"
+        ];
+        "custom/niri-windows" = {
+          exec = "${
+            pkgs.buildGoModule {
+              name = "waybar-niri-windows";
+              vendorHash = null;
+              src = pkgs.fetchFromGitHub {
+                owner = "calico32";
+                repo = "waybar-niri-windows";
+                rev = "048bf64b04f2758b12e641dd21bac193e0680eab";
+                hash = "sha256-8bU10/wbeSO5SZiMd0sK+BHnIIB62zAlUaUlTFSdSq8=";
+              };
+            }
+          }/bin/waybar-niri-windows";
+          return-type = "json";
+          hide-empty-text = true;
+        };
+      };
+      style = ''
+        #workspaces button.empty:not(.active) { /* hide empty workspaces */
+          margin-left: -10px;
+          margin-right: -16px;
+          padding: 0px;
+          color: transparent;
+          background-color: transparent;
+          border: none;
+        }
+      '';
+    };
     fuzzel = {
       enable = true;
       settings = {

@@ -17,6 +17,8 @@
     ./system/incus.nix
   ];
 
+  programs.niri.enable = true;
+
   stylix = {
     enable = true;
     image = ./home-manager/sway/wallpaper_cropped_1.png;
