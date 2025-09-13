@@ -135,7 +135,11 @@ in
         restartIfChanged = false;
         unitConfig.X-StopOnRemoval = false;
 
-        serviceConfig.Type = "oneshot";
+        serviceConfig = {
+          Type = "oneshot";
+          CPUSchedulingPolicy = "idle";
+          IOSchedulingClass = "idle";
+        };
 
         environment =
           config.nix.envVars
@@ -167,7 +171,8 @@ in
 
         # Check if the currently deployed revision exists on Github
         # Otherwise it could have been a manual switch --target-host
-        # that is not pushed to Git yet and we do not want to downgrade
+        # that is not pushed to Git yet and we do not want to downgrade.
+        # This also prevents running offline, because then Github is not available
         serviceConfig.ExecCondition = pkgs.writeShellScript "check-upgrade-conditions" ''
           # Check generation age
           date_string="$(${nixos-rebuild} list-generations --json | jq -r '.[] | select(.current == true) | .date')"
