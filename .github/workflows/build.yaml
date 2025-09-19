@@ -72,6 +72,6 @@ jobs:
         if: failure()
         run: |
           gh extension install github/gh-models
-          cat build.log | sed -n '/error:/,$p' | tail | gh models run openai/gpt-5 "This is the result of a nixosConfiguration nix-build. Summarize the error and suggest a possible fix, if you are pretty certain it might help" 
+          cat build.log | sed -n '/error:/,$p' | tail | gh models run openai/gpt-4o "This is the result of a nixosConfiguration nix-build. Summarize the error and suggest a possible fix, if you are pretty certain it might help" 
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
