@@ -153,6 +153,7 @@
             nix-index-database.nixosModules.nix-index
           ];
           specialArgs = {
+            secrets = import nix-secrets;
             inherit inputs;
           };
         };

@@ -2,7 +2,12 @@
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running `nixos-help`).
 
-{ config, pkgs, ... }:
+{
+  config,
+  pkgs,
+  secrets,
+  ...
+}:
 
 {
   imports = [
@@ -15,7 +20,14 @@
     ./system/autoupgrade.nix
     ../../modules/nixos/common.nix
     ./system/incus.nix
+    ../../modules/nixos/nixpkgs-age-monitor.nix
   ];
+
+  services.nixpkgs-age-monitor = {
+    enable = true;
+    alertThresholdDays = 7;
+    ntfyTopic = secrets.ntfy-alertmanager;
+  };
 
   programs.niri.enable = true;
 

@@ -31,7 +31,14 @@ in
     ../../modules/nixos/common.nix
     ../../modules/nixos/nginx.nix
     ../../modules/nixos/autoupgrade.nix
+    ../../modules/nixos/nixpkgs-age-monitor.nix
   ];
+
+  services.nixpkgs-age-monitor = {
+    enable = true;
+    alertThresholdDays = 7;
+    ntfyTopic = secrets.ntfy-alertmanager;
+  };
 
   autoUpgrade = {
     enable = true;
