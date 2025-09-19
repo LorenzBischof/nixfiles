@@ -125,6 +125,8 @@ in
       "--flake ${cfg.flake}"
     ];
 
+    environment.etc.git-revision.text = inputs.self.rev;
+
     systemd.services.nixos-upgrade =
       let
         nixos-rebuild = "${config.system.build.nixos-rebuild}/bin/nixos-rebuild";

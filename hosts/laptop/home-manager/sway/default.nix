@@ -56,6 +56,8 @@
         height = 20;
         modules-left = [
           "niri/workspaces"
+        ];
+        modules-center = [
           "custom/niri-windows"
         ];
         modules-right = [
@@ -79,16 +81,31 @@
           hide-empty-text = true;
         };
       };
-      style = ''
-        #workspaces button.empty:not(.active) { /* hide empty workspaces */
-          margin-left: -10px;
-          margin-right: -16px;
-          padding: 0px;
-          color: transparent;
-          background-color: transparent;
-          border: none;
-        }
-      '';
+      style = # css
+        ''
+                  #workspaces button.empty:not(.active) { /* hide empty workspaces */
+                    margin-left: -10px;
+                    margin-right: -16px;
+                    padding: 0px;
+                    color: transparent;
+                    background-color: transparent;
+                    border: none;
+                  }
+                  #custom-niri-windows {
+                    font-size: 30px;
+                    margin-top: -3px;
+                    margin-left: 10px;
+                  }
+                  window#waybar #workspaces button.active {
+          	    background-color: #6699CC;
+                    border-color: #6699CC;
+                    border: 0;
+                    border-radius: 0;
+                  }
+                  #workspaces button {
+                    margin: 0;
+                  }
+        '';
     };
     fuzzel = {
       enable = true;
