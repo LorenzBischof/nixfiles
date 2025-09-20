@@ -6,19 +6,22 @@
   options,
   ...
 }:
+let
+  cfg = config.my.homelab;
+in
 {
-  options = {
-    homelab.domain = lib.mkOption {
+  options.my.homelab = {
+    domain = lib.mkOption {
       type = lib.types.str;
       example = "example.com";
       description = "The domain where services are reachable";
     };
-    homelab.ports = lib.mkOption {
+    ports = lib.mkOption {
       type = lib.types.listOf lib.types.int;
       default = [ ];
       description = "List of allocated port numbers";
     };
-    homelab.nginx = {
+    nginx = {
       enable = lib.mkOption {
         type = lib.types.bool;
         default = false;
@@ -49,9 +52,9 @@
     };
   };
 
-  config = lib.mkIf config.homelab.nginx.enable (
+  config = lib.mkIf cfg.nginx.enable (
     let
-      duplicatePorts = lib.pipe options.homelab.ports.definitionsWithLocations [
+      duplicatePorts = lib.pipe options.my.homelab.ports.definitionsWithLocations [
         # Expand entries with multiple ports into individual port entries
         (lib.concatMap (
           entry:
@@ -76,8 +79,8 @@
           message = duplicatePorts;
         }
         {
-          assertion = config.homelab.nginx.acme.enable -> (config.homelab.nginx.acme.environmentFile != null);
-          message = "homelab.nginx.acme.environmentFile must be set when ACME is enabled";
+          assertion = cfg.nginx.acme.enable -> (cfg.nginx.acme.environmentFile != null);
+          message = "my.homelab.nginx.acme.environmentFile must be set when ACME is enabled";
         }
       ];
 
@@ -97,7 +100,7 @@
         };
       };
 
-      homelab.ports = [
+      my.homelab.ports = [
         80
         443
       ];
@@ -107,15 +110,15 @@
         443
       ];
 
-      security.acme = lib.mkIf config.homelab.nginx.acme.enable {
+      security.acme = lib.mkIf cfg.nginx.acme.enable {
         acceptTerms = true;
         defaults.email = secrets.acme-email;
-        certs."${config.homelab.domain}" = {
-          dnsProvider = config.homelab.nginx.acme.dnsProvider;
-          environmentFile = config.homelab.nginx.acme.environmentFile;
-          extraDomainNames = [ "*.${config.homelab.domain}" ];
+        certs."${cfg.domain}" = {
+          dnsProvider = cfg.nginx.acme.dnsProvider;
+          environmentFile = cfg.nginx.acme.environmentFile;
+          extraDomainNames = [ "*.${cfg.domain}" ];
           group = "nginx";
-          extraLegoFlags = config.homelab.nginx.acme.extraLegoFlags;
+          extraLegoFlags = cfg.nginx.acme.extraLegoFlags;
         };
       };
     }

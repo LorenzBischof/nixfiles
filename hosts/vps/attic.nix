@@ -5,14 +5,17 @@
   secrets,
   ...
 }:
+let
+  domain = config.my.homelab.domain;
+in
 {
   services.atticd = {
     enable = true;
     environmentFile = config.age.secrets.atticd-env.path;
   };
-  services.nginx.virtualHosts."cache.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."cache.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     locations."/" = {
       proxyPass = "http://127.0.0.1:8080";
       proxyWebsockets = true;
@@ -21,5 +24,5 @@
       '';
     };
   };
-  homelab.ports = [ 8080 ];
+  my.homelab.ports = [ 8080 ];
 }

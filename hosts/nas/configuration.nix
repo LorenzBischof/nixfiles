@@ -31,13 +31,13 @@ in
     ../../modules/nixos
   ];
 
-  services.nixpkgs-age-monitor = {
+  my.services.nixpkgs-age-monitor = {
     enable = true;
     alertThresholdDays = 7;
     ntfyTopic = secrets.ntfy-alertmanager;
   };
 
-  autoUpgrade = {
+  my.system.autoUpgrade = {
     enable = true;
     dates = "hourly";
     flake = "github:LorenzBischof/nixfiles";
@@ -182,7 +182,7 @@ in
     };
 
   virtualisation.vmVariant = {
-    homelab.domain = secrets.test-domain;
+    my.homelab.domain = secrets.test-domain;
     security.acme.defaults.server = "https://acme-staging-v02.api.letsencrypt.org/directory";
     services.restic.backups.daily.repositoryFile = pkgs.writeText "restic-repo" "/srv/restic-repo";
 

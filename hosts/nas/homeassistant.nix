@@ -5,10 +5,13 @@
   secrets,
   ...
 }:
+let
+  domain = config.my.homelab.domain;
+in
 {
-  services.nginx.virtualHosts."homeassistant.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."homeassistant.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     locations."/" = {
       proxyPass = "http://192.168.0.103:8123";
       proxyWebsockets = true;

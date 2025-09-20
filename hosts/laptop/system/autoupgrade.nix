@@ -1,7 +1,7 @@
 { pkgs, lib, ... }:
 
 {
-  autoUpgrade = {
+  my.system.autoUpgrade = {
     enable = true;
     dates = "hourly";
     flake = "github:LorenzBischof/nixfiles";

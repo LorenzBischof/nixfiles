@@ -5,6 +5,9 @@
   secrets,
   ...
 }:
+let
+  domain = config.my.homelab.domain;
+in
 {
   users.groups.media = { };
 
@@ -53,18 +56,18 @@
     };
   };
 
-  services.nginx.virtualHosts."jellyfin.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."jellyfin.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     locations."/" = {
       proxyPass = "http://127.0.0.1:8096";
       proxyWebsockets = true;
     };
   };
 
-  services.nginx.virtualHosts."radarr.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."radarr.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.radarr.settings.server.port}";
@@ -73,9 +76,9 @@
     };
   };
 
-  services.nginx.virtualHosts."sonarr.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."sonarr.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.sonarr.settings.server.port}";
@@ -84,9 +87,9 @@
     };
   };
 
-  services.nginx.virtualHosts."readarr.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."readarr.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.readarr.settings.server.port}";
@@ -95,9 +98,9 @@
     };
   };
 
-  services.nginx.virtualHosts."nzbget.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."nzbget.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://127.0.0.1:6789";
@@ -106,9 +109,9 @@
     };
   };
 
-  services.nginx.virtualHosts."audiobookshelf.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."audiobookshelf.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.audiobookshelf.port}";
@@ -117,7 +120,7 @@
     };
   };
 
-  homelab.ports = [
+  my.homelab.ports = [
     config.services.audiobookshelf.port
     config.services.radarr.settings.server.port
     config.services.sonarr.settings.server.port
@@ -126,12 +129,12 @@
     8096
   ];
 
-  homelab.dashboard.Media = {
-    Jellyfin.href = "https://jellyfin.${config.homelab.domain}";
-    Radarr.href = "https://radarr.${config.homelab.domain}";
-    Sonarr.href = "https://sonarr.${config.homelab.domain}";
-    Readarr.href = "https://readarr.${config.homelab.domain}";
-    NZBGet.href = "https://nzbget.${config.homelab.domain}";
-    Audiobookshelf.href = "https://audiobookshelf.${config.homelab.domain}";
+  my.homelab.dashboard.Media = {
+    Jellyfin.href = "https://jellyfin.${domain}";
+    Radarr.href = "https://radarr.${domain}";
+    Sonarr.href = "https://sonarr.${domain}";
+    Readarr.href = "https://readarr.${domain}";
+    NZBGet.href = "https://nzbget.${domain}";
+    Audiobookshelf.href = "https://audiobookshelf.${domain}";
   };
 }

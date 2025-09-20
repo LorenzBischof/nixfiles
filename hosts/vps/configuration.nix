@@ -13,20 +13,19 @@
     ../../modules/nixos
   ];
 
-  services.nixpkgs-age-monitor = {
+  my.services.nixpkgs-age-monitor = {
     enable = true;
     alertThresholdDays = 7;
     ntfyTopic = secrets.ntfy-alertmanager;
   };
 
-  autoUpgrade = {
+  my.system.autoUpgrade = {
     enable = true;
     dates = "hourly";
     flake = "github:LorenzBischof/nixfiles";
   };
 
-  # Configure homelab nginx
-  homelab = {
+  my.homelab = {
     domain = secrets.vps-domain;
     nginx = {
       enable = true;

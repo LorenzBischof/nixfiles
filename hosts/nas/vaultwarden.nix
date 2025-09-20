@@ -6,7 +6,8 @@
   ...
 }:
 let
-  vaultwardenDomain = "bitwarden.${config.homelab.domain}";
+  domain = config.my.homelab.domain;
+  vaultwardenDomain = "bitwarden.${domain}";
   backupDir = "/var/cache/vaultwarden-backup";
 in
 {
@@ -22,7 +23,7 @@ in
   };
   services.nginx.virtualHosts."${vaultwardenDomain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.vaultwarden.config.ROCKET_PORT}";
       proxyWebsockets = true;
@@ -35,6 +36,6 @@ in
 
   services.restic.backups.daily.paths = [ backupDir ];
 
-  homelab.ports = [ config.services.vaultwarden.config.ROCKET_PORT ];
-  homelab.dashboard.Services.Bitwarden.href = "https://${vaultwardenDomain}";
+  my.homelab.ports = [ config.services.vaultwarden.config.ROCKET_PORT ];
+  my.homelab.dashboard.Services.Bitwarden.href = "https://${vaultwardenDomain}";
 }

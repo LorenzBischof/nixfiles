@@ -5,6 +5,9 @@
   secrets,
   ...
 }:
+let
+  domain = config.my.homelab.domain;
+in
 {
   services.open-webui = {
     enable = true;
@@ -19,9 +22,9 @@
     };
   };
 
-  services.nginx.virtualHosts."chat.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."chat.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.open-webui.port}";
@@ -30,6 +33,6 @@
     };
   };
 
-  homelab.ports = [ config.services.open-webui.port ];
-  homelab.dashboard.Services.Chat.href = "https://chat.${config.homelab.domain}";
+  my.homelab.ports = [ config.services.open-webui.port ];
+  my.homelab.dashboard.Services.Chat.href = "https://chat.${domain}";
 }

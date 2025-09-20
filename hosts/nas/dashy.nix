@@ -5,6 +5,7 @@
   ...
 }:
 let
+  domain = config.my.homelab.domain;
   serviceOption = lib.types.submodule {
     options = {
       href = lib.mkOption {
@@ -17,7 +18,7 @@ let
 in
 {
   options = {
-    homelab.dashboard = lib.mkOption {
+    my.homelab.dashboard = lib.mkOption {
       type = lib.types.attrsOf (lib.types.attrsOf serviceOption);
       default = { };
       description = "Dashboard services configuration";
@@ -32,11 +33,11 @@ in
           url = value.href;
           title = title;
         }) items;
-      }) config.homelab.dashboard;
+      }) config.my.homelab.dashboard;
     };
-    services.nginx.virtualHosts."homepage.${config.homelab.domain}" = {
+    services.nginx.virtualHosts."homepage.${domain}" = {
       forceSSL = true;
-      useACMEHost = config.homelab.domain;
+      useACMEHost = domain;
       enableAuthelia = true;
       locations."/" = {
         root = config.services.dashy.finalDrv;

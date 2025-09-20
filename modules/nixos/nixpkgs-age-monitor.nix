@@ -5,24 +5,24 @@
   ...
 }:
 let
-  cfg = config.services.nixpkgs-age-monitor;
+  cfg = config.my.services.nixpkgs-age-monitor;
 
   nixpkgsAgeScript = pkgs.writeShellScript "nixpkgs-age-check" ''
     set -euo pipefail
-    
+
     # Extract date from nixos-version (format: 25.11.20250918.0147c2f)
     nixos_version=$(cat /run/current-system/nixos-version)
     nixpkgs_date=$(echo "$nixos_version" | sed 's/.*\.\([0-9]\{8\}\)\..*/\1/')
-    
+
     # Convert to epoch seconds for calculation
     nixpkgs_epoch=$(date -d "$nixpkgs_date" +%s)
     current_epoch=$(date +%s)
-    
+
     # Calculate age in days
     age_days=$(( (current_epoch - nixpkgs_epoch) / 86400 ))
-    
+
     echo "nixpkgs age: $age_days days"
-    
+
     # Send notification if threshold exceeded
     if [ "$age_days" -gt "${toString cfg.alertThresholdDays}" ]; then
       ${pkgs.curl}/bin/curl -s \
@@ -35,21 +35,21 @@ let
   '';
 in
 {
-  options.services.nixpkgs-age-monitor = {
+  options.my.services.nixpkgs-age-monitor = {
     enable = lib.mkEnableOption "nixpkgs age monitoring";
-    
+
     alertThresholdDays = lib.mkOption {
       type = lib.types.int;
       default = 7;
       description = "Alert when nixpkgs is older than this many days";
     };
-    
+
     ntfyUrl = lib.mkOption {
       type = lib.types.str;
       default = "https://ntfy.sh";
       description = "ntfy server URL";
     };
-    
+
     ntfyTopic = lib.mkOption {
       type = lib.types.str;
       description = "ntfy topic for notifications";
@@ -80,3 +80,4 @@ in
     };
   };
 }
+

@@ -6,7 +6,7 @@
   ...
 }:
 let
-  inherit (config.homelab) domain;
+  inherit (config.my.homelab) domain;
   autheliaLocation = pkgs.writeText "authelia-location.conf" ''
     ## Essential Proxy Configuration
     internal;
@@ -144,7 +144,7 @@ in
       enable = true;
       user = "authelia-main";
     };
-    homelab.ports = [ 9091 ];
+    my.homelab.ports = [ 9091 ];
     services.nginx.virtualHosts."auth.${domain}" = {
       forceSSL = true;
       useACMEHost = domain;

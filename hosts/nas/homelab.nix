@@ -6,13 +6,15 @@
   ...
 }:
 {
-  homelab.domain = lib.mkDefault secrets.prod-domain;
-  homelab.nginx = {
-    enable = true;
-    acme = {
+  my.homelab = {
+    domain = lib.mkDefault secrets.prod-domain;
+    nginx = {
       enable = true;
-      dnsProvider = "cloudflare";
-      environmentFile = config.age.secrets.cloudflare-token.path;
+      acme = {
+        enable = true;
+        dnsProvider = "cloudflare";
+        environmentFile = config.age.secrets.cloudflare-token.path;
+      };
     };
   };
 }

@@ -5,6 +5,9 @@
   secrets,
   ...
 }:
+let
+  domain = config.my.homelab.domain;
+in
 {
   services.syncthing = {
     enable = true;
@@ -67,9 +70,9 @@
       mode = "0770";
     };
   };
-  services.nginx.virtualHosts."syncthing.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."syncthing.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://${toString config.services.syncthing.guiAddress}";
@@ -82,8 +85,8 @@
 
   services.restic.backups.daily.paths = [ config.services.syncthing.dataDir ];
 
-  homelab.ports = [
+  my.homelab.ports = [
     (builtins.elemAt (builtins.split ":" config.services.syncthing.guiAddress) 1)
   ];
-  homelab.dashboard.Services.Syncthing.href = "https://syncthing.${config.homelab.domain}";
+  my.homelab.dashboard.Services.Syncthing.href = "https://syncthing.${domain}";
 }

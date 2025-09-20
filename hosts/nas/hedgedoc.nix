@@ -6,7 +6,8 @@
   ...
 }:
 let
-  hedgedocDomain = "hedgedoc.${config.homelab.domain}";
+  domain = config.my.homelab.domain;
+  hedgedocDomain = "hedgedoc.${domain}";
 in
 {
   services.hedgedoc = {
@@ -27,7 +28,7 @@ in
   };
   services.nginx.virtualHosts."${hedgedocDomain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       extraConfig = ''
@@ -55,6 +56,6 @@ in
     config.services.hedgedoc.settings.db.storage
     config.services.hedgedoc.settings.uploadsPath
   ];
-  homelab.ports = [ config.services.hedgedoc.settings.port ];
-  #homelab.dashboard.Services.Notes.href = "https://${hedgedocDomain}";
+  my.homelab.ports = [ config.services.hedgedoc.settings.port ];
+  #my.homelab.dashboard.Services.Notes.href = "https://${hedgedocDomain}";
 }

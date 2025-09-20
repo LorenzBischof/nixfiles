@@ -22,7 +22,7 @@
     ./system/incus.nix
   ];
 
-  services.nixpkgs-age-monitor = {
+  my.services.nixpkgs-age-monitor = {
     enable = true;
     alertThresholdDays = 7;
     ntfyTopic = secrets.ntfy-alertmanager;

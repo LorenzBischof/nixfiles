@@ -7,7 +7,8 @@
 }:
 let
   photosDir = "/data/photos";
-  immichDomain = "photos.${config.homelab.domain}";
+  domain = config.my.homelab.domain;
+  immichDomain = "photos.${domain}";
 in
 {
   users.groups.photos = { };
@@ -31,7 +32,7 @@ in
 
   services.nginx.virtualHosts."${immichDomain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://localhost:${toString config.services.immich.port}";
@@ -49,6 +50,6 @@ in
     };
   };
 
-  homelab.ports = [ config.services.immich.port ];
-  homelab.dashboard.Media.Photos.href = "https://${immichDomain}";
+  my.homelab.ports = [ config.services.immich.port ];
+  my.homelab.dashboard.Media.Photos.href = "https://${immichDomain}";
 }

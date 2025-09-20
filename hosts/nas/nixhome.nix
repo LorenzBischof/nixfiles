@@ -5,6 +5,7 @@
   ...
 }:
 let
+  domain = config.my.homelab.domain;
   serviceOption = lib.types.submodule {
     options = {
       href = lib.mkOption {
@@ -16,12 +17,10 @@ let
   };
 in
 {
-  options = {
-    homelab.dashboard = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.attrsOf serviceOption);
-      default = { };
-      description = "Dashboard services configuration";
-    };
+  options.my.homelab.dashboard = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.attrsOf serviceOption);
+    default = { };
+    description = "Dashboard services configuration";
   };
   config =
     let
@@ -38,11 +37,11 @@ in
             url = value.href;
             name = name;
           }) items;
-        }) config.homelab.dashboard;
+        }) config.my.homelab.dashboard;
       };
-      services.nginx.virtualHosts."homepage.${config.homelab.domain}" = {
+      services.nginx.virtualHosts."homepage.${domain}" = {
         forceSSL = true;
-        useACMEHost = config.homelab.domain;
+        useACMEHost = domain;
         enableAuthelia = true;
         locations."/" = {
           proxyPass = "http://127.0.0.1:${port}";
@@ -50,7 +49,7 @@ in
           enableAuthelia = true;
         };
       };
-      homelab.ports = [ port ];
+      my.homelab.ports = [ port ];
 
     };
 }

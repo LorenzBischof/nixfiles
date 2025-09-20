@@ -7,7 +7,8 @@
 }:
 let
   backupDir = "/var/cache/paperless-backup";
-  paperlessDomain = "paperless.${config.homelab.domain}";
+  domain = config.my.homelab.domain;
+  paperlessDomain = "paperless.${domain}";
 in
 {
   services.paperless = {
@@ -27,7 +28,7 @@ in
   };
   services.nginx.virtualHosts."${paperlessDomain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.paperless.port}";
@@ -59,7 +60,7 @@ in
     };
   services.restic.backups.daily.paths = [ backupDir ];
 
-  homelab.ports = [ config.services.paperless.port ];
-  homelab.dashboard.Services.Paperless.href = "https://${paperlessDomain}";
+  my.homelab.ports = [ config.services.paperless.port ];
+  my.homelab.dashboard.Services.Paperless.href = "https://${paperlessDomain}";
 
 }

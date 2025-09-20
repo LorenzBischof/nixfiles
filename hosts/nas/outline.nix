@@ -6,21 +6,22 @@
   ...
 }:
 let
-  domain = "notes.${config.homelab.domain}";
+  domain = config.my.homelab.domain;
+  outlineDomain = "notes.${domain}";
 in
 {
   services.outline = {
     enable = true;
     port = 9281;
     forceHttps = false;
-    publicUrl = "https://${domain}";
+    publicUrl = "https://${outlineDomain}";
     storage.storageType = "local";
     oidcAuthentication = {
       clientId = "outline";
       clientSecretFile = config.age.secrets.outline-oidc-secret.path;
-      authUrl = "https://auth.${config.homelab.domain}/api/oidc/authorization";
-      tokenUrl = "https://auth.${config.homelab.domain}/api/oidc/token";
-      userinfoUrl = "https://auth.${config.homelab.domain}/api/oidc/userinfo";
+      authUrl = "https://auth.${domain}/api/oidc/authorization";
+      tokenUrl = "https://auth.${domain}/api/oidc/token";
+      userinfoUrl = "https://auth.${domain}/api/oidc/userinfo";
       usernameClaim = "preferred_username";
       displayName = "Authelia";
       scopes = [
@@ -31,9 +32,9 @@ in
       ];
     };
   };
-  services.nginx.virtualHosts."${domain}" = {
+  services.nginx.virtualHosts."${outlineDomain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     locations."/" = {
       proxyPass = "http://localhost:${toString config.services.outline.port}";
       proxyWebsockets = true;
@@ -45,7 +46,7 @@ in
       client_secret = secrets.authelia-clients-outline;
       authorization_policy = "one_factor";
       redirect_uris = [
-        "https://${domain}/auth/oidc.callback"
+        "https://${outlineDomain}/auth/oidc.callback"
       ];
       scopes = [
         "openid"
@@ -63,6 +64,6 @@ in
   #   config.services.hedgedoc.settings.uploadsPath
   # ];
 
-  homelab.ports = [ config.services.outline.port ];
-  homelab.dashboard.Services.Notes.href = "https://${domain}";
+  my.homelab.ports = [ config.services.outline.port ];
+  my.homelab.dashboard.Services.Notes.href = "https://${outlineDomain}";
 }

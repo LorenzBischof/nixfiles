@@ -5,11 +5,14 @@
   secrets,
   ...
 }:
+let
+  domain = config.my.homelab.domain;
+in
 {
   services.scrutiny.enable = true;
-  services.nginx.virtualHosts."scrutiny.${config.homelab.domain}" = {
+  services.nginx.virtualHosts."scrutiny.${domain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString config.services.scrutiny.settings.web.listen.port}";
@@ -18,6 +21,6 @@
     };
   };
 
-  homelab.ports = [ config.services.scrutiny.settings.web.listen.port ];
-  homelab.dashboard.Monitoring.Scrutiny.href = "https://scrutiny.${config.homelab.domain}";
+  my.homelab.ports = [ config.services.scrutiny.settings.web.listen.port ];
+  my.homelab.dashboard.Monitoring.Scrutiny.href = "https://scrutiny.${domain}";
 }

@@ -6,7 +6,8 @@
   ...
 }:
 let
-  mealieDomain = "recipes.${config.homelab.domain}";
+  domain = config.my.homelab.domain;
+  mealieDomain = "recipes.${domain}";
 in
 {
   services.mealie = {
@@ -14,7 +15,7 @@ in
     settings = {
       OIDC_AUTH_ENABLED = "true";
       OIDC_SIGNUP_ENABLED = "true";
-      OIDC_CONFIGURATION_URL = "https://auth.${config.homelab.domain}/.well-known/openid-configuration";
+      OIDC_CONFIGURATION_URL = "https://auth.${domain}/.well-known/openid-configuration";
       OIDC_CLIENT_ID = "mealie";
       OIDC_AUTO_REDIRECT = "true"; # WARNING: a default local admin user is created by default!
     };
@@ -23,7 +24,7 @@ in
 
   services.nginx.virtualHosts."${mealieDomain}" = {
     forceSSL = true;
-    useACMEHost = config.homelab.domain;
+    useACMEHost = domain;
     locations."/" = {
       proxyPass = "http://localhost:${toString config.services.mealie.port}";
       proxyWebsockets = true;
@@ -50,6 +51,6 @@ in
   };
 
   services.restic.backups.daily.paths = [ "/var/lib/mealie/mealie.db" ];
-  homelab.ports = [ config.services.mealie.port ];
-  homelab.dashboard.Services.Recipes.href = "https://${mealieDomain}";
+  my.homelab.ports = [ config.services.mealie.port ];
+  my.homelab.dashboard.Services.Recipes.href = "https://${mealieDomain}";
 }
