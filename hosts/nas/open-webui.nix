@@ -15,6 +15,7 @@
       DEFAULT_USER_ROLE = "admin";
       ENABLE_SIGNUP = "true";
       BYPASS_MODEL_ACCESS_CONTROL = "true";
+      HOME = config.services.open-webui.stateDir; # https://github.com/NixOS/nixpkgs/issues/411914
     };
   };
 
