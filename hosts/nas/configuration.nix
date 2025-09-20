@@ -28,10 +28,7 @@ in
     ./mealie.nix
     ./hedgedoc.nix
     ./outline.nix
-    ../../modules/nixos/common.nix
-    ../../modules/nixos/nginx.nix
-    ../../modules/nixos/autoupgrade.nix
-    ../../modules/nixos/nixpkgs-age-monitor.nix
+    ../../modules/nixos
   ];
 
   services.nixpkgs-age-monitor = {

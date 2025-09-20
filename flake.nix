@@ -179,6 +179,7 @@
           ];
           specialArgs = {
             secrets = import nix-secrets;
+            inherit inputs;
           };
         };
         #  rpi2 = nixpkgs.lib.nixosSystem {

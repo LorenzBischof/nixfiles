@@ -18,9 +18,8 @@
     ./system/detect-syncthing-conflicts.nix
     ./system/nas.nix
     ./system/autoupgrade.nix
-    ../../modules/nixos/common.nix
+    ../../modules/nixos
     ./system/incus.nix
-    ../../modules/nixos/nixpkgs-age-monitor.nix
   ];
 
   services.nixpkgs-age-monitor = {

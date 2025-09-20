@@ -1,9 +1,6 @@
 { pkgs, lib, ... }:
 
 {
-  imports = [
-    ../../../modules/nixos/autoupgrade.nix
-  ];
   autoUpgrade = {
     enable = true;
     dates = "hourly";
