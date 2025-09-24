@@ -1,0 +1,17 @@
+{
+  "lspconfig": {
+    "nixd": {
+      "nixd.nixpkgs": {
+        "expr": "import (builtins.getFlake (\"git+file://\" + toString ./.)).inputs.nixpkgs {}"
+      },
+      "nixd.options": {
+        "nixos": {
+          "expr": "(builtins.getFlake (\"git+file://\" + toString ./.)).nixosConfigurations.laptop.options"
+        },
+        "home_manager": {
+          "expr": "(builtins.getFlake (\"git+file://\" + toString ./.)).homeConfigurations.bischoflo.options"
+        }
+      }
+    }
+  }
+}
