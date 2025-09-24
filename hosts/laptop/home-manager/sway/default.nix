@@ -300,6 +300,9 @@
           xkb_layout = "de(adnw),ch(de_nodeadkeys)";
           xkb_options = "grp:alt_shift_toggle";
         };
+        "type:touchpad" = {
+          natural_scroll = "enabled";
+        };
         "5824:10203:Glove80_Left_Keyboard" = {
           xkb_layout = "ch(de_nodeadkeys)";
         };
