@@ -42,10 +42,7 @@ in
     };
     flags = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = [
-        "--refresh"
-        "--flake ${cfg.flake}"
-      ];
+      default = [ ];
       example = [
         "-I"
         "stuff=/home/alice/nixos-stuff"
@@ -112,94 +109,48 @@ in
     };
   };
   config = lib.mkIf (cfg.enable && (builtins.hasAttr "rev" inputs.self)) {
-
-    assertions = [
-      {
-        assertion = !config.system.autoUpgrade.enable;
-        message = ''
-          The options 'system.autoUpgrade.enable' and 'my.system.autoUpgrade.enable' cannot both be set.
-        '';
-      }
-    ];
-
     environment.etc.git-revision.text = inputs.self.rev;
 
-    systemd.services.nixos-upgrade =
-      let
-        nixos-rebuild = "${config.system.build.nixos-rebuild}/bin/nixos-rebuild";
-      in
-      {
-        description = "NixOS Upgrade";
+    system.autoUpgrade = {
+      enable = true;
+      inherit (cfg)
+        operation
+        flake
+        flags
+        dates
+        randomizedDelaySec
+        fixedRandomDelay
+        persistent
+        ;
+    };
 
-        restartIfChanged = false;
-        unitConfig.X-StopOnRemoval = false;
+    systemd.services.nixos-upgrade = {
+      serviceConfig = {
+        CPUSchedulingPolicy = "idle";
+        IOSchedulingClass = "idle";
 
-        serviceConfig = {
-          Type = "oneshot";
-          CPUSchedulingPolicy = "idle";
-          IOSchedulingClass = "idle";
-        };
-
-        environment =
-          config.nix.envVars
-          // {
-            inherit (config.environment.sessionVariables) NIX_PATH;
-            HOME = "/root";
-          }
-          // config.networking.proxy.envVars;
-
-        path = with pkgs; [
-          coreutils
-          gnutar
-          xz.bin
-          gzip
-          gitMinimal
-          config.nix.package.out
-          config.programs.ssh.package
-          jq
-          curl
-        ];
-
-        script = ''
-          ${nixos-rebuild} ${cfg.operation} ${toString cfg.flags}
-        '';
-
-        startAt = cfg.dates;
-
-        after = [ "network-online.target" ];
-        wants = [ "network-online.target" ];
-
-        # Check if the currently deployed revision exists on Github
-        # Otherwise it could have been a manual switch --target-host
-        # that is not pushed to Git yet and we do not want to downgrade.
-        # This also prevents running offline, because then Github is not available
-        serviceConfig.ExecCondition = pkgs.writeShellScript "check-upgrade-conditions" ''
-          # Check generation age
-          date_string="$(${nixos-rebuild} list-generations --json | jq -r '.[] | select(.current == true) | .date')"
-          age_seconds=$(($(date +%s) - $(date -d "$date_string" +%s)))
-
-          if ! test $age_seconds -gt 43200; then
-              echo "Last generation is only $age_seconds old, not auto upgrading"
+        ExecCondition = pkgs.writeShellScript "check-upgrade-conditions" ''
+          status="$(${pkgs.curl}/bin/curl -s "https://api.github.com/repos/lorenzbischof/nixfiles/compare/HEAD...${inputs.self.rev or ""}" | ${pkgs.jq}/bin/jq -r .status)"
+          if [ "$status" = "behind" ]; then
+              echo "Commit ${inputs.self.rev or ""} is behind the default branch. Updating..."
+          elif [ "$status" = "ahead" ]; then
+              echo "Commit ${inputs.self.rev or ""} is ahead of the default branch. Did you merge your PR?"
               exit 1
-          fi
-
-          if ! curl --fail-with-body --silent https://api.github.com/repos/lorenzbischof/nixfiles/commits/${inputs.self.rev or "dirty"}  >/dev/null; then
+          elif [ "$status" = "identical" ]; then
+              echo "Already up to date. Skipping."
+              exit 1
+          elif [ "$status" = "404" ]; then
               echo "Commit ${inputs.self.rev or ""} does not exist on remote. Did you push your changes?"
               exit 1
+          else
+              echo "Did not receive a response. Maybe you are rate-limited?"
+              exit 1
           fi
-
         '';
-        # Prefer not to autoupgrade when on battery
-        unitConfig.ConditionACPower = true;
-
       };
-
-    systemd.timers.nixos-upgrade = {
-      timerConfig = {
-        RandomizedDelaySec = cfg.randomizedDelaySec;
-        FixedRandomDelay = cfg.fixedRandomDelay;
-        Persistent = cfg.persistent;
-      };
+      # Prefer not to autoupgrade when on battery
+      unitConfig.ConditionACPower = true;
     };
+
   };
 }
