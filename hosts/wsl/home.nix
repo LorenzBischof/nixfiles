@@ -38,8 +38,8 @@ let
 in
 {
   imports = [
-    ../../modules/home-manager/shell
-    ../../modules/home-manager/git
+    ../../modules/home/shell
+    ../../modules/home/git
   ];
 
   nixpkgs.config.allowUnfree = true;

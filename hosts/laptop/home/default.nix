@@ -9,17 +9,17 @@
 }:
 {
   imports = [
-    ./home-manager/alacritty
-    ./home-manager/dunst
-    ./home-manager/foot.nix
-    ./home-manager/sway
-    ./home-manager/i3
-    ./home-manager/scripts
-    ./home-manager/aider-chat.nix
-    ./home-manager/aichat.nix
-    ./home-manager/ai.nix
-    ../../modules/home-manager/git
-    ../../modules/home-manager/shell
+    ./ai.nix
+    ./aichat.nix
+    ./aider-chat.nix
+    ./alacritty
+    ./dunst
+    ./foot.nix
+    ./i3
+    ./scripts
+    ./sway
+    ../../../modules/home/git
+    ../../../modules/home/shell
     inputs.nix-secrets.homeManagerModule
     inputs.numen.homeManagerModule
   ];
@@ -37,7 +37,7 @@
 
   services.safeeyes = {
     # https://github.com/NixOS/nixpkgs/issues/242664
-    package = pkgs.callPackage ../../packages/safeeyes.nix { };
+    package = pkgs.callPackage (self + "/packages/safeeyes.nix") { };
     enable = true;
   };
 

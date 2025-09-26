@@ -135,7 +135,7 @@
         laptop = nixpkgs.lib.nixosSystem {
           inherit system pkgs;
           modules = [
-            ./hosts/laptop/configuration.nix
+            ./hosts/laptop/nixos
             stylix.nixosModules.stylix
             talon.nixosModules.talon
             home-manager.nixosModules.home-manager
@@ -144,7 +144,7 @@
               home-manager = {
                 useGlobalPkgs = true;
                 useUserPackages = true;
-                users.lbischof = import ./hosts/laptop/home.nix;
+                users.lbischof = import ./hosts/laptop/home;
                 extraSpecialArgs = {
                   inherit self inputs;
                 };

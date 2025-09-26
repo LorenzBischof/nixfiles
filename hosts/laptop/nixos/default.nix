@@ -11,15 +11,14 @@
 
 {
   imports = [
-    # Include the results of the hardware scan.
-    ./system/hardware-configuration.nix
-    ./system/suspend.nix
-    ./system/detect-reboot-needed.nix
-    ./system/detect-syncthing-conflicts.nix
-    ./system/nas.nix
-    ./system/autoupgrade.nix
-    ../../modules/nixos
-    ./system/incus.nix
+    ./autoupgrade.nix
+    ./detect-reboot-needed.nix
+    ./detect-syncthing-conflicts.nix
+    ./hardware-configuration.nix
+    ./incus.nix
+    ./nas.nix
+    ./suspend.nix
+    ../../../modules/nixos
   ];
 
   my.services.nixpkgs-age-monitor = {
@@ -32,7 +31,7 @@
 
   stylix = {
     enable = true;
-    image = ./home-manager/sway/wallpaper_cropped_1.png;
+    image = ../home/sway/wallpaper_cropped_1.png;
     base16Scheme = "${pkgs.base16-schemes}/share/themes/eighties.yaml";
     autoEnable = true;
     fonts.sizes = {
