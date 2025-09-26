@@ -30,7 +30,9 @@
     daemonCPUSchedPolicy = lib.mkDefault "idle";
 
     channel.enable = false;
-    package = pkgs.lix;
+    # Temporarily disable, because Nixd does not seem to work correctly.
+    #package = pkgs.lix;
+    package = pkgs.nixVersions.latest;
     settings = {
       experimental-features = [
         "nix-command"
