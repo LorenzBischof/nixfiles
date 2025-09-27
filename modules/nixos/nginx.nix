@@ -93,9 +93,7 @@ in
 
         virtualHosts."_" = {
           default = true;
-          extraConfig = ''
-            ssl_reject_handshake on;
-          '';
+          rejectSSL = true;
           locations."/".return = 444;
         };
       };
