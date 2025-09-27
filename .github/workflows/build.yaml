@@ -62,6 +62,14 @@ jobs:
       # https://determinate.systems/posts/magic-nix-cache-free-tier-eol/
       #- uses: DeterminateSystems/magic-nix-cache-action@main
 
+      - name: Tailscale
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:cicd
+          use-cache: 'true'
+
       - name: Build and push system
         run: |
           nix run nixpkgs#attic-client login cache https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
