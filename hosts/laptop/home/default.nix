@@ -104,13 +104,11 @@
         };
         "nas-tailscale" = lib.hm.dag.entryBefore [ "nas" ] {
           match = ''originalhost nas exec "tailscale status"'';
-          hostname = "100.102.187.46";
-          user = "lbischof";
+          hostname = "nas";
           identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "nas" = {
           hostname = "192.168.0.124";
-          user = "lbischof";
           identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "nas-unlock" = {
@@ -121,12 +119,9 @@
         };
         "nas.local" = {
           hostname = "192.168.1.2";
-          user = "lbischof";
           identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "vps" = {
-          hostname = "140.238.171.222";
-          user = "lbischof";
           identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
       };
