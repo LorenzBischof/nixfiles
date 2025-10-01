@@ -257,51 +257,66 @@
       formatter.${system} = treefmtEval.config.build.wrapper;
       checks.${system} =
         let
+          nixosConfigurationsPerSystem = {
+            aarch64-linux = [
+              "vps"
+            ];
+            x86_64-linux = [
+              "laptop"
+              "nas"
+            ];
+          };
+          nixosConfigurations = lib.mapAttrs' (n: lib.nameValuePair "nixos-${n}") (
+            lib.genAttrs (nixosConfigurationsPerSystem.${system} or [ ]) (
+              name: self.nixosConfigurations.${name}.config.system.build.toplevel
+            )
+          );
           testFiles = builtins.readDir ./tests;
           testNames = builtins.attrNames (
             lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) testFiles
           );
           removeExtension = name: lib.removeSuffix ".nix" name;
-        in
-        lib.listToAttrs (
-          map (testFile: {
-            name = removeExtension testFile;
-            value = pkgs.testers.runNixOSTest {
-              interactive.sshBackdoor.enable = true;
-              globalTimeout = 300;
-
+          tests = lib.listToAttrs (
+            map (testFile: {
               name = removeExtension testFile;
+              value = pkgs.testers.runNixOSTest {
+                interactive.sshBackdoor.enable = true;
+                globalTimeout = 300;
 
-              defaults = {
-                # I could not get this to work another way. If I directly set the options, there is an eval error.
-                # Including the full module means that we need a mocked private key etc.
-                options.age = with lib; {
-                  secrets = mkOption {
-                    type = types.attrsOf (
-                      types.submodule (
-                        { config, ... }:
-                        {
-                          options = {
-                            file = mkOption {
-                              type = types.path;
+                name = removeExtension testFile;
+
+                defaults = {
+                  # I could not get this to work another way. If I directly set the options, there is an eval error.
+                  # Including the full module means that we need a mocked private key etc.
+                  options.age = with lib; {
+                    secrets = mkOption {
+                      type = types.attrsOf (
+                        types.submodule (
+                          { config, ... }:
+                          {
+                            options = {
+                              file = mkOption {
+                                type = types.path;
+                              };
+                              path = mkOption {
+                                type = types.str;
+                                default = "${config.file}";
+                              };
                             };
-                            path = mkOption {
-                              type = types.str;
-                              default = "${config.file}";
-                            };
-                          };
-                        }
-                      )
-                    );
-                    default = { };
+                          }
+                        )
+                      );
+                      default = { };
+                    };
                   };
                 };
+                imports = [
+                  (./tests + "/${testFile}")
+                ];
               };
-              imports = [
-                (./tests + "/${testFile}")
-              ];
-            };
-          }) testNames
-        );
+            }) testNames
+          );
+        in
+        tests // nixosConfigurations;
     };
 }
