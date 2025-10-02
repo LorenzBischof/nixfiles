@@ -5,9 +5,22 @@ default: switch
 add:
     @git add -N .
 
+[private]
+check-git-revision host:
+    #!/usr/bin/env bash
+    remote_revision=$(ssh {{host}} cat /etc/git-revision 2>/dev/null || echo "")
+    if [ -n "$remote_revision" ] && ! git cat-file -e "$remote_revision" 2>/dev/null; then
+        echo "Error: Git revision $remote_revision from {{host}} is not available locally"
+        exit 1
+    fi
+
 # Activate configuration ("", nas, vps)
 switch host="": add
     #!/usr/bin/env bash
+    if [ -n "{{host}}" ]; then
+        just check-git-revision {{host}}
+    fi
+    
     overrides=$(./override-input.sh)
     if [ "{{host}}" = "" ]; then
         sudo nixos-rebuild switch --flake . $overrides
