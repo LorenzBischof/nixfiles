@@ -20,10 +20,23 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Here we specify the matrix of our hosts and their target platform architectures
+      matrix:
+        machine:
+          - host: laptop
+            platform: x86-64-linux
+          - host: nas
+            platform: x86-64-linux
+          - host: vps
+            platform: aarch64-linux
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-qemu-action@v3
+      # We only run this if we are building an aarch64-linux system
+      - if: matrix.machine.platform == 'aarch64-linux'
+        uses: docker/setup-qemu-action@v3
 
       - run: |
           sudo mkdir -p /etc/nix
@@ -59,13 +72,14 @@ jobs:
 
       - name: Build and push system
         run: |
-          nix run nixpkgs#attic-client -- login cache https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
-          nix run nixpkgs#nix-fast-build -- --no-nom --skip-cached --system "aarch64-linux x86_64-linux" --attic-cache system
+          nix run nixpkgs#attic-client login cache https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
+          nix build .#nixosConfigurations.${{ matrix.machine.host }}.config.system.build.toplevel 2>&1 | tee build.log
+          nix run nixpkgs#attic-client push system result
 
-     # - name: Process failure
-     #   if: failure()
-     #   run: |
-     #     gh extension install github/gh-models
-     #     cat build.log | sed -n '/error:/,$p' | tail | gh models run openai/gpt-4o "This is the result of a nixosConfiguration nix-build. Summarize the error and suggest a possible fix, if you are pretty certain it might help" 
-     #   env:
-     #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Process failure
+        if: failure()
+        run: |
+          gh extension install github/gh-models
+          cat build.log | sed -n '/error:/,$p' | tail | gh models run openai/gpt-4o "This is the result of a nixosConfiguration nix-build. Summarize the error and suggest a possible fix, if you are pretty certain it might help" 
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
