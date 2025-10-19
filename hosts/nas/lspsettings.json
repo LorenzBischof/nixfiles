@@ -1,0 +1,12 @@
+{
+  "nixd": {
+    "nixpkgs": {
+      "expr": "let findFlake = dir: if builtins.pathExists (dir + \"/flake.nix\") then builtins.getFlake (\"git+file://\" + toString dir) else if toString dir == \"/\" then throw \"No flake.nix found\" else findFlake (dir + \"/..\"); flake = findFlake ./.; in flake.inputs.nixpkgs {}"
+    },
+    "options": {
+      "nixos": {
+        "expr": "let findFlake = dir: if builtins.pathExists (dir + \"/flake.nix\") then builtins.getFlake (\"git+file://\" + toString dir) else if toString dir == \"/\" then throw \"No flake.nix found\" else findFlake (dir + \"/..\"); flake = findFlake ./.; in flake.nixosConfigurations.nas.options"
+      }
+    }
+  }
+}
