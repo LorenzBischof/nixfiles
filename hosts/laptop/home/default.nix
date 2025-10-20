@@ -2,6 +2,7 @@
   self,
   config,
   pkgs,
+  pkgs-citrix-workspace,
   lib,
   stylix,
   inputs,
@@ -66,7 +67,7 @@
     # fonts
     font-awesome
     nerd-fonts.dejavu-sans-mono
-    citrix_workspace
+    pkgs-citrix-workspace.citrix_workspace
   ];
 
   systemd.user.startServices = true;

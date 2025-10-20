@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs-citrix-workspace.url = "github:nixos/nixpkgs/87f93d54c572c70f5e4c69eb82f0a7ece26ac9f6";
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -73,6 +74,7 @@
     {
       self,
       nixpkgs,
+      nixpkgs-citrix-workspace,
       home-manager,
       stylix,
       nix-index-database,
@@ -104,7 +106,18 @@
             "aspnetcore-runtime-wrapped-6.0.36"
             "dotnet-sdk-6.0.428"
             "dotnet-sdk-wrapped-6.0.428"
-            # Citrix Workspace
+          ];
+        };
+        overlays = [
+          neovim-config.overlays.default
+        ];
+      };
+
+      pkgs-citrix-workspace = import nixpkgs-citrix-workspace {
+        inherit system;
+        config = {
+          allowUnfree = true;
+          permittedInsecurePackages = [
             "libsoup-2.74.3"
             "libxml2-2.13.8"
           ];
@@ -125,7 +138,6 @@
                   hash = "052zibykhig9091xl76z2x9vn4f74w5q8i9frlpc473pvfplsczk";
                 };
           })
-          neovim-config.overlays.default
         ];
       };
       treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
@@ -146,7 +158,7 @@
                 useUserPackages = true;
                 users.lbischof = import ./hosts/laptop/home;
                 extraSpecialArgs = {
-                  inherit self inputs;
+                  inherit self inputs pkgs-citrix-workspace;
                 };
               };
             }
