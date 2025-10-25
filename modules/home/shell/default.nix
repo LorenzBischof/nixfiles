@@ -58,6 +58,7 @@
         inline_height = 10;
         enter_accept = true;
         prefers_reduced_motion = true;
+        search_mode = "fulltext";
       };
     };
     fd.enable = true;
