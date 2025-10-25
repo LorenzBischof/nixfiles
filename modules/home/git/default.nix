@@ -13,6 +13,7 @@
       executable = true;
     };
   };
+  home.packages = [ pkgs.watchman ];
   programs.jujutsu = {
     enable = true;
     settings = {
@@ -45,6 +46,7 @@
         "format_short_signature(signature)" = "signature.name()";
         "format_timestamp(timestamp)" = "timestamp.ago()";
       };
+      fsmonitor.backend = "watchman";
     };
   };
 
