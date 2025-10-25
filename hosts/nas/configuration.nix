@@ -176,12 +176,12 @@ in
         FCTEMPS=${fan}/pwm1=/sys/devices/platform/coretemp.0/hwmon/hwmon[[:print:]]*/temp2_input
         FCFANS=${fan}/pwm1=${fan}/fan1_input
         MINTEMP=${fan}/pwm1=60
-        MAXTEMP=${fan}/pwm1=110
+        MAXTEMP=${fan}/pwm1=80
         MINSTART=${fan}/pwm1=30
         MINSTOP=${fan}/pwm1=50
         MINPWM=${fan}/pwm1=50
-        MAXPWM=255
-        AVERAGE=5
+        MAXPWM=${fan}/pwm1=200
+        AVERAGE=${fan}/pwm1=10
       '';
     };
 
