@@ -14,7 +14,6 @@
     ./autoupgrade.nix
     ./detect-reboot-needed.nix
     ./detect-syncthing-conflicts.nix
-    ./hardware-configuration.nix
     ./incus.nix
     ./nas.nix
     ./suspend.nix
@@ -118,7 +117,7 @@
   };
 
   services.thermald.enable = true;
-  services.auto-cpufreq.enable = true;
+  #services.auto-cpufreq.enable = true;
 
   services.logind.settings.Login.HandlePowerKey = "ignore";
 
@@ -138,20 +137,10 @@
     enable = true;
     user = "lbischof";
     dataDir = "/home/lbischof";
-    # overrideDevices = true;
-    #overrideFolders = true;
+    openDefaultPorts = true;
   };
-  # Syncthing ports:
-  # 22000 TCP and/or UDP for sync traffic
-  # 21027/UDP for discovery
-  # source: https://docs.syncthing.net/users/firewall.html
-  networking.firewall.allowedTCPPorts = [ 22000 ];
-  networking.firewall.allowedUDPPorts = [
-    22000
-    21027
-  ];
 
-  # Define a user account. Don't forget to set a password with ‘passwd’.
+  users.mutableUsers = false;
   users.users.lbischof = {
     isNormalUser = true;
     extraGroups = [

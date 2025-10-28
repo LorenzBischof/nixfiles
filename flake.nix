@@ -4,6 +4,7 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-citrix-workspace.url = "github:nixos/nixpkgs/87f93d54c572c70f5e4c69eb82f0a7ece26ac9f6";
+    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -61,12 +62,12 @@
       url = "github:numtide/nix-ai-tools";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.treefmt-nix.follows = "treefmt-nix";
-      inputs.blueprint.inputs.nixpkgs.follows = "nixpkgs";
+      #inputs.blueprint.inputs.nixpkgs.follows = "nixpkgs";
     };
     mcp-nixos = {
       url = "github:utensils/mcp-nixos";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.devshell.inputs.nixpkgs.follows = "nixpkgs";
+      #inputs.devshell.inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
@@ -75,6 +76,7 @@
       self,
       nixpkgs,
       nixpkgs-citrix-workspace,
+      nixos-hardware,
       home-manager,
       stylix,
       nix-index-database,
@@ -148,11 +150,42 @@
           inherit system pkgs;
           modules = [
             ./hosts/laptop/nixos
+            ./hosts/laptop/nixos/hardware-configuration.nix
             stylix.nixosModules.stylix
             talon.nixosModules.talon
             home-manager.nixosModules.home-manager
             nix-secrets.nixosModules.laptop
             {
+              home-manager = {
+                useGlobalPkgs = true;
+                useUserPackages = true;
+                users.lbischof = import ./hosts/laptop/home;
+                extraSpecialArgs = {
+                  inherit self inputs pkgs-citrix-workspace;
+                };
+              };
+            }
+            nix-index-database.nixosModules.nix-index
+          ];
+          specialArgs = {
+            secrets = import nix-secrets;
+            inherit inputs;
+          };
+        };
+        framework = nixpkgs.lib.nixosSystem {
+          inherit system pkgs;
+          modules = [
+            disko.nixosModules.disko
+            nixos-hardware.nixosModules.framework-amd-ai-300-series
+            ./hosts/laptop/nixos
+            ./hosts/laptop/nixos/disko.nix
+            ./hosts/laptop/nixos/hardware-configuration-framework.nix
+            stylix.nixosModules.stylix
+            talon.nixosModules.talon
+            home-manager.nixosModules.home-manager
+            nix-secrets.nixosModules.laptop
+            {
+              boot.kernelPackages = pkgs.linuxPackages_latest;
               home-manager = {
                 useGlobalPkgs = true;
                 useUserPackages = true;
@@ -192,6 +225,15 @@
           specialArgs = {
             secrets = import nix-secrets;
             inherit inputs;
+          };
+        };
+        iso-installer = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            ./hosts/iso-installer/configuration.nix
+          ];
+          specialArgs = {
+            inherit self nixpkgs;
           };
         };
         #  rpi2 = nixpkgs.lib.nixosSystem {
@@ -249,22 +291,6 @@
       images = {
         rpi2 = self.nixosConfigurations.rpi2.config.system.build.sdImage;
         rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
-      };
-      packages.x86_64-linux = {
-        nas-iso = nixos-generators.nixosGenerate {
-          system = "x86_64-linux";
-          modules = [
-            {
-              device = "nas";
-              mainuser = "lbischof";
-            }
-            ./hosts/iso/configuration.nix
-          ];
-          specialArgs = {
-            inherit self nixpkgs;
-          };
-          format = "install-iso";
-        };
       };
       formatter.${system} = treefmtEval.config.build.wrapper;
       checks.${system} =

@@ -175,7 +175,6 @@
           }
           {
             block = "battery";
-            if_command = "test -e /sys/class/power_supply/BAT0";
           }
           {
             block = "time";

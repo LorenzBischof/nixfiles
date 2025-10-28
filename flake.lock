@@ -512,11 +512,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1759050717,
-        "narHash": "sha256-2aFiSDJFCoOUSRQ2NB6M90dxw0HHlpg5JhtJjF5U2IE=",
+        "lastModified": 1761723000,
+        "narHash": "sha256-40IgbHFbPENnfdDhu3pH2LEHx1IH8vKpNnZlUcTXAHs=",
         "owner": "lorenzbischof",
         "repo": "nix-secrets",
-        "rev": "926846e18847f4f2fe817f5322d26fe40430d891",
+        "rev": "7cd5534135326e1e7560933f43b11066cce49b32",
         "type": "github"
       },
       "original": {
@@ -579,6 +579,22 @@
       "original": {
         "owner": "nix-community",
         "repo": "nixos-generators",
+        "type": "github"
+      }
+    },
+    "nixos-hardware": {
+      "locked": {
+        "lastModified": 1761827175,
+        "narHash": "sha256-XdPVSYyIBK4/ruoqujaQmmSGg3J2/EenexV9IEXhr6o=",
+        "owner": "NixOS",
+        "repo": "nixos-hardware",
+        "rev": "43ffe9ac82567512abb83187cb673de1091bdfa8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "master",
+        "repo": "nixos-hardware",
         "type": "github"
       }
     },
@@ -709,6 +725,7 @@
         "nix-secrets": "nix-secrets",
         "nixhome": "nixhome",
         "nixos-generators": "nixos-generators",
+        "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs",
         "nixpkgs-citrix-workspace": "nixpkgs-citrix-workspace",
         "numen": "numen",
