@@ -56,20 +56,15 @@
   };
 
   boot = {
-    binfmt.emulatedSystems = [ "aarch64-linux" ];
-    kernelParams = [ "nohibernate" ];
-    loader.grub = {
-      enable = true;
-      zfsSupport = true;
-      efiSupport = true;
-      efiInstallAsRemovable = true;
-      mirroredBoots = [
-        {
-          devices = [ "nodev" ];
-          path = "/boot";
-        }
-      ];
+    loader = {
+      systemd-boot.enable = true;
+      efi = {
+        canTouchEfiVariables = true;
+        efiSysMountPoint = "/boot";
+      };
     };
+    initrd.systemd.enable = true;
+    binfmt.emulatedSystems = [ "aarch64-linux" ];
   };
 
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
