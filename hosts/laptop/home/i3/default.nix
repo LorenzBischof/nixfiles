@@ -51,10 +51,6 @@
           command = "talon";
           notification = false;
         }
-        {
-          command = "${pkgs.feh}/bin/feh --bg-fill ${../sway/wallpaper_cropped_0.png}";
-          notification = false;
-        }
       ];
       window = {
         border = 5;

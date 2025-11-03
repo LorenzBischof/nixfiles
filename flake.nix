@@ -150,7 +150,7 @@
           inherit system pkgs;
           modules = [
             ./hosts/laptop/nixos
-            ./hosts/laptop/nixos/hardware-configuration.nix
+            ./modules/nixos
             stylix.nixosModules.stylix
             talon.nixosModules.talon
             home-manager.nixosModules.home-manager
@@ -177,19 +177,16 @@
           modules = [
             disko.nixosModules.disko
             nixos-hardware.nixosModules.framework-amd-ai-300-series
-            ./hosts/laptop/nixos
-            ./hosts/laptop/nixos/disko.nix
-            ./hosts/laptop/nixos/hardware-configuration-framework.nix
+            ./modules/nixos
+            ./hosts/framework/nixos
             stylix.nixosModules.stylix
-            talon.nixosModules.talon
             home-manager.nixosModules.home-manager
             nix-secrets.nixosModules.laptop
             {
-              boot.kernelPackages = pkgs.linuxPackages_latest;
               home-manager = {
                 useGlobalPkgs = true;
                 useUserPackages = true;
-                users.lbischof = import ./hosts/laptop/home;
+                users.lbischof = import ./hosts/framework/home;
                 extraSpecialArgs = {
                   inherit self inputs pkgs-citrix-workspace;
                 };

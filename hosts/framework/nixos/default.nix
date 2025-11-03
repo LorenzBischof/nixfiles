@@ -13,20 +13,27 @@
   imports = [
     ./hardware-configuration.nix
     ./autoupgrade.nix
-    ./incus.nix
-    ./nas.nix
+    ./disko.nix
   ];
 
-  my.services.nixpkgs-age-monitor = {
-    enable = true;
-    alertThresholdDays = 7;
-    ntfyTopic = secrets.ntfy-alertmanager;
+  my.services = {
+    detect-reboot-required.enable = true;
+    detect-syncthing-conflicts.enable = true;
+    nixpkgs-age-monitor = {
+      enable = true;
+      alertThresholdDays = 7;
+      ntfyTopic = secrets.ntfy-alertmanager;
+    };
   };
-
-  programs.niri.enable = true;
+  # upower automatically hibernates when battery is low
+  services.upower = {
+    enable = true;
+    noPollBatteries = true;
+  };
 
   stylix = {
     enable = true;
+    #image = ../home/sway/wallpaper_cropped_1.png;
     base16Scheme = "${pkgs.base16-schemes}/share/themes/eighties.yaml";
     autoEnable = true;
     fonts.sizes = {
@@ -40,13 +47,10 @@
     };
   };
 
-  services = {
-    blueman.enable = true;
-
-    tailscale.enable = true;
-  };
+  services.tailscale.enable = true;
 
   boot = {
+    kernelPackages = pkgs.linuxPackages_latest;
     loader = {
       systemd-boot.enable = true;
       efi = {
@@ -64,16 +68,9 @@
   systemd.services.systemd-suspend.environment.SYSTEMD_SLEEP_FREEZE_USER_SESSIONS = "false";
 
   networking = {
-    hostId = "ac63adf1";
-    hostName = "laptop"; # Define your hostname.
-    # Pick only one of the below networking options.
-    # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
-    networkmanager.enable = true; # Easiest to use and most distros use this by default.
+    hostName = "framework";
+    networkmanager.enable = true;
   };
-
-  # AppArmor
-  # Disabled for now, because I get an error when switching
-  #security.apparmor.enable = true;
 
   # Temporary fix for Swaylock issue TODO: what issue?
   security.pam.services.swaylock = { };
@@ -85,10 +82,7 @@
   };
 
   hardware = {
-    bluetooth = {
-      enable = true;
-      powerOnBoot = true;
-    };
+    bluetooth.enable = true;
     sane.enable = true;
     # For some reason the avahi options above do not work
     sane.netConf = "192.168.0.157";
@@ -105,7 +99,10 @@
   services.thermald.enable = true;
   #services.auto-cpufreq.enable = true;
 
-  services.logind.settings.Login.HandlePowerKey = "ignore";
+  services.logind.settings.Login = {
+    HandlePowerKey = "suspend-then-hibernate";
+    HandleLidSwitch = "suspend-then-hibernate";
+  };
 
   security.polkit.enable = true;
 
@@ -115,8 +112,8 @@
     pulse.enable = true;
   };
   # Set a higher priority, so that the headset port activates automatically
-  environment.etc."alsa-card-profile/mixer/paths/analog-input-headset-mic.conf".source =
-    ./analog-input-headset-mic.conf;
+  #environment.etc."alsa-card-profile/mixer/paths/analog-input-headset-mic.conf".source =
+  #  ./analog-input-headset-mic.conf;
   programs.noisetorch.enable = true;
 
   services.syncthing = {
@@ -158,12 +155,7 @@
   console.useXkbConfig = true;
 
   services.libinput.enable = true;
-  services.xserver.desktopManager.xterm.enable = false;
-  services.xserver.displayManager.startx.enable = true;
-
-  # The following is required for the entries in the login manager
-  # Configuration is managed by home-manager
-  services.xserver.windowManager.i3.enable = true;
+  # services.xserver.desktopManager.xterm.enable = false;
   programs.sway.enable = true;
 
   services.greetd = {
@@ -182,64 +174,8 @@
     dconf.enable = true;
     yubikey-touch-detector.enable = true;
     adb.enable = true;
-    talon.enable = true;
     virt-manager.enable = true;
-    nix-ld = {
-      enable = true;
-      libraries = with pkgs; [
-        alsa-lib
-        at-spi2-atk
-        at-spi2-core
-        atk
-        cairo
-        cups
-        curl
-        dbus
-        expat
-        fontconfig
-        freetype
-        fuse
-        fuse3
-        gdk-pixbuf
-        glib
-        gtk3
-        icu
-        libGL
-        libappindicator-gtk3
-        libdrm
-        libglvnd
-        libnotify
-        libpulseaudio
-        libunwind
-        libusb1
-        libuuid
-        libxkbcommon
-        mesa
-        nspr
-        nss
-        openssl
-        pango
-        pipewire
-        stdenv.cc.cc
-        systemd
-        vulkan-loader
-        xorg.libX11
-        xorg.libXScrnSaver
-        xorg.libXcomposite
-        xorg.libXcursor
-        xorg.libXdamage
-        xorg.libXext
-        xorg.libXfixes
-        xorg.libXi
-        xorg.libXrandr
-        xorg.libXrender
-        xorg.libXtst
-        xorg.libxcb
-        xorg.libxkbfile
-        xorg.libxshmfence
-        zlib
-      ];
-    };
+    nix-ld.enable = true;
   };
 
   # xdg-desktop-portal works by exposing a series of D-Bus interfaces

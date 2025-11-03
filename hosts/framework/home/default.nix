@@ -10,35 +10,12 @@
 }:
 {
   imports = [
-    ./ai.nix
-    ./aichat.nix
-    ./aider-chat.nix
-    ./alacritty
-    ./i3
     ../../../modules/home
     inputs.nix-secrets.homeManagerModule
-    inputs.numen.homeManagerModule
   ];
 
-  my.programs.git.enable = true;
   my.programs.firefox.enable = true;
-
-  services.numen = {
-    enable = true;
-    xkbLayout = "de";
-    xkbVariant = "adnw";
-    subtitles.enable = true;
-    updateCommand = pkgs.writeShellApplication {
-      name = "reload-i3status";
-      text = "pkill -SIGRTMIN+4 i3status-rs";
-    };
-  };
-
-  services.safeeyes = {
-    # https://github.com/NixOS/nixpkgs/issues/242664
-    package = pkgs.callPackage (self + "/packages/safeeyes.nix") { };
-    enable = true;
-  };
+  my.programs.git.enable = true;
 
   # The home.packages option allows you to install Nix packages into your
   # environment.

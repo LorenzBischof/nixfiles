@@ -4,8 +4,18 @@
   lib,
   ...
 }:
-
+let
+  sway-terminal = pkgs.writeShellApplication {
+    name = "sway-terminal";
+    runtimeInputs = [ pkgs.jq ];
+    text = builtins.readFile ./sway-terminal.sh;
+  };
+in
 {
+  imports = [
+    ./foot.nix
+  ];
+
   home.packages = with pkgs; [
     wob
     #autotiling-rs
@@ -17,8 +27,11 @@
     warpd
     wtype
     wf-recorder
+    libnotify
+    sway-terminal
   ];
 
+  services.dunst.enable = true;
   #  services.kanshi = {
   #    enable = true;
   #    profiles = {
@@ -207,12 +220,16 @@
       }
       {
         timeout = 310;
-        command = "${pkgs.swaylock}/bin/swaylock -f";
+        command = "${pkgs.sway}/bin/swaymsg 'output * dpms off'";
+        resumeCommand = "${pkgs.sway}/bin/swaymsg 'output * dpms on'";
       }
       {
         timeout = 320;
-        command = "${pkgs.sway}/bin/swaymsg 'output * dpms off'";
-        resumeCommand = "${pkgs.sway}/bin/swaymsg 'output * dpms on'";
+        command = "${pkgs.swaylock}/bin/swaylock -f";
+      }
+      {
+        timeout = 500;
+        command = "systemctl suspend-then-hibernate";
       }
     ];
   };
@@ -298,7 +315,12 @@
         "*" = {
           xkb_layout = "de(adnw),ch(de_nodeadkeys)";
           xkb_options = "grp:alt_shift_toggle";
+        };
+        "type:touchpad" = {
           natural_scroll = "enabled";
+          tap = "enabled";
+          tap_button_map = "lrm";
+          dwt = "enabled";
         };
         "5824:10203:Glove80_Left_Keyboard" = {
           xkb_layout = "ch(de_nodeadkeys)";
@@ -313,7 +335,7 @@
       };
       output = {
         "*" = {
-          #bg = builtins.toString ./wallpaper_cropped_1.png + " fill";
+          adaptive_sync = "on";
         };
         "eDP-1" = {
           bg = builtins.toString ./wallpaper_cropped_0.png + " fill";

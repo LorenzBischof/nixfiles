@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [flake-check, laptop, nas, vps]
+        target: [flake-check, laptop, framework, nas, vps]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
