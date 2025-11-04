@@ -11,7 +11,7 @@ in
 {
   services.n8n = {
     enable = true;
-    webhookUrl = "https://webhook.${domain}";
+    environment.WEBHOOK_URL = "https://webhook.${domain}";
   };
 
   services.nginx.virtualHosts."n8n.${domain}" = {
