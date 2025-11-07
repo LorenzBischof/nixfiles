@@ -16,6 +16,9 @@
     ./disko.nix
   ];
 
+  services.ollama.enable = true;
+  services.open-webui.enable = true;
+
   my.services = {
     detect-reboot-required.enable = true;
     detect-syncthing-conflicts.enable = true;
