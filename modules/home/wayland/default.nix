@@ -315,9 +315,9 @@ in
         "*" = {
           xkb_layout = "de(adnw),ch(de_nodeadkeys)";
           xkb_options = "grp:alt_shift_toggle";
+          natural_scroll = "enabled";
         };
         "type:touchpad" = {
-          natural_scroll = "enabled";
           tap = "enabled";
           tap_button_map = "lrm";
           dwt = "enabled";
@@ -327,7 +327,6 @@ in
         };
         "1133:50184:Logitech_USB_Trackball" = {
           left_handed = "enabled";
-          natural_scroll = "enabled";
           scroll_button = "BTN_EXTRA";
           scroll_method = "on_button_down";
         };
