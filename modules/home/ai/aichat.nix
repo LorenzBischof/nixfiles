@@ -17,14 +17,17 @@ let
       ];
     }
   );
+  cfg = config.my.profiles.ai;
 in
 {
-  home.packages = with pkgs; [
-    aichat
-  ];
+  config = lib.mkIf cfg.enable {
+    home.packages = with pkgs; [
+      aichat
+    ];
 
-  home.sessionVariables = {
-    AICHAT_ENV_FILE = "/run/agenix/aichat-env";
-    AICHAT_CONFIG_FILE = "${aichatConfig}";
+    home.sessionVariables = {
+      AICHAT_ENV_FILE = "/run/agenix/aichat-env";
+      AICHAT_CONFIG_FILE = "${aichatConfig}";
+    };
   };
 }

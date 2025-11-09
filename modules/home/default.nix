@@ -10,5 +10,6 @@
     ./shell
     ./git
     ./firefox.nix
+    ./ai
   ];
 }

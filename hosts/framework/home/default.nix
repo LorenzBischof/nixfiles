@@ -16,6 +16,7 @@
 
   my.programs.firefox.enable = true;
   my.programs.git.enable = true;
+  my.profiles.ai.enable = true;
 
   # The home.packages option allows you to install Nix packages into your
   # environment.

@@ -10,8 +10,6 @@
 }:
 {
   imports = [
-    ./ai.nix
-    ./aichat.nix
     ./aider-chat.nix
     ./alacritty
     ./i3
