@@ -67,8 +67,19 @@
 
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
 
-  # https://github.com/systemd/systemd/issues/33083
-  systemd.services.systemd-suspend.environment.SYSTEMD_SLEEP_FREEZE_USER_SESSIONS = "false";
+  systemd.sleep.extraConfig = ''
+    HibernateDelaySec=2h
+    SuspendState=mem
+    HibernateOnACPower=no
+  '';
+  # Disable Bluetooth as wakeup source, because it prevents automatic hibernation
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="usb", DRIVERS=="btusb", ATTR{power/wakeup}="disabled"
+  '';
+  services.logind.settings.Login = {
+    HandlePowerKey = "suspend-then-hibernate";
+    HandleLidSwitch = "suspend-then-hibernate";
+  };
 
   networking = {
     hostName = "framework";
@@ -101,11 +112,6 @@
 
   services.thermald.enable = true;
   #services.auto-cpufreq.enable = true;
-
-  services.logind.settings.Login = {
-    HandlePowerKey = "suspend-then-hibernate";
-    HandleLidSwitch = "suspend-then-hibernate";
-  };
 
   security.polkit.enable = true;
 
