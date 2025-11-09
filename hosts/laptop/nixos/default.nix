@@ -23,7 +23,7 @@
     ntfyTopic = secrets.ntfy-alertmanager;
   };
 
-  programs.niri.enable = true;
+
 
   stylix = {
     enable = true;

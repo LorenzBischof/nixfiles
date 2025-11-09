@@ -60,7 +60,7 @@ in
   #    };
   #  };
 
-  xdg.configFile."niri/config.kdl".source = ./niri.kdl;
+
   stylix.targets.swaylock.useWallpaper = false;
   programs = {
     fuzzel = {
