@@ -14,6 +14,7 @@ in
 {
   imports = [
     ./foot.nix
+    ./waybar.nix
   ];
 
   home.packages = with pkgs; [
@@ -62,64 +63,6 @@ in
   xdg.configFile."niri/config.kdl".source = ./niri.kdl;
   stylix.targets.swaylock.useWallpaper = false;
   programs = {
-    waybar = {
-      enable = true;
-      settings.mainBar = {
-        layer = "top";
-        height = 20;
-        modules-left = [
-          "niri/workspaces"
-        ];
-        modules-center = [
-          "custom/niri-windows"
-        ];
-        modules-right = [
-          "battery"
-          "clock"
-        ];
-        "custom/niri-windows" = {
-          exec = "${
-            pkgs.buildGoModule {
-              name = "waybar-niri-windows";
-              vendorHash = null;
-              src = pkgs.fetchFromGitHub {
-                owner = "calico32";
-                repo = "waybar-niri-windows";
-                rev = "048bf64b04f2758b12e641dd21bac193e0680eab";
-                hash = "sha256-8bU10/wbeSO5SZiMd0sK+BHnIIB62zAlUaUlTFSdSq8=";
-              };
-            }
-          }/bin/waybar-niri-windows";
-          return-type = "json";
-          hide-empty-text = true;
-        };
-      };
-      style = # css
-        ''
-                  #workspaces button.empty:not(.active) { /* hide empty workspaces */
-                    margin-left: -10px;
-                    margin-right: -16px;
-                    padding: 0px;
-                    color: transparent;
-                    background-color: transparent;
-                    border: none;
-                  }
-                  #custom-niri-windows {
-                    font-size: 30px;
-                    margin-top: -3px;
-                    margin-left: 10px;
-                  }
-                  window#waybar #workspaces button.active {
-          	    background-color: #6699CC;
-                    border-color: #6699CC;
-                    border: 0;
-                    border-radius: 0;
-                  }
-                  #workspaces button {
-                    margin: 0;
-                  }
-        '';
-    };
     fuzzel = {
       enable = true;
       settings = {
@@ -144,57 +87,6 @@ in
         hide-keyboard-layout = true;
         show-failed-attempts = true;
         indicator-idle-visible = true;
-      };
-    };
-    i3status-rust = {
-      enable = true;
-      bars.default = {
-        theme = "native";
-        icons = "awesome6";
-        blocks = [
-          {
-            block = "custom";
-            signal = 4;
-            command = ''
-              if ! systemctl --user is-active numen > /dev/null; then 
-                  echo 
-              else 
-                if [ -f "$HOME/.local/state/numen/paused" ]; then 
-                  echo 
-                else 
-                  echo 
-                fi; 
-              fi
-            '';
-            interval = 5;
-          }
-          {
-            block = "net";
-            device = "wlp2s0";
-            format = "$ssid";
-            format_alt = "$ip $signal_strength $speed_down.eng(prefix:K) $speed_up.eng(prefix:K)";
-            interval = 5;
-          }
-          {
-            block = "sound";
-            #   on_click = "pavucontrol -t 1";
-            headphones_indicator = true;
-          }
-          {
-            block = "sound";
-            device_kind = "source";
-            #   on_click = "pavucontrol -t 2";
-            headphones_indicator = true;
-          }
-          {
-            block = "battery";
-          }
-          {
-            block = "time";
-            interval = 5;
-            format = "$timestamp.datetime(f:'%R')";
-          }
-        ];
       };
     };
   };
@@ -252,20 +144,7 @@ in
         border = 5;
         titlebar = false;
       };
-      bars = [
-        (lib.attrsets.recursiveUpdate config.stylix.targets.sway.exportedBarConfig {
-          statusCommand = "i3status-rs ~/.config/i3status-rust/config-default.toml";
-          position = "top";
-          extraConfig = ''
-            separator_symbol ""
-          '';
-          fonts = {
-            names = [ "DejaVu Sans Mono" ];
-            size = 12.0;
-          };
-          colors.statusline = config.lib.stylix.colors.withHashtag.base04;
-        })
-      ];
+      bars = [ ];
       up = "k";
       down = "j";
       right = "l";
