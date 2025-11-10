@@ -60,7 +60,6 @@ in
   #    };
   #  };
 
-
   stylix.targets.swaylock.useWallpaper = false;
   programs = {
     fuzzel = {
@@ -117,11 +116,7 @@ in
       }
       {
         timeout = 320;
-        command = "${pkgs.swaylock}/bin/swaylock -f";
-      }
-      {
-        timeout = 500;
-        command = "systemctl suspend-then-hibernate";
+        command = "${pkgs.systemd}/bin/systemctl suspend-then-hibernate";
       }
     ];
   };
