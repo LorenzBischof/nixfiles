@@ -69,6 +69,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
       #inputs.devshell.inputs.nixpkgs.follows = "nixpkgs";
     };
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v0.4.3";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -92,6 +96,7 @@
       disko,
       nix-ai-tools,
       mcp-nixos,
+      lanzaboote,
       ...
     }@inputs:
     let
@@ -182,6 +187,7 @@
             stylix.nixosModules.stylix
             home-manager.nixosModules.home-manager
             nix-secrets.nixosModules.laptop
+            lanzaboote.nixosModules.lanzaboote
             {
               home-manager = {
                 useGlobalPkgs = true;

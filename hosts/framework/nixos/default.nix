@@ -54,7 +54,7 @@
   boot = {
     kernelPackages = pkgs.linuxPackages_latest;
     loader = {
-      systemd-boot.enable = true;
+      systemd-boot.enable = false; # disable when using lanzaboote
       efi = {
         canTouchEfiVariables = true;
         efiSysMountPoint = "/boot";
@@ -62,6 +62,11 @@
     };
     initrd.systemd.enable = true;
     binfmt.emulatedSystems = [ "aarch64-linux" ];
+  };
+
+  boot.lanzaboote = {
+    enable = true;
+    pkiBundle = "/var/lib/sbctl";
   };
 
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
