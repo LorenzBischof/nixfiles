@@ -38,6 +38,10 @@
           ];
           format-charging = "󰂄";
           format-full = "󱈑";
+          states = {
+            warning = 20;
+            critical = 10;
+          };
         };
 
         "clock" = {
@@ -128,9 +132,20 @@
       #battery.charging {
         color: #9ece6a;
       }
+        
+      @keyframes blink {
+        to {
+            opacity: 0;
+        }
+      }
 
       #battery.critical:not(.charging) {
-        color: #f7768e;
+        opacity: 1;
+        animation-name: blink;
+        animation-duration: 1s;
+        animation-timing-function: steps(12);
+        animation-iteration-count: infinite;
+        animation-direction: alternate;
       }
 
       #network.disconnected {
