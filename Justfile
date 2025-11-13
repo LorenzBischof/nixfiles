@@ -47,3 +47,7 @@ test host="": add
         echo "Unknown host: {{host}}"
         exit 1
     fi
+
+code:
+    sudo -v
+    opencode
