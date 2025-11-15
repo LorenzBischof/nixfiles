@@ -25,7 +25,7 @@ in
     ./scrutiny.nix
     ./open-webui.nix
     ./homeassistant.nix
-    ./mealie.nix
+    #./mealie.nix
     ./hedgedoc.nix
     ./outline.nix
     ../../modules/nixos
