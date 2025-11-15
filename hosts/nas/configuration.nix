@@ -23,7 +23,7 @@ in
     ./photos.nix
     ./offline-backup.nix
     ./scrutiny.nix
-    ./open-webui.nix
+    #./open-webui.nix
     ./homeassistant.nix
     #./mealie.nix
     ./hedgedoc.nix

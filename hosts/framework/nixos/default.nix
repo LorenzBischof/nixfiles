@@ -16,7 +16,7 @@
     ./disko.nix
   ];
 
-  services.open-webui.enable = true;
+  services.open-webui.enable = false;
 
   my.services = {
     detect-reboot-required.enable = true;
