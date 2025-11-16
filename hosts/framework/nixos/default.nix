@@ -6,6 +6,7 @@
   config,
   pkgs,
   secrets,
+  inputs,
   ...
 }:
 
@@ -220,6 +221,10 @@
     # Firmware updater
     fwupd.enable = true;
   };
+
+  nixpkgs.overlays = [
+    inputs.neovim-config.overlays.default
+  ];
 
   # https://github.com/NixOS/nixpkgs/issues/180175
   systemd.services.NetworkManager-wait-online.enable = false;

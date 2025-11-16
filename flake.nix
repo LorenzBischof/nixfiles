@@ -178,7 +178,6 @@
           };
         };
         framework = nixpkgs.lib.nixosSystem {
-          inherit system pkgs;
           modules = [
             disko.nixosModules.disko
             nixos-hardware.nixosModules.framework-amd-ai-300-series
@@ -206,7 +205,6 @@
           };
         };
         nas = nixpkgs.lib.nixosSystem {
-          inherit system pkgs;
           modules = [
             ./hosts/nas/configuration.nix
             nix-secrets.nixosModules.nas
@@ -219,7 +217,6 @@
           };
         };
         vps = nixpkgs.lib.nixosSystem {
-          system = "aarch64-linux";
           modules = [
             disko.nixosModules.disko
             nix-secrets.nixosModules.vps
