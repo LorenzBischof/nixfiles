@@ -52,8 +52,14 @@
   services.tailscale.enable = true;
 
   boot = {
+    consoleLogLevel = 3;
+    kernelParams = [ "quiet" ];
+    plymouth = {
+      enable = true;
+    };
     kernelPackages = pkgs.linuxPackages_latest;
     loader = {
+      timeout = 0;
       systemd-boot.enable = false; # disable when using lanzaboote
       efi = {
         canTouchEfiVariables = true;
