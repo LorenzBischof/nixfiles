@@ -27,7 +27,7 @@ switch host="": add
     elif [ "{{host}}" = "nas" ]; then
         nixos-rebuild switch --flake .#nas --target-host nas --sudo $overrides
     elif [ "{{host}}" = "vps" ]; then
-        nixos-rebuild switch --use-substitutes --flake .#vps --target-host vps --build-host vps --ask-sudo-password $overrides
+        nixos-rebuild switch --use-substitutes --flake .#vps --target-host vps --build-host vps --ask-sudo-password
     else
         echo "Unknown host: {{host}}"
         exit 1

@@ -20,6 +20,7 @@ in
       };
       devices = {
         laptop.id = secrets.syncthing-devices.laptop;
+        framework.id = secrets.syncthing-devices.framework;
         pixel-6a.id = secrets.syncthing-devices.pixel-6a;
         pixel-7.id = secrets.syncthing-devices.pixel-7;
         macbook.id = secrets.syncthing-devices.macbook;
@@ -34,6 +35,7 @@ in
             "pixel-6a"
             "pixel-7"
             "macbook"
+            "framework"
           ];
         };
         files-lo = {
@@ -42,6 +44,7 @@ in
           devices = [
             "laptop"
             "pixel-6a"
+            "framework"
           ];
         };
         paperless-consume = {
