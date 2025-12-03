@@ -12,6 +12,8 @@ in
   options.my.programs.firefox.enable = lib.mkEnableOption "firefox";
 
   config = lib.mkIf cfg.enable {
+    # Currently using a theme
+    stylix.targets.firefox.enable = false;
     programs.firefox = {
       enable = true;
 

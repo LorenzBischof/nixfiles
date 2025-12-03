@@ -56,7 +56,7 @@ in
 
     programs.git = {
       enable = true;
-      extraConfig = {
+      settings = {
         core = {
           whitespace = "trailing-space, space-before-tab";
           quotepath = "off"; # https://stackoverflow.com/a/22828826
