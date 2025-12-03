@@ -42,7 +42,16 @@
     # fonts
     font-awesome
     nerd-fonts.dejavu-sans-mono
-    pkgs-citrix-workspace.citrix_workspace
+    (writeShellApplication {
+      name = "wfica";
+      runtimeInputs = [
+        pkgs-citrix-workspace.citrix_workspace
+      ];
+      text = ''
+        sed -i 's/TWIMode=On/TWIMode=Off/' "$1"
+        nohup wfica "$1" >/dev/null 2>&1 &
+      '';
+    })
   ];
 
   systemd.user.startServices = true;
