@@ -2,14 +2,15 @@
   pkgs,
   lib,
   config,
+  secrets,
   ...
 }:
-
 {
   my.system.autoUpgrade = {
     enable = true;
     dates = "hourly";
     flake = "github:LorenzBischof/nixfiles";
+    ntfyTopic = secrets.ntfy-alertmanager;
   };
 
   systemd.services = lib.mkIf config.my.system.autoUpgrade.enabled {

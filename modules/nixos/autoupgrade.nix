@@ -116,6 +116,16 @@ in
         system was powered down.
       '';
     };
+    ntfyUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "https://ntfy.sh";
+      description = "ntfy server URL";
+    };
+    ntfyTopic = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "ntfy topic for notifications";
+    };
   };
   config = lib.mkIf (cfg.enabled) {
     environment.etc.git-revision.text = inputs.self.rev;
@@ -159,7 +169,33 @@ in
       };
       # Prefer not to autoupgrade when on battery
       unitConfig.ConditionACPower = true;
+
+      onSuccess = lib.mkIf (cfg.ntfyTopic != null) [ "ntfy-upgrade-success.service" ];
+      onFailure = lib.mkIf (cfg.ntfyTopic != null) [ "ntfy-upgrade-failure.service" ];
     };
 
+    systemd.services."ntfy-upgrade-success" = lib.mkIf (cfg.ntfyTopic != null) {
+      script = ''
+        if [ "$(systemctl show nixos-upgrade -p ConditionResult --value)" = "no" ]; then
+            exit 0
+        fi
+        ${pkgs.curl}/bin/curl -s \
+          -H "Title: NixOS Upgrade Succeeded on $(${pkgs.nettools}/bin/hostname)" \
+          -H "Tags: white_check_mark" \
+          -d "System updated successfully to ${inputs.self.rev or "unknown"}" \
+          "${cfg.ntfyUrl}/${cfg.ntfyTopic}"
+      '';
+    };
+
+    systemd.services."ntfy-upgrade-failure" = lib.mkIf (cfg.ntfyTopic != null) {
+      script = ''
+        ${pkgs.curl}/bin/curl -s \
+          -H "Title: NixOS Upgrade Failed on $(${pkgs.nettools}/bin/hostname)" \
+          -H "Tags: warning" \
+          -H "Priority: high" \
+          -d "System upgrade failed!" \
+          "${cfg.ntfyUrl}/${cfg.ntfyTopic}"
+      '';
+    };
   };
 }
