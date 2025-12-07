@@ -5,12 +5,16 @@
   secrets,
   ...
 }:
+
 {
   my.system.autoUpgrade = {
     enable = true;
     dates = "hourly";
     flake = "github:LorenzBischof/nixfiles";
-    ntfyTopic = secrets.ntfy-alertmanager;
+    ntfy = {
+      enable = true;
+      topic = secrets.ntfy-alertmanager;
+    };
   };
 
   systemd.services = lib.mkIf config.my.system.autoUpgrade.enabled {
@@ -37,7 +41,7 @@
       # The variable %U does not seem to work
       environment.DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/1000/bus";
       script = ''
-        ${pkgs.libnotify}/bin/notify-send --urgency=critical "Auto upgrade failure!";
+        ${pkgs.libnotify}/bin/notify-send --urgency=critical "Auto upgrade failure!"
       '';
     };
   };

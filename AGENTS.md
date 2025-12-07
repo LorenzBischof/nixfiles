@@ -52,6 +52,18 @@ When writing shell scripts inside Nix strings (for example `writeShellScript` or
 
 - Use `''${var}` when you need a literal Bash `${var}` expansion at runtime.
 
+## ntfy Notification Lifecycle
+
+When sending ntfy notifications from recurring checks/services, keep one updatable notification per host/service instead of creating a new message each run.
+For details, see the ntfy publish docs: https://docs.ntfy.sh/publish/#updating-deleting-notifications
+
+- Use a stable notification ID in the publish URL, for example:
+  - `https://ntfy.sh/<topic>/<sequence-id>`
+  - where `<sequence-id>` is derived from hostname + check name.
+- Publish updates to that same URL so clients update the existing notification.
+- Clear/dismiss resolved states by calling:
+  - `PUT https://ntfy.sh/<topic>/<sequence-id>/clear`
+
 ## Common Development Commands
 
 ### Building and Switching

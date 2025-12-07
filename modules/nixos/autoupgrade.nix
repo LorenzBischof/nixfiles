@@ -114,20 +114,40 @@ in
         subject to the delay imposed by RandomizedDelaySec=. This is
         useful to catch up on missed runs of the service when the
         system was powered down.
-      '';
+        '';
     };
-    ntfyUrl = lib.mkOption {
-      type = lib.types.str;
-      default = "https://ntfy.sh";
-      description = "ntfy server URL";
-    };
-    ntfyTopic = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "ntfy topic for notifications";
+    ntfy = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Whether to send ntfy notifications for autoupgrade events.
+        '';
+      };
+      url = lib.mkOption {
+        type = lib.types.str;
+        default = "https://ntfy.sh";
+        description = ''
+          ntfy server URL.
+        '';
+      };
+      topic = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          ntfy topic for notifications.
+        '';
+      };
     };
   };
   config = lib.mkIf (cfg.enabled) {
+    assertions = [
+      {
+        assertion = (!cfg.ntfy.enable) || (cfg.ntfy.topic != null);
+        message = "my.system.autoUpgrade.ntfy.topic must be set when my.system.autoUpgrade.ntfy.enable = true";
+      }
+    ];
+
     environment.etc.git-revision.text = inputs.self.rev;
 
     system.autoUpgrade = {
@@ -170,31 +190,39 @@ in
       # Prefer not to autoupgrade when on battery
       unitConfig.ConditionACPower = true;
 
-      onSuccess = lib.mkIf (cfg.ntfyTopic != null) [ "ntfy-upgrade-success.service" ];
-      onFailure = lib.mkIf (cfg.ntfyTopic != null) [ "ntfy-upgrade-failure.service" ];
+      onSuccess = lib.mkIf cfg.ntfy.enable [ "ntfy-upgrade-success.service" ];
+      onFailure = lib.mkIf cfg.ntfy.enable [ "ntfy-upgrade-failure.service" ];
     };
 
-    systemd.services."ntfy-upgrade-success" = lib.mkIf (cfg.ntfyTopic != null) {
+    systemd.services."ntfy-upgrade-success" = lib.mkIf cfg.ntfy.enable {
       script = ''
+        hostname="$(${pkgs.nettools}/bin/hostname)"
+        sequence_id="nixos-upgrade-$hostname"
+        notification_url="${cfg.ntfy.url}/${cfg.ntfy.topic}/$sequence_id"
+
         if [ "$(systemctl show nixos-upgrade -p ConditionResult --value)" = "no" ]; then
-            exit 0
+          exit 0
         fi
-        ${pkgs.curl}/bin/curl -s \
-          -H "Title: NixOS Upgrade Succeeded on $(${pkgs.nettools}/bin/hostname)" \
+        ${pkgs.curl}/bin/curl -fsS \
+          -H "Title: NixOS Upgrade Succeeded on $hostname" \
           -H "Tags: white_check_mark" \
           -d "System updated successfully to ${inputs.self.rev or "unknown"}" \
-          "${cfg.ntfyUrl}/${cfg.ntfyTopic}"
+          "$notification_url"
       '';
     };
 
-    systemd.services."ntfy-upgrade-failure" = lib.mkIf (cfg.ntfyTopic != null) {
+    systemd.services."ntfy-upgrade-failure" = lib.mkIf cfg.ntfy.enable {
       script = ''
-        ${pkgs.curl}/bin/curl -s \
-          -H "Title: NixOS Upgrade Failed on $(${pkgs.nettools}/bin/hostname)" \
+        hostname="$(${pkgs.nettools}/bin/hostname)"
+        sequence_id="nixos-upgrade-$hostname"
+        notification_url="${cfg.ntfy.url}/${cfg.ntfy.topic}/$sequence_id"
+
+        ${pkgs.curl}/bin/curl -fsS \
+          -H "Title: NixOS Upgrade Failed on $hostname" \
           -H "Tags: warning" \
           -H "Priority: high" \
           -d "System upgrade failed!" \
-          "${cfg.ntfyUrl}/${cfg.ntfyTopic}"
+          "$notification_url"
       '';
     };
   };
