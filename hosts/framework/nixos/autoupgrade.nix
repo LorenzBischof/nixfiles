@@ -1,4 +1,9 @@
-{ pkgs, lib, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  ...
+}:
 
 {
   my.system.autoUpgrade = {
@@ -7,7 +12,7 @@
     flake = "github:LorenzBischof/nixfiles";
   };
 
-  systemd.services = {
+  systemd.services = lib.mkIf config.my.system.autoUpgrade.enabled {
     nixos-upgrade = {
       onSuccess = [ "notify-upgrade-success.service" ];
       onFailure = [ "notify-upgrade-failure.service" ];

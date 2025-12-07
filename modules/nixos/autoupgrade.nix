@@ -19,6 +19,15 @@ in
         `nixos-rebuild switch` once a day.
       '';
     };
+    enabled = lib.mkOption {
+      type = lib.types.bool;
+      readOnly = true;
+      default = cfg.enable && (builtins.hasAttr "rev" inputs.self);
+      description = ''
+        Whether autoupgrade is actually enabled. This is true only when
+        both `enable` is true and the system is running from a clean git revision.
+      '';
+    };
     operation = lib.mkOption {
       type = lib.types.enum [
         "switch"
@@ -108,7 +117,7 @@ in
       '';
     };
   };
-  config = lib.mkIf (cfg.enable && (builtins.hasAttr "rev" inputs.self)) {
+  config = lib.mkIf (cfg.enabled) {
     environment.etc.git-revision.text = inputs.self.rev;
 
     system.autoUpgrade = {
