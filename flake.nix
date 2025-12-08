@@ -154,32 +154,6 @@
     in
     {
       nixosConfigurations = {
-        laptop = nixpkgs.lib.nixosSystem {
-          inherit system pkgs;
-          modules = [
-            ./hosts/laptop/nixos
-            ./modules/nixos
-            stylix.nixosModules.stylix
-            talon.nixosModules.talon
-            home-manager.nixosModules.home-manager
-            nix-secrets.nixosModules.laptop
-            {
-              home-manager = {
-                useGlobalPkgs = true;
-                useUserPackages = true;
-                users.lbischof = import ./hosts/laptop/home;
-                extraSpecialArgs = {
-                  inherit self inputs pkgs-citrix-workspace;
-                };
-              };
-            }
-            nix-index-database.nixosModules.nix-index
-          ];
-          specialArgs = {
-            secrets = import nix-secrets;
-            inherit inputs;
-          };
-        };
         framework = nixpkgs.lib.nixosSystem {
           modules = [
             disko.nixosModules.disko

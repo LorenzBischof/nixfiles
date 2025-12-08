@@ -19,7 +19,6 @@ in
         urAccepted = -1;
       };
       devices = {
-        laptop.id = secrets.syncthing-devices.laptop;
         framework.id = secrets.syncthing-devices.framework;
         pixel-6a.id = secrets.syncthing-devices.pixel-6a;
         pixel-7.id = secrets.syncthing-devices.pixel-7;
@@ -31,7 +30,6 @@ in
           id = "jl3m1-4ls92";
           path = "~/home";
           devices = [
-            "laptop"
             "pixel-6a"
             "pixel-7"
             "macbook"
@@ -42,7 +40,6 @@ in
           id = "ztx9n-wzrke";
           path = "~/files-lo";
           devices = [
-            "laptop"
             "pixel-6a"
             "framework"
           ];
