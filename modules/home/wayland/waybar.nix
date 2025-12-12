@@ -68,6 +68,7 @@
           format = "{icon}";
           format-muted = "󰝟";
           reverse-scrolling = true;
+          reverse-mouse-scrolling = true;
           format-icons = {
             default = [
               "󰕿"
