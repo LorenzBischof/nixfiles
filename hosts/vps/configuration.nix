@@ -68,7 +68,8 @@
         "wheel"
       ];
       openssh.authorizedKeys.keys = [
-        "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIDSKZEtyhueGqUow/G2ewR5TuccLqhrgwWd5VUnd6ImqAAAAC3NzaDpob21lbGFi"
+        "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIHkFqdhSF5DYceP6AJDgBj2PihSSht6LRfTk39llKX8uAAAAC3NzaDpob21lbGFi"
+        "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIB/zgMFamMRd57dXMuU7E4NHP/gHrybWrGi55m8D8nrKAAAAC3NzaDpob21lbGFi"
       ];
     };
   };
