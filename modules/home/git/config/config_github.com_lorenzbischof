@@ -1,7 +1,7 @@
 [user]
 	name = LorenzBischof
     email = 1837725+LorenzBischof@users.noreply.github.com
-    signingKey = ~/.ssh/id_ed25519_sk_rk_github.com_jyniybinc
+    signingKey = ~/.ssh/id_ed25519_sk_rk_github.com_lorenzbischof_signing
 [core]
     sshCommand = "ssh -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519_sk_rk_github.com_jyniybinc"
 [commit]

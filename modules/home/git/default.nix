@@ -29,7 +29,7 @@ in
         signing = {
           behavior = "own";
           backend = "ssh";
-          key = "~/.ssh/id_ed25519_github.com_lorenzbischof_signing.pub";
+          key = "~/.ssh/id_ed25519_sk_rk_github.com_lorenzbischof_signing.pub";
         };
         colors = {
           commit_id = "bright black";
