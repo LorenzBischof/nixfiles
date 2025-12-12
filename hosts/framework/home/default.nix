@@ -35,6 +35,7 @@
     wl-mirror
     sshfs
     devbox
+    yubikey-manager
 
     # Required so that Logseq can open links
     # There is probably a NixOS option for this...
