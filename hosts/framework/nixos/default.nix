@@ -165,14 +165,7 @@
     ddcutil
   ];
 
-  services.xserver = {
-    enable = true;
-    xkb = {
-      layout = "de";
-      variant = "adnw";
-    };
-  };
-  console.useXkbConfig = true;
+  console.keyMap = "adnw";
 
   services.libinput.enable = true;
   # services.xserver.desktopManager.xterm.enable = false;
