@@ -7,8 +7,13 @@
 }:
 let
   domain = config.my.homelab.domain;
+  mediaDir = "${config.services.home-assistant.configDir}/media";
 in
 {
+  systemd.tmpfiles.settings."10-homeassistant".${mediaDir}.d = {
+    user = "hass";
+    group = "hass";
+  };
   services.home-assistant = {
     enable = true;
     extraComponents = [
@@ -101,7 +106,11 @@ in
         ];
         use_x_forwarded_for = true;
       };
+      homeassistant.media_dirs.media = mediaDir;
     };
+    blueprints.automation = [
+      ./nfc-media.yaml
+    ];
     lovelaceConfig.views = [
       {
         title = "Home";
@@ -178,7 +187,10 @@ in
   networking.firewall.allowedUDPPorts = [ 56700 ];
 
   # Required by Sonos
-  networking.firewall.allowedTCPPorts = [ 1400 ];
+  networking.firewall.allowedTCPPorts = [
+    1400 # Sonos event callbacks
+    8123 # Home Assistant (LAN access for fetching media by Sonos)
+  ];
 
   # Required by Homekit
   services.avahi = {

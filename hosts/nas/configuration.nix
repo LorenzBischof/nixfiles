@@ -24,7 +24,7 @@ in
     ./offline-backup.nix
     ./scrutiny.nix
     #./open-webui.nix
-    ./homeassistant.nix
+    ./homeassistant
     #./mealie.nix
     ./hedgedoc.nix
     ./outline.nix

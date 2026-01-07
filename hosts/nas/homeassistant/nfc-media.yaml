@@ -1,0 +1,50 @@
+blueprint:
+  name: NFC Media
+  domain: automation
+  input:
+    file:
+      name: Media Player and File
+      description: ''
+      selector:
+        media: {}
+    tag:
+      name: NFC Tag
+      selector:
+        entity:
+          filter:
+            - domain: binary_sensor
+
+mode: restart
+triggers:
+- entity_id:
+    - !input tag
+  to: 'off'
+  id: tag-off
+  trigger: state
+- entity_id:
+    - !input tag
+  to: 'on'
+  id: tag-on
+  trigger: state
+conditions: []
+variables:
+  file: !input file
+actions:
+- choose:
+  - conditions:
+    - condition: trigger
+      id:
+      - tag-on
+    sequence:
+      - action: media_player.play_media
+        target:
+          entity_id: "{{ file.entity_id }}"
+        data: !input file
+  - conditions:
+    - condition: trigger
+      id:
+      - tag-off
+    sequence:
+      - target:
+          entity_id: "{{ file.entity_id }}"
+        action: media_player.media_pause
