@@ -104,6 +104,9 @@
   ];
 
   systemd.user.startServices = true;
+  systemd.user.tmpfiles.rules = [
+    "d %h/.ssh/controlmasters 0700 - - -"
+  ];
 
   fonts.fontconfig.enable = true;
   programs = {
@@ -121,6 +124,13 @@
       matchBlocks = {
         "*" = {
           identitiesOnly = true;
+        };
+        "gitlab.com" = {
+          # SSH connection multiplexing to avoid multiple yubikey touches (e.g. for git-lfs)
+          # https://github.com/git-lfs/git-lfs/issues/5784
+          controlMaster = "auto";
+          controlPersist = "5s";
+          controlPath = "~/.ssh/controlmasters/%C";
         };
         "scanner" = {
           hostname = "192.168.0.157";

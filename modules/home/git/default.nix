@@ -56,7 +56,9 @@ in
 
     programs.git = {
       enable = true;
+      lfs.enable = true;
       settings = {
+        lfs.ssh.automultiplex = false; # https://github.com/git-lfs/git-lfs/issues/5784
         core = {
           whitespace = "trailing-space, space-before-tab";
           quotepath = "off"; # https://stackoverflow.com/a/22828826
