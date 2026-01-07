@@ -10,6 +10,14 @@ let
     runtimeInputs = [ pkgs.jq ];
     text = builtins.readFile ./sway-terminal.sh;
   };
+  export-display-config = pkgs.writeShellApplication {
+    name = "export-display-config";
+    runtimeInputs = [
+      pkgs.jq
+      pkgs.sway
+    ];
+    text = builtins.readFile ./export-display-config.sh;
+  };
 in
 {
   imports = [
@@ -30,35 +38,10 @@ in
     wf-recorder
     libnotify
     sway-terminal
+    export-display-config
   ];
 
   services.dunst.enable = true;
-  #  services.kanshi = {
-  #    enable = true;
-  #    profiles = {
-  #      undocked = {
-  #        outputs = [
-  #          {
-  #            criteria = "eDP-1";
-  #          }
-  #        ];
-  #      };
-  #      docked = {
-  #        outputs = [
-  #          {
-  #            criteria = "eDP-1";
-  #            mode = "1920x1080";
-  #            position = "1920,120";
-  #          }
-  #          {
-  #            criteria = "DP-5";
-  #            mode = "1920x1200";
-  #            position = "0,0";
-  #          }
-  #        ];
-  #      };
-  #    };
-  #  };
 
   stylix.targets.swaylock.useWallpaper = false;
   programs = {
@@ -207,16 +190,6 @@ in
         };
         "eDP-1" = {
           bg = builtins.toString ./wallpaper_cropped_0.png + " fill";
-          position = "1920 120";
-        };
-        "DP-5" = {
-          position = "0 0";
-        };
-        "HDMI-A-1" = {
-          position = "0 0";
-        };
-        "DP-6" = {
-          position = "0 0";
         };
       };
     };

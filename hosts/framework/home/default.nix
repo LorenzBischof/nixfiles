@@ -18,6 +18,53 @@
   my.programs.git.enable = true;
   my.profiles.ai.enable = true;
 
+  services.kanshi = {
+    enable = true;
+    systemdTarget = "sway-session.target";
+    settings = [
+      {
+        profile.name = "undocked";
+        profile.outputs = [
+          {
+            criteria = "eDP-1";
+          }
+        ];
+      }
+      {
+        profile.outputs = [
+          {
+            criteria = "eDP-1";
+            mode = "2880x1920@120Hz";
+            position = "2822,2037";
+            scale = 2.0;
+          }
+          {
+            criteria = "LG Electronics LG HDR 4K 0x00021724";
+            mode = "3840x2160@60Hz";
+            position = "2585,957";
+            scale = 2.0;
+          }
+        ];
+      }
+      {
+        profile.outputs = [
+          {
+            criteria = "Dell Inc. DELL U3421WE DKDB753";
+            mode = "3440x1440@59Hz";
+            position = "2121,1321";
+            scale = 1.0;
+          }
+          {
+            criteria = "eDP-1";
+            mode = "2880x1920@120Hz";
+            position = "3140,2761";
+            scale = 2.0;
+          }
+        ];
+      }
+    ];
+  };
+
   # The home.packages option allows you to install Nix packages into your
   # environment.
   home.packages = with pkgs; [
