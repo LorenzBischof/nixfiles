@@ -83,6 +83,7 @@
     sshfs
     devbox
     yubikey-manager
+    google-chrome
 
     # Required so that Logseq can open links
     # There is probably a NixOS option for this...
