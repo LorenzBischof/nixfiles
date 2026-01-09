@@ -73,6 +73,25 @@ in
             }
           ];
         }
+
+        {
+          id = "light_livingroom_child";
+          alias = "Light livingroom child";
+          triggers = [
+            {
+              platform = "event";
+              event_type = "zha_event";
+              event_data.device_id = "af7e099abfd813adda3107f88fff9064";
+              event_data.args.click_type = "single";
+            }
+          ];
+          actions = [
+            {
+              service = "light.toggle";
+              data.entity_id = "light.wohnzimmer";
+            }
+          ];
+        }
       ];
       input_boolean.light_hold = { };
       http = {
