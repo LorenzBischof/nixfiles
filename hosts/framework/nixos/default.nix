@@ -149,10 +149,8 @@
     extraGroups = [
       "wheel"
       "video"
-      "keyd"
       "i2c"
       "scanner"
-      "adbUsers"
       "libvirtd"
       "docker"
     ];
@@ -186,7 +184,6 @@
     # Required for Stylix
     dconf.enable = true;
     yubikey-touch-detector.enable = true;
-    adb.enable = true;
     virt-manager.enable = true;
     nix-ld.enable = true;
   };
