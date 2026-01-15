@@ -174,14 +174,14 @@ in
       enable = true;
       config = ''
         INTERVAL=10
-        FCTEMPS=${fan}/pwm1=/sys/devices/platform/coretemp.0/hwmon/hwmon[[:print:]]*/temp2_input
+        FCTEMPS=${fan}/pwm1=/sys/devices/platform/coretemp.0/hwmon/hwmon[[:print:]]*/temp1_input
         FCFANS=${fan}/pwm1=${fan}/fan1_input
         MINTEMP=${fan}/pwm1=60
         MAXTEMP=${fan}/pwm1=80
-        MINSTART=${fan}/pwm1=30
-        MINSTOP=${fan}/pwm1=30
-        MINPWM=${fan}/pwm1=30
-        MAXPWM=${fan}/pwm1=200
+        MINSTART=${fan}/pwm1=70
+        MINSTOP=${fan}/pwm1=70
+        MINPWM=${fan}/pwm1=70
+        MAXPWM=${fan}/pwm1=250
         AVERAGE=${fan}/pwm1=10
       '';
     };
