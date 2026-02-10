@@ -6,7 +6,8 @@ This system is running NixOS, a declarative Linux distribution.
 
 The NixOS system configuration is managed in: `~/git/github.com/lorenzbischof/nixfiles`
 
-To update this global CLAUDE.md file or skills in `~/.claude/skills/`, edit the source files in `modules/home/ai/` in the repository and run `just switch` to apply changes.
+To update the host/global AGENTS.md file for Codex, edit the source file in `modules/home/ai/AGENTS.md` in the repository and run `just switch` to apply changes.
+For MicroVM guests, edit `hosts/framework/nixos/AGENTS.microvm.md`.
 
 ## Important: System Changes Require Rebuilds
 

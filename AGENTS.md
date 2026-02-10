@@ -2,6 +2,16 @@
 
 This is a personal NixOS configuration repository using Nix Flakes. It manages multiple systems with shared modules for both NixOS system configuration and home-manager user configuration.
 
+## AGENTS.md Layers
+
+There are two relevant AGENTS.md sources in this repo setup:
+
+- **Project-local AGENTS.md (this file)**: `AGENTS.md`
+  - Repository-specific guidance for working in `nixfiles`.
+- **Global AGENTS.md sources**:
+  - Host/default: `modules/home/ai/AGENTS.md`
+  - MicroVM guest: `hosts/framework/nixos/AGENTS.microvm.md`
+
 ## Repository Architecture
 
 ### Directory Layout
@@ -35,6 +45,12 @@ This repository uses a custom options pattern with `my.*` namespace:
 - Profile options: `my.profiles.*` (e.g., `my.profiles.ai`)
 
 Modules define options and are imported into host configurations, which then enable/configure them.
+
+## Nix + Bash Interpolation Note
+
+When writing shell scripts inside Nix strings (for example `writeShellScript` or `writeShellApplication`), Nix interpolates `${...}` before Bash sees the script.
+
+- Use `''${var}` when you need a literal Bash `${var}` expansion at runtime.
 
 ## Common Development Commands
 
@@ -79,3 +95,7 @@ nix flake check
 # Run specific test
 nix build .#checks.x86_64-linux.attic --print-build-logs
 ```
+
+## Focused Docs
+
+- MicroVM workspace/symlink/share behavior: `docs/microvm-workspace-shares.md`

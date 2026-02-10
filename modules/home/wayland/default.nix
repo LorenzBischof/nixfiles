@@ -88,12 +88,16 @@ in
         resumeCommand = "${pkgs.brillo}/bin/brillo -I -equ 200000";
       }
       {
-        timeout = 310;
+        timeout = 330;
+        command = "${pkgs.swaylock}/bin/swaylock -f";
+      }
+      {
+        timeout = 340;
         command = "${pkgs.sway}/bin/swaymsg 'output * dpms off'";
         resumeCommand = "${pkgs.sway}/bin/swaymsg 'output * dpms on'";
       }
       {
-        timeout = 320;
+        timeout = 350;
         command = "${pkgs.systemd}/bin/systemctl suspend-then-hibernate";
       }
     ];

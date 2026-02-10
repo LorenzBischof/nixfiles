@@ -48,6 +48,13 @@ test host="": add
         exit 1
     fi
 
+# Run flake checks plus MicroVM test
+check: add
+    #!/usr/bin/env bash
+    overrides=$(./override-input.sh)
+    nix flake check $overrides
+    nix build .#nixosTests.x86_64-linux.microvm $overrides
+
 code:
     sudo -v
     opencode

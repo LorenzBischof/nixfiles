@@ -81,6 +81,10 @@
       url = "github:mafredri/asustor-platform-driver";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    microvm = {
+      url = "github:microvm-nix/microvm.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -104,6 +108,7 @@
       disko,
       mcp-nixos,
       lanzaboote,
+      microvm,
       ...
     }@inputs:
     let
@@ -141,7 +146,7 @@
             citrix_workspace =
               (prev.citrix_workspace.overrideAttrs (attrs: {
                 # Required by newer version
-                buildInputs = attrs.buildInputs ++ [ pkgs.sane-backends ];
+                buildInputs = attrs.buildInputs ++ [ prev.sane-backends ];
                 src = attrs.src.overrideAttrs (srcAttrs: {
                   # So that I can push the tar.gz to the Nix cache
                   allowSubstitutes = true;
@@ -155,6 +160,59 @@
         ];
       };
       treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+      mkTest =
+        { name, module }:
+        pkgs.testers.runNixOSTest {
+          interactive.sshBackdoor.enable = true;
+          globalTimeout = 500;
+
+          inherit name;
+
+          defaults = {
+            # I could not get this to work another way. If I directly set the options, there is an eval error.
+            # Including the full module means that we need a mocked private key etc.
+            options.age = with lib; {
+              secrets = mkOption {
+                type = types.attrsOf (
+                  types.submodule (
+                    { config, ... }:
+                    {
+                      options = {
+                        file = mkOption {
+                          type = types.path;
+                        };
+                        path = mkOption {
+                          type = types.str;
+                          default = "${config.file}";
+                        };
+                      };
+                    }
+                  )
+                );
+                default = { };
+              };
+            };
+          };
+          imports = [ module ];
+        };
+      microvmDefinitions = import ./hosts/framework/nixos/microvms/profiles.nix { };
+      microvmHomeConfigurations = lib.mapAttrs' (
+        name: vm:
+        let
+          perVmHomeModulePath = ./hosts/microvms + "/${name}/default.nix";
+          perVmHomeModules = lib.optional (builtins.pathExists perVmHomeModulePath) perVmHomeModulePath;
+        in
+        lib.nameValuePair "microvm-${name}" (
+          home-manager.lib.homeManagerConfiguration {
+            inherit pkgs;
+            extraSpecialArgs = {
+              inherit inputs;
+              vmName = vm.hostName or name;
+            };
+            modules = [ ./hosts/framework/nixos/microvm-home.nix ] ++ perVmHomeModules;
+          }
+        )
+      ) microvmDefinitions;
     in
     {
       nixosConfigurations = {
@@ -168,6 +226,7 @@
             home-manager.nixosModules.home-manager
             nix-secrets.nixosModules.laptop
             lanzaboote.nixosModules.lanzaboote
+            microvm.nixosModules.host
             {
               home-manager = {
                 useGlobalPkgs = true;
@@ -260,68 +319,36 @@
         #    ];
         #  };
       };
-      homeConfigurations.bischoflo = home-manager.lib.homeManagerConfiguration {
-        inherit pkgs;
-        modules = [
-          ./hosts/wsl/home.nix
-          nix-index-database.hmModules.nix-index
-          {
-            programs.nix-index-database.comma.enable = true;
-          }
-        ];
-      };
+      homeConfigurations = {
+        bischoflo = home-manager.lib.homeManagerConfiguration {
+          inherit pkgs;
+          modules = [
+            ./hosts/wsl/home.nix
+            nix-index-database.hmModules.nix-index
+            {
+              programs.nix-index-database.comma.enable = true;
+            }
+          ];
+        };
+      }
+      // microvmHomeConfigurations;
       images = {
         rpi2 = self.nixosConfigurations.rpi2.config.system.build.sdImage;
         rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
       };
       formatter.${system} = treefmtEval.config.build.wrapper;
-      checks.${system} =
-        let
-          testFiles = builtins.readDir ./tests;
-          testNames = builtins.attrNames (
-            lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) testFiles
-          );
-          removeExtension = name: lib.removeSuffix ".nix" name;
-        in
-        lib.listToAttrs (
-          map (testFile: {
-            name = removeExtension testFile;
-            value = pkgs.testers.runNixOSTest {
-              interactive.sshBackdoor.enable = true;
-              globalTimeout = 300;
-
-              name = removeExtension testFile;
-
-              defaults = {
-                # I could not get this to work another way. If I directly set the options, there is an eval error.
-                # Including the full module means that we need a mocked private key etc.
-                options.age = with lib; {
-                  secrets = mkOption {
-                    type = types.attrsOf (
-                      types.submodule (
-                        { config, ... }:
-                        {
-                          options = {
-                            file = mkOption {
-                              type = types.path;
-                            };
-                            path = mkOption {
-                              type = types.str;
-                              default = "${config.file}";
-                            };
-                          };
-                        }
-                      )
-                    );
-                    default = { };
-                  };
-                };
-              };
-              imports = [
-                (./tests + "/${testFile}")
-              ];
-            };
-          }) testNames
-        );
+      nixosTests.${system} = {
+        attic = mkTest {
+          name = "attic";
+          module = import ./tests/attic.nix { inherit inputs self; };
+        };
+        microvm = mkTest {
+          name = "microvm";
+          module = import ./tests/microvm.nix { inherit inputs self; };
+        };
+      };
+      checks.${system} = {
+        inherit (self.nixosTests.${system}) attic;
+      };
     };
 }
