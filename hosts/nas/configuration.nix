@@ -28,6 +28,7 @@ in
     #./mealie.nix
     ./hedgedoc.nix
     ./outline.nix
+    ./umap.nix
     ../../modules/nixos
   ];
 
