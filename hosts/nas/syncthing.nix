@@ -11,6 +11,7 @@ in
 {
   services.syncthing = {
     enable = true;
+    openDefaultPorts = true;
     settings = {
       gui = {
         insecureSkipHostcheck = true;
@@ -20,45 +21,49 @@ in
       };
       devices = {
         framework.id = secrets.syncthing-devices.framework;
-        pixel-6a.id = secrets.syncthing-devices.pixel-6a;
         pixel-7.id = secrets.syncthing-devices.pixel-7;
         macbook.id = secrets.syncthing-devices.macbook;
         scanner.id = secrets.syncthing-devices.scanner;
+        pixel-9a-l.id = secrets.syncthing-devices.pixel-9a-l;
+        pixel-9a-t.id = secrets.syncthing-devices.pixel-9a-t;
       };
       folders = {
         home = {
           id = "jl3m1-4ls92";
           path = "~/home";
           devices = [
-            "pixel-6a"
             "pixel-7"
             "macbook"
             "framework"
+            "pixel-9a-l"
+            "pixel-9a-t"
           ];
         };
         files-lo = {
           id = "ztx9n-wzrke";
           path = "~/files-lo";
           devices = [
-            "pixel-6a"
             "framework"
+            "pixel-9a-l"
           ];
         };
         paperless-consume = {
           id = "uukkv-dqhnx";
           path = config.services.paperless.consumptionDir;
           devices = [
-            "pixel-6a"
             "pixel-7"
             "scanner"
+            "pixel-9a-l"
+            "pixel-9a-t"
           ];
         };
         photos = {
           id = "y9793-spumx";
           path = "~/photos";
           devices = [
-            "pixel-6a"
             "pixel-7"
+            "pixel-9a-l"
+            "pixel-9a-t"
           ];
         };
       };
