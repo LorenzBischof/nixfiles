@@ -1,6 +1,7 @@
 {
   config,
   pkgs,
+  inputs,
   lib,
   secrets,
   ...
@@ -18,11 +19,17 @@ let
   };
 in
 {
+  imports = [
+    "${inputs.nixpkgs-umap}/nixos/modules/services/web-apps/umap.nix"
+  ];
+
+  # Disable NixOS manual generation to avoid umap module doc issues
+  documentation.nixos.enable = false;
+
   services.umap = {
     enable = true;
-    settings = {
-      SITE_URL = "https://${umapDomain}";
-    };
+    package = inputs.nixpkgs-umap.legacyPackages.x86_64-linux.umap;
+    settings.SITE_URL = "https://${umapDomain}";
   };
 
   services.nginx.virtualHosts."${umapDomain}".useACMEHost = domain;

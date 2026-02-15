@@ -729,11 +729,11 @@
     },
     "nixpkgs-umap": {
       "locked": {
-        "lastModified": 1771108205,
-        "narHash": "sha256-ojXGhCJmcUOwP5UfjMhXWQdSYnlN1I+QsanIKAoJwVw=",
+        "lastModified": 1771194447,
+        "narHash": "sha256-rtUo30yEq0BNLgIouluij01vm44Z1iCQUc5N/7ytTX4=",
         "owner": "LorenzBischof",
         "repo": "nixpkgs",
-        "rev": "4d84e0042414189405d8891240515a2d93875233",
+        "rev": "92e56ddbed85ce41b368febf9f32a7d067381c06",
         "type": "github"
       },
       "original": {

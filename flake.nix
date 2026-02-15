@@ -101,7 +101,6 @@
       nix-ai-tools,
       mcp-nixos,
       lanzaboote,
-      nixpkgs-umap,
       ...
     }@inputs:
     let
@@ -189,16 +188,6 @@
             nix-secrets.nixosModules.nas
             nixhome.nixosModules.nixhome
             alertmanager-ntfy.nixosModules.${system}.default
-            # Import just the umap NixOS module from nixpkgs-umap
-            "${nixpkgs-umap}/nixos/modules/services/web-apps/umap.nix"
-            # Override the umap package to use the one from nixpkgs-umap
-            {
-              nixpkgs.overlays = [
-                (final: prev: {
-                  umap = nixpkgs-umap.legacyPackages.${system}.umap;
-                })
-              ];
-            }
           ];
           specialArgs = {
             secrets = import nix-secrets;
