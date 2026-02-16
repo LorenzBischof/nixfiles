@@ -23,6 +23,7 @@ in
     ./photos.nix
     ./offline-backup.nix
     ./scrutiny.nix
+    ./dawarich.nix
     #./open-webui.nix
     ./homeassistant
     #./mealie.nix
