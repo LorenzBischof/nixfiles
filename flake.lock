@@ -138,10 +138,10 @@
     "blueprint": {
       "inputs": {
         "nixpkgs": [
-          "nix-ai-tools",
+          "llm-agents",
           "nixpkgs"
         ],
-        "systems": "systems_3"
+        "systems": "systems_2"
       },
       "locked": {
         "lastModified": 1769353768,
@@ -320,7 +320,7 @@
     },
     "flake-utils_2": {
       "inputs": {
-        "systems": "systems_2"
+        "systems": "systems_3"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -499,6 +499,30 @@
         "type": "github"
       }
     },
+    "llm-agents": {
+      "inputs": {
+        "blueprint": "blueprint",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "treefmt-nix": [
+          "treefmt-nix"
+        ]
+      },
+      "locked": {
+        "lastModified": 1771427464,
+        "narHash": "sha256-VhAD/KfXc5NudSjzhsiU27asKu99jwrb7TsD2BRpLZs=",
+        "owner": "numtide",
+        "repo": "llm-agents.nix",
+        "rev": "b9565d386f29e6b10cc7c513be3697e7c6694f9c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "llm-agents.nix",
+        "type": "github"
+      }
+    },
     "mcp-nixos": {
       "inputs": {
         "flake-parts": "flake-parts_2",
@@ -538,30 +562,6 @@
       "original": {
         "owner": "LorenzBischof",
         "repo": "neovim-config",
-        "type": "github"
-      }
-    },
-    "nix-ai-tools": {
-      "inputs": {
-        "blueprint": "blueprint",
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "treefmt-nix": [
-          "treefmt-nix"
-        ]
-      },
-      "locked": {
-        "lastModified": 1771338738,
-        "narHash": "sha256-CH6gkznCEgsEjobD2zUvFSlYg1LTNQoO0aliRCuwCQw=",
-        "owner": "numtide",
-        "repo": "nix-ai-tools",
-        "rev": "cb932aee9b1e7cef0f2d6f005667808eebad72f0",
-        "type": "github"
-      },
-      "original": {
-        "owner": "numtide",
-        "repo": "nix-ai-tools",
         "type": "github"
       }
     },
@@ -863,9 +863,9 @@
         "disko": "disko",
         "home-manager": "home-manager",
         "lanzaboote": "lanzaboote",
+        "llm-agents": "llm-agents",
         "mcp-nixos": "mcp-nixos",
         "neovim-config": "neovim-config",
-        "nix-ai-tools": "nix-ai-tools",
         "nix-index-database": "nix-index-database",
         "nix-secrets": "nix-secrets",
         "nixhome": "nixhome",

@@ -61,8 +61,8 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nix-ai-tools = {
-      url = "github:numtide/nix-ai-tools";
+    llm-agents = {
+      url = "github:numtide/llm-agents.nix";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.treefmt-nix.follows = "treefmt-nix";
       #inputs.blueprint.inputs.nixpkgs.follows = "nixpkgs";
@@ -102,7 +102,6 @@
       nixhome,
       alertmanager-ntfy,
       disko,
-      nix-ai-tools,
       mcp-nixos,
       lanzaboote,
       ...

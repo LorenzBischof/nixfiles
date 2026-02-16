@@ -22,11 +22,24 @@ in
 
     programs.opencode = {
       enable = true;
-      package = inputs.nix-ai-tools.packages.${pkgs.system}.opencode;
+      package = inputs.llm-agents.packages.${pkgs.system}.opencode;
     };
+
     programs.claude-code = {
       enable = true;
-      package = inputs.nix-ai-tools.packages.${pkgs.system}.claude-code;
+      package = inputs.llm-agents.packages.${pkgs.system}.claude-code;
+    };
+
+    programs.codex = {
+      enable = true;
+      package = inputs.llm-agents.packages.${pkgs.system}.codex;
+      settings = {
+        sandbox_mode = "workspace-write";
+        approval_policy = "untrusted";
+        sandbox_workspace_write = {
+          network_access = true;
+        };
+      };
     };
 
     # Global Claude Code context file
