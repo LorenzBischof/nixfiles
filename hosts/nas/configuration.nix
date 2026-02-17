@@ -5,9 +5,6 @@
   secrets,
   ...
 }:
-let
-  asustor-platform-driver = config.boot.kernelPackages.callPackage ./asustor-platform-driver.nix { };
-in
 {
   imports = [
     ./hardware-configuration.nix
@@ -49,10 +46,11 @@ in
     "100.91.84.39" = [ "webhook.${secrets.vps-domain}" ];
   };
 
+  hardware.asustor.enable = true;
+
   boot = {
     loader.systemd-boot.enable = true;
     loader.efi.canTouchEfiVariables = true;
-    extraModulePackages = [ asustor-platform-driver ];
     kernelModules = [
       "r8169"
       "asustor_gpio_it87"

@@ -47,6 +47,26 @@
         "type": "github"
       }
     },
+    "asustor-platform-driver": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1765104919,
+        "narHash": "sha256-VtoRwAm2y8KsythdN23SqPr89ayzttXHk3ptRJkh6Kk=",
+        "owner": "mafredri",
+        "repo": "asustor-platform-driver",
+        "rev": "cb392fc2fe60362b53147f7b3b4eac2616122301",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mafredri",
+        "repo": "asustor-platform-driver",
+        "type": "github"
+      }
+    },
     "base16": {
       "inputs": {
         "fromYaml": "fromYaml"
@@ -839,6 +859,7 @@
     "root": {
       "inputs": {
         "alertmanager-ntfy": "alertmanager-ntfy",
+        "asustor-platform-driver": "asustor-platform-driver",
         "disko": "disko",
         "home-manager": "home-manager",
         "lanzaboote": "lanzaboote",

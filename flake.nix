@@ -77,6 +77,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixpkgs-umap.url = "github:LorenzBischof/nixpkgs/push-toztvqvvsxnk";
+    asustor-platform-driver = {
+      url = "github:mafredri/asustor-platform-driver";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -188,6 +192,7 @@
             nix-secrets.nixosModules.nas
             nixhome.nixosModules.nixhome
             alertmanager-ntfy.nixosModules.${system}.default
+            inputs.asustor-platform-driver.nixosModules.default
           ];
           specialArgs = {
             secrets = import nix-secrets;
