@@ -99,7 +99,7 @@
       ];
       text = ''
         sed -i 's/TWIMode=On/TWIMode=Off/' "$1"
-        nohup wfica "$1" >/dev/null 2>&1 &
+        nohup systemd-inhibit --what=sleep --mode=block --why="Citrix session" wfica "$1" >/dev/null 2>&1 &
       '';
     })
   ];

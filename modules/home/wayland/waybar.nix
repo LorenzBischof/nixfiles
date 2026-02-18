@@ -11,7 +11,7 @@
         modules-left = [ "sway/workspaces" ];
         modules-center = [ "clock" ];
         modules-right = [
-          "idle_inhibitor"
+          "inhibitor"
           "bluetooth"
           "network"
           "pulseaudio"
@@ -81,7 +81,8 @@
           on-click = "pavucontrol";
         };
 
-        "idle_inhibitor" = {
+        "inhibitor" = {
+          what = [ "sleep" ];
           format = "{icon}";
           format-icons = {
             activated = "󰅶";
@@ -124,7 +125,7 @@
       #network,
       #bluetooth,
       #pulseaudio,
-      #idle_inhibitor {
+      #inhibitor {
         margin: 5px 0;
         padding: 0 8px;
       }
@@ -133,7 +134,7 @@
       #battery.charging {
         color: #9ece6a;
       }
-        
+
       @keyframes blink {
         to {
             opacity: 0;
@@ -157,7 +158,7 @@
         color: #f7768e;
       }
 
-      #idle_inhibitor.activated {
+      #inhibitor.activated {
         color: #9ece6a;
       }
     '';
