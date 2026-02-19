@@ -135,6 +135,8 @@ in
           enabled = true;
           org_role = "Admin";
         };
+        # https://github.com/NixOS/nixpkgs/pull/484374
+        security.secret_key = "SW2YcwTIb9zpOOhoPsMm";
       };
       provision = {
         enable = true;
