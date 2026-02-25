@@ -17,4 +17,6 @@
       };
     };
   };
+
+  services.nginx.defaultListenAddresses = [ "100.102.187.46" ];
 }

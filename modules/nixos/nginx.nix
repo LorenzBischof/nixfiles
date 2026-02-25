@@ -98,6 +98,16 @@ in
         };
       };
 
+      # During nixos-rebuild switch, Tailcale may be briefly unavailable causing
+      # nginx reload to fail if a listen address cannot be resolved. Retry
+      # reloads a few times with a finite cap.
+      systemd.services.nginx-config-reload = {
+        unitConfig.StartLimitIntervalSec = lib.mkForce 120;
+        unitConfig.StartLimitBurst = 5;
+        serviceConfig.Restart = "on-failure";
+        serviceConfig.RestartSec = "10s";
+      };
+
       my.homelab.ports = [
         80
         443
