@@ -1,7 +1,7 @@
 { }:
 
 {
-  "email-monitoring" = {
+  "alias-watch" = {
     ipAddress = "192.168.83.4";
     tapId = "microvm2";
     mac = "02:00:00:00:00:03";

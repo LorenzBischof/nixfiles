@@ -85,6 +85,10 @@
       url = "github:microvm-nix/microvm.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    alias-watch = {
+      url = "github:lorenzbischof/alias-watch";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -109,6 +113,7 @@
       mcp-nixos,
       lanzaboote,
       microvm,
+      alias-watch,
       ...
     }@inputs:
     let
@@ -248,6 +253,7 @@
           modules = [
             ./hosts/nas/configuration.nix
             nix-secrets.nixosModules.nas
+            alias-watch.nixosModules.default
             nixhome.nixosModules.nixhome
             alertmanager-ntfy.nixosModules.${system}.default
             inputs.asustor-platform-driver.nixosModules.default
