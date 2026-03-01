@@ -17,6 +17,7 @@
     ./autoupgrade.nix
     ./disko.nix
     ./microvm.nix
+    ./low-battery-power-button-led.nix
   ];
 
   services.open-webui.enable = false;
