@@ -10,6 +10,11 @@ let
   nixpkgsAgeScript = pkgs.writeShellScript "nixpkgs-age-check" ''
     set -euo pipefail
 
+    hostname="$(${pkgs.nettools}/bin/hostname)"
+    sequence_id="nixpkgs-age-$hostname"
+    topic_url="${cfg.ntfyUrl}/${cfg.ntfyTopic}"
+    notification_url="$topic_url/$sequence_id"
+
     # Extract date from nixos-version (format: 25.11.20250918.0147c2f)
     nixos_version=$(cat /run/current-system/nixos-version)
     nixpkgs_date=$(echo "$nixos_version" | sed 's/.*\.\([0-9]\{8\}\)\..*/\1/')
@@ -23,14 +28,17 @@ let
 
     echo "nixpkgs age: $age_days days"
 
-    # Send notification if threshold exceeded
+    # Keep a single updatable notification per host.
     if [ "$age_days" -gt "${toString cfg.alertThresholdDays}" ]; then
-      ${pkgs.curl}/bin/curl -s \
-        -H "Title: nixpkgs outdated on $(${pkgs.nettools}/bin/hostname)" \
+      ${pkgs.curl}/bin/curl -fsS \
+        -H "Title: nixpkgs outdated on $hostname" \
         -H "Priority: default" \
         -H "Tags: warning" \
         -d "nixpkgs is $age_days days old (built: $nixpkgs_date)" \
-        "${cfg.ntfyUrl}/${cfg.ntfyTopic}"
+        "$notification_url"
+    else
+      # Dismiss a previously sent alert notification when we are back under threshold.
+      ${pkgs.curl}/bin/curl -fsS -X PUT "$notification_url/clear" > /dev/null || true
     fi
   '';
 in
@@ -80,4 +88,3 @@ in
     };
   };
 }
-
