@@ -30,3 +30,14 @@ For local flake commands in this VM, override `nix-secrets` to the sibling check
 ## Tooling
 
 If additional tooling is required, use `nix-shell`.
+
+## Host Command Requests
+
+When you need host access from inside the VM, use `hostexec`.
+
+```bash
+hostexec -- id
+# optional: hostexec --json -- id
+```
+
+Only run host commands when required, keep commands minimal, and avoid passing secrets in command arguments.

@@ -1,49 +1,43 @@
-# MicroVM Workspace Share Behavior
+# MicroVM Workspace Shares
 
-This note documents how `microvm-here` and MicroVM virtiofs shares interact.
+This doc keeps only operator-relevant behavior that is easy to miss in code.
 
-## Problem Shape
+## What `microvm-here` manages
 
-MicroVMs use host paths under `/var/lib/microvm-workspaces/*` as virtiofs `source` paths.
-If a `source` path is missing, the VM share mount can fail.
+- Always creates `/var/lib/microvm-workspaces`.
+- Always maintains `/var/lib/microvm-workspaces/<vmName>` as a symlink to the current repo root.
+- Maintains shared roots used by VM virtiofs mounts:
+  - `/var/lib/microvm-workspaces/nixfiles`
+  - `/var/lib/microvm-workspaces/nix-secrets`
+- For VM `nixfiles`:
+  - `nixfiles` becomes a symlink to the current repo root.
+  - `nix-secrets` becomes a symlink to sibling `../nix-secrets` when present.
+  - Otherwise `nix-secrets` is a read-only placeholder directory.
+- For non-`nixfiles` VMs:
+  - `nixfiles` is ensured to exist as a read-only placeholder when no symlink exists yet.
+- Ensures `nixfiles/hosts/microvms/<vmHostName>` exists for all known VM host names.
+- For each configured `relativeMounts` entry, creates a managed path under
+  `/var/lib/microvm-workspaces/<vmName>/<relative-path>`:
+  - symlink to source path when source exists
+  - plain directory placeholder when source is missing
 
-For this repo, important shared paths are:
+Read-only placeholders are created as `root:root` mode `0555`.
 
-- `/var/lib/microvm-workspaces/nixfiles`
-- `/var/lib/microvm-workspaces/nix-secrets`
-- `/var/lib/microvm-workspaces/nixfiles/hosts/microvms/<vmHostName>`
+## Runtime caveat
 
-## Current Behavior
+If a VM started while `nixfiles`/`nix-secrets` were placeholders, and later those host paths
+switch to symlinks, the running VM can keep seeing stale placeholder content. Restart that VM.
 
-`microvm-here` in `hosts/framework/nixos/microvm.nix` manages these paths:
+## Operator guidance
 
-- Always ensures `/var/lib/microvm-workspaces` exists.
-- Always ensures a read-only placeholder for `/var/lib/microvm-workspaces/nix-secrets` if missing.
-- When starting VM `nixfiles`:
-  - Replaces `/var/lib/microvm-workspaces/nixfiles` with a symlink to the current repo root.
-  - If sibling `../nix-secrets` exists, replaces `/var/lib/microvm-workspaces/nix-secrets` with a symlink to it.
-  - Otherwise keeps/creates a read-only placeholder directory for `nix-secrets`.
-- When starting any non-`nixfiles` VM:
-  - Ensures a read-only placeholder exists for `/var/lib/microvm-workspaces/nixfiles`.
-- Ensures `/var/lib/microvm-workspaces/nixfiles/hosts/microvms/<vmHostName>` exists:
-  - If `nixfiles` is a symlink, create the directory in the real nixfiles repo.
-  - If `nixfiles` is a placeholder directory, create it as read-only placeholder content.
+- Start `nixfiles` early when other VMs depend on live `nixfiles` or `nix-secrets` content.
+- If you started another VM first, restart it after `nixfiles` establishes symlinks.
 
-Read-only placeholders are `root:root` with mode `0555` to avoid accidental writes by normal VM users.
+## Source of truth
 
-## Important Runtime Constraint
-
-Changing host share sources (placeholder directory -> symlink) after a VM is already running does not reliably refresh the guest view.
-In practice, running VMs can continue to see old placeholder content until restart.
-
-Implication:
-
-- If a VM started before `nixfiles`/`nix-secrets` symlinks were established, restart that VM to get the updated share source.
-
-Guest remount or restarting only `virtiofsd` is not treated as a reliable fix in this setup.
-
-## Operational Guidance
-
-- Start `nixfiles` early if other VMs depend on live nixfiles/nix-secrets content.
-- If you had to start another VM first, restart that VM after `nixfiles` establishes symlinks.
-- Avoid writing into placeholder-backed paths; those are compatibility fallbacks, not canonical storage.
+- Host launcher logic:
+  `hosts/framework/nixos/microvm.nix` (`microvm-here`)
+- Guest share mounts:
+  `hosts/framework/nixos/microvm-base.nix`
+- Regression test for placeholder/symlink lifecycle:
+  `tests/microvm.nix`

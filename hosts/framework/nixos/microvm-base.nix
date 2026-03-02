@@ -73,6 +73,120 @@ let
       readOnly = !hasNixfilesAsWorkspace;
     }
   ];
+  hostExecCli = pkgs.writers.writePython3Bin "hostexec" { } ''
+    import argparse
+    import errno
+    import json
+    import os
+    import socket
+    import sys
+
+
+    def parse_args() -> argparse.Namespace:
+        parser = argparse.ArgumentParser(
+            prog="hostexec",
+            description="Request host command execution over AF_VSOCK.",
+        )
+        parser.add_argument(
+            "--cid",
+            type=int,
+            default=2,
+            help="Host CID (default: 2)",
+        )
+        parser.add_argument(
+            "--port",
+            type=int,
+            default=int(os.getenv("HOSTEXEC_PORT", "40555")),
+            help="Host VSOCK port (default: 40555 or HOSTEXEC_PORT)",
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="Print raw JSON response",
+        )
+        parser.add_argument(
+            "command",
+            nargs=argparse.REMAINDER,
+            help="Command to run on host",
+        )
+        args = parser.parse_args()
+
+        command = list(args.command)
+        if command and command[0] == "--":
+            command = command[1:]
+        if not command:
+            parser.error("missing command; use: hostexec -- <command>")
+        args.command = command
+        return args
+
+
+    def main() -> int:
+        args = parse_args()
+        payload = json.dumps({"argv": args.command}).encode("utf-8")
+
+        if not hasattr(socket, "AF_VSOCK"):
+            sys.stderr.write("AF_VSOCK is not supported in this environment.\n")
+            return 78
+
+        with socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM) as sock:
+            try:
+                sock.connect((args.cid, args.port))
+            except OSError as exc:
+                sys.stderr.write(
+                    "failed to connect to hostexec bridge at "
+                    f"cid={args.cid} port={args.port}: {exc}\n"
+                )
+                retryable_errnos = {
+                    errno.ECONNREFUSED,
+                    errno.ECONNRESET,
+                    errno.ETIMEDOUT,
+                    errno.ENETUNREACH,
+                }
+                if exc.errno in retryable_errnos:
+                    sys.stderr.write(
+                        "on the host, check: "
+                        "systemctl status microvm-hostexec-vsock.service\n"
+                    )
+                return 69
+            sock.sendall(payload)
+            sock.shutdown(socket.SHUT_WR)
+
+            chunks = []
+            while True:
+                chunk = sock.recv(65536)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+
+        raw = b"".join(chunks).decode("utf-8", errors="replace")
+        if not raw.strip():
+            sys.stderr.write(
+                "hostexec bridge returned no response; on the host, check: "
+                "journalctl -u microvm-hostexec-vsock -n 200 --no-pager\n"
+            )
+            return 70
+        try:
+            response = json.loads(raw)
+        except json.JSONDecodeError:
+            sys.stderr.write(raw)
+            return 75
+
+        if args.json:
+            sys.stdout.write(json.dumps(response, indent=2, sort_keys=True) + "\n")
+        else:
+            out = response.get("stdout", "")
+            err = response.get("stderr", "")
+            if out:
+                sys.stdout.write(out)
+            if err:
+                sys.stderr.write(err)
+
+        return int(response.get("exit_code", 1))
+
+
+    if __name__ == "__main__":
+        raise SystemExit(main())
+  '';
 in
 {
   imports = [
@@ -92,6 +206,7 @@ in
 
   environment.systemPackages = with pkgs; [
     home-manager
+    hostExecCli
     jq
     ripgrep
   ];

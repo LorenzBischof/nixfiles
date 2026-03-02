@@ -29,3 +29,12 @@ nix-shell -p jq python3 nodejs
 You can search for packages at https://search.nixos.org/packages
 
 For permanent installation, packages should be added to the NixOS configuration repository.
+
+## MicroVM SSH Debugging (No sudo)
+
+If a MicroVM is already running, connect from host without sudo:
+
+```bash
+ssh microvm-<vm>
+ssh microvm-<vm> 'uname -a'
+```

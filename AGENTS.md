@@ -51,6 +51,7 @@ Modules define options and are imported into host configurations, which then ena
 When writing shell scripts inside Nix strings (for example `writeShellScript` or `writeShellApplication`), Nix interpolates `${...}` before Bash sees the script.
 
 - Use `''${var}` when you need a literal Bash `${var}` expansion at runtime.
+- `pkgs.writers.writePython3Bin` here is `name attrs text` (use `{ }` for `attrs` when unused).
 
 ## ntfy Notification Lifecycle
 
@@ -93,6 +94,9 @@ sudo nixos-rebuild build --flake .#framework
 
 # Build for specific host without switching
 nix build .#nixosConfigurations.nas.config.system.build.toplevel
+
+# Quick local build check for current host
+nix build .#nixosConfigurations.framework.config.system.build.toplevel
 
 # Update home-manager for WSL (standalone)
 home-manager switch --flake .#bischoflo
