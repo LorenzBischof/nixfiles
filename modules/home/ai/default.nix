@@ -8,8 +8,23 @@
 let
   cfg = config.my.profiles.ai;
   baseCodex = inputs.llm-agents.packages.${pkgs.system}.codex;
+  codexNotifyConfigArg = "notify=[\"${lib.getExe codexNotify}\"]";
+  codexNotify = pkgs.writeShellScriptBin "codex-notify" ''
+    set -eu
+    payload="''${1:-}"
+    [ -n "$payload" ] || exit 0
+
+    # Keep behavior stable if codex adds more events: only notify for agent-turn-complete.
+    printf '%s' "$payload" | ${lib.getExe pkgs.jq} -e '.type == "agent-turn-complete"' >/dev/null 2>&1 || exit 0
+
+    ${lib.optionalString cfg.codexNotify.bell.enable ''
+      if [ -t 1 ]; then
+        printf '\a' || true
+      fi
+    ''}
+  '';
   wrappedCodex = pkgs.writeShellScriptBin "codex" ''
-    exec ${lib.getExe baseCodex} ${lib.escapeShellArgs cfg.codexArgs} "$@"
+    exec ${lib.getExe baseCodex} -c ${lib.escapeShellArg codexNotifyConfigArg} ${lib.escapeShellArgs cfg.codexArgs} "$@"
   '';
   renderedAgentsMd = builtins.readFile cfg.agentsFile;
 in
@@ -37,6 +52,11 @@ in
       type = lib.types.path;
       default = ./AGENTS.md;
       description = "Source AGENTS.md file for AI tools.";
+    };
+    codexNotify = {
+      bell.enable = (lib.mkEnableOption "terminal bell for Codex notifications") // {
+        default = true;
+      };
     };
   };
   config = lib.mkIf cfg.enable {
