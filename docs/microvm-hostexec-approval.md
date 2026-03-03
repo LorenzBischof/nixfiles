@@ -48,8 +48,8 @@ journalctl -t microvm-hostexec -n 200 --no-pager
 ## Source of truth
 
 - Module and server implementation:
-  `hosts/framework/nixos/microvm-hostexec.nix`
+  `hosts/framework/nixos/microvm/hostexec.nix`
 - VM client CLI (`hostexec`) wiring:
-  `hosts/framework/nixos/microvm-base.nix`
+  `hosts/framework/nixos/microvm/base.nix`
 - Feature enablement in framework host:
-  `hosts/framework/nixos/microvm-config.nix`
+  `hosts/framework/nixos/microvm/config.nix`

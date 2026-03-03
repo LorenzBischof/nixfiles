@@ -11,7 +11,7 @@
         imports = [
           inputs.microvm.nixosModules.host
           inputs.home-manager.nixosModules.home-manager
-          ../hosts/framework/nixos/microvm.nix
+          ../hosts/framework/nixos/microvm/module.nix
         ];
 
         virtualisation.memorySize = 6144;

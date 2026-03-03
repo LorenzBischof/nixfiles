@@ -8,8 +8,8 @@
 
 let
   inherit (inputs) microvm;
-  microvmBase = import ./microvm-base.nix;
-  microvmDefinitions = import ./microvms/profiles.nix { };
+  microvmBase = import ./base.nix;
+  microvmDefinitions = import ./profiles.nix { };
   relativeMountCases = lib.concatMapStrings (
     name:
     let

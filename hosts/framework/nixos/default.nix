@@ -15,7 +15,7 @@
     ./hardware-configuration.nix
     ./autoupgrade.nix
     ./disko.nix
-    ./microvm-config.nix
+    ./microvm/config.nix
     ./low-battery-power-button-led.nix
   ];
 

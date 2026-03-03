@@ -191,7 +191,7 @@ in
 {
   imports = [
     inputs.home-manager.nixosModules.home-manager
-    (import ./microvm-nix-db-overlay.nix { inherit roVarNixDb rwVarNixDb; })
+    (import ./nix-db-overlay.nix { inherit roVarNixDb rwVarNixDb; })
   ];
 
   home-manager.useGlobalPkgs = true;
@@ -201,7 +201,7 @@ in
     vmName = vm.hostName;
   };
   home-manager.users.microvm = {
-    imports = [ ./microvm-home.nix ] ++ perVmHomeModules;
+    imports = [ ./home.nix ] ++ perVmHomeModules;
   };
 
   environment.systemPackages = with pkgs; [

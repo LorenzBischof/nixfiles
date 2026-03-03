@@ -2,8 +2,8 @@
 
 {
   imports = [
-    ./microvm.nix
-    ./microvm-hostexec.nix
+    ./module.nix
+    ./hostexec.nix
   ];
 
   my.microvmHostExec.enable = true;

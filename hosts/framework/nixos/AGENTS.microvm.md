@@ -14,8 +14,8 @@ Some VM profiles also mount a dedicated workspace at:
 
 ## Home Manager (MicroVM)
 
-VM-specific writable Home Manager directory (entrypoint is `default.nix`):
-`/home/microvm/nixfiles/hosts/microvms/<vmName>/`
+VM-specific writable Home Manager module:
+`/home/microvm/nixfiles/hosts/microvms/<vmName>/default.nix`
 
 Switch this VM Home Manager config without a host rebuild:
 `home-manager switch --flake .#microvm-<vmName> --override-input nix-secrets ../nix-secrets`

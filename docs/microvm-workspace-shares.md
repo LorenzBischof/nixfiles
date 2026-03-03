@@ -36,8 +36,8 @@ switch to symlinks, the running VM can keep seeing stale placeholder content. Re
 ## Source of truth
 
 - Host launcher logic:
-  `hosts/framework/nixos/microvm.nix` (`microvm-here`)
+  `hosts/framework/nixos/microvm/module.nix` (`microvm-here`)
 - Guest share mounts:
-  `hosts/framework/nixos/microvm-base.nix`
+  `hosts/framework/nixos/microvm/base.nix`
 - Regression test for placeholder/symlink lifecycle:
   `tests/microvm.nix`

@@ -8,7 +8,7 @@
 
 {
   imports = [
-    ../../../modules/home/ai
+    ../../../../modules/home/ai
   ];
 
   my.profiles.ai.enable = true;
@@ -17,7 +17,7 @@
     "-c"
     "tui.animations=false"
   ];
-  my.profiles.ai.agentsFile = ./AGENTS.microvm.md;
+  my.profiles.ai.agentsFile = ../AGENTS.microvm.md;
 
   home.username = "microvm";
   home.homeDirectory = "/home/microvm";
@@ -37,6 +37,7 @@
   };
 
   programs.git.enable = true;
+  programs.jujutsu.enable = true;
 
   home.stateVersion = "25.11";
 

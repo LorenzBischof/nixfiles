@@ -200,7 +200,7 @@
           };
           imports = [ module ];
         };
-      microvmDefinitions = import ./hosts/framework/nixos/microvms/profiles.nix { };
+      microvmDefinitions = import ./hosts/framework/nixos/microvm/profiles.nix { };
       microvmHomeConfigurations = lib.mapAttrs' (
         name: vm:
         let
@@ -214,7 +214,7 @@
               inherit inputs;
               vmName = vm.hostName or name;
             };
-            modules = [ ./hosts/framework/nixos/microvm-home.nix ] ++ perVmHomeModules;
+            modules = [ ./hosts/framework/nixos/microvm/home.nix ] ++ perVmHomeModules;
           }
         )
       ) microvmDefinitions;

@@ -115,3 +115,4 @@ nix build .#checks.x86_64-linux.attic --print-build-logs
 ## Focused Docs
 
 - MicroVM workspace/symlink/share behavior: `docs/microvm-workspace-shares.md`
+- MicroVM per-VM Home Manager overrides: `hosts/microvms/<vmName>/default.nix`
