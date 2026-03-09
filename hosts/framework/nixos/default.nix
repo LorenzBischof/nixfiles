@@ -85,6 +85,14 @@
     SuspendState = "mem";
     HibernateOnACPower = "no";
   };
+  environment.etc."systemd/system-sleep/drop-caches-on-hibernate".source =
+    pkgs.writeShellScript "drop-caches-on-hibernate" ''
+      if [ "$1" = "pre" ] && [ "$SYSTEMD_SLEEP_ACTION" = "hibernate" ]; then
+        logger -t drop-caches-on-hibernate "syncing before hibernate"
+        ${pkgs.coreutils}/bin/sync
+        echo 3 > /proc/sys/vm/drop_caches
+      fi
+    '';
   # Disable Bluetooth as wakeup source, because it prevents automatic hibernation
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="usb", DRIVERS=="btusb", ATTR{power/wakeup}="disabled"
