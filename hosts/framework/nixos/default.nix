@@ -80,11 +80,11 @@
 
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
 
-  systemd.sleep.extraConfig = ''
-    HibernateDelaySec=2h
-    SuspendState=mem
-    HibernateOnACPower=no
-  '';
+  systemd.sleep.settings.Sleep = {
+    HibernateDelaySec = "2h";
+    SuspendState = "mem";
+    HibernateOnACPower = "no";
+  };
   # Disable Bluetooth as wakeup source, because it prevents automatic hibernation
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="usb", DRIVERS=="btusb", ATTR{power/wakeup}="disabled"
