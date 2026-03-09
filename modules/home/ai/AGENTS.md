@@ -35,6 +35,6 @@ For permanent installation, packages should be added to the NixOS configuration 
 If a MicroVM is already running, connect from host without sudo:
 
 ```bash
-ssh microvm-<vm>
-ssh microvm-<vm> 'uname -a'
+microvm -s <vm>
+microvm -s <vm> uname -a
 ```

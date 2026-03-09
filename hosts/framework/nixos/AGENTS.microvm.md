@@ -6,21 +6,21 @@ Important: if you know the next step, do not ask if you should continue. Always 
 
 ## Repository Mounts
 
-Primary nixfiles mount:
-`/home/microvm/nixfiles`
+Current repo workspace:
+`/home/microvm/<repoName>`
 
-Some VM profiles also mount a dedicated workspace at:
-`/home/microvm/<vmName>`
+Per-profile workspace root:
+`/home/microvm/.workspaces/<vmName>`
 
 ## Home Manager (MicroVM)
 
 VM-specific writable Home Manager module:
-`/home/microvm/nixfiles/hosts/microvms/<vmName>/default.nix`
+`/home/microvm/nixfiles/hosts/microvms/<vmName>/default.nix` when the current workspace repo is `nixfiles`
 
 Switch this VM Home Manager config without a host rebuild:
 `home-manager switch --flake .#microvm-<vmName> --override-input nix-secrets ../nix-secrets`
 
-Use `hosts/microvms/<vmName>/default.nix` as a VM-local playground.
+Use `hosts/microvms/<vmName>/default.nix` as a VM-local playground only when working from the `nixfiles` repo.
 
 Only auto-run the `home-manager switch .#microvm-<vmName>` command without asking when changes are VM-specific (for example files under `hosts/microvms/<vmName>/` or modules imported exclusively by that VM profile).
 
@@ -39,9 +39,9 @@ If additional tooling is required, use `nix-shell`.
 
 Treat `hostexec` as a last resort.
 
-Always check and reason from `nixfiles` configuration first (for example under
-`/home/microvm/nixfiles`, especially `hosts/` and `modules/`) before running
-any host command.
+Always check and reason from the mounted current repo first. When the current
+repo is `nixfiles`, focus on `/home/microvm/nixfiles`, especially `hosts/` and
+`modules/`, before running any host command.
 
 Goal: basically never use `hostexec`. Use it only when the required information
 or action cannot be obtained from repository files or VM-local commands.

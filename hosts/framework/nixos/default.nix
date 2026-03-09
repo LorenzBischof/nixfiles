@@ -155,6 +155,7 @@
       "scanner"
       "libvirtd"
       "docker"
+      "kvm"
     ];
     shell = pkgs.zsh;
   };

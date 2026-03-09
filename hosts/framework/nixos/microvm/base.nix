@@ -11,68 +11,11 @@
 }:
 
 let
-  guestWorkspace = "/home/microvm/${vm.hostName}";
-  nixfilesWorkspace = "/var/lib/microvm-workspaces/nixfiles";
-  nixfilesMountPoint = "/home/microvm/nixfiles";
-  nixSecretsWorkspace = "/var/lib/microvm-workspaces/nix-secrets";
-  nixSecretsMountPoint = "/home/microvm/nix-secrets";
+  guestWorkspace = "/home/microvm/.workspaces/${vm.hostName}";
   roVarNixDb = "/nix/.ro-var-nix-db";
   rwVarNixDb = "/nix/.rw-var-nix-db";
-  hasNixfilesAsWorkspace = vm.workspace == nixfilesWorkspace;
   perVmHomeModulePath = ../../../hosts/microvms + "/${vm.hostName}/default.nix";
   perVmHomeModules = lib.optional (builtins.pathExists perVmHomeModulePath) perVmHomeModulePath;
-  normalizePath =
-    path:
-    let
-      parts = lib.splitString "/" path;
-      fold =
-        acc: part:
-        if part == "" || part == "." then
-          acc
-        else if part == ".." then
-          if acc == [ ] then [ ] else lib.init acc
-        else
-          acc ++ [ part ];
-      normalized = lib.foldl fold [ ] parts;
-    in
-    "/" + lib.concatStringsSep "/" normalized;
-  relativeWorkspaceShares = lib.imap0 (
-    idx: rel:
-    let
-      mountPath = normalizePath "${guestWorkspace}/${rel}";
-    in
-    {
-      proto = "virtiofs";
-      tag = "workspace-rel-${toString idx}";
-      source = normalizePath "${vm.workspace}/${rel}";
-      mountPoint = mountPath;
-      readOnly = false;
-    }
-  ) vm.relativeMounts;
-  sharedNixfilesShares = lib.optionals (!hasNixfilesAsWorkspace) [
-    {
-      proto = "virtiofs";
-      tag = "nixfiles-ro";
-      source = nixfilesWorkspace;
-      mountPoint = nixfilesMountPoint;
-      readOnly = true;
-    }
-    {
-      proto = "virtiofs";
-      tag = "nixfiles-vm-home";
-      source = normalizePath "${nixfilesWorkspace}/hosts/microvms/${vm.hostName}";
-      mountPoint = normalizePath "${nixfilesMountPoint}/hosts/microvms/${vm.hostName}";
-    }
-  ];
-  sharedNixSecretsShares = [
-    {
-      proto = "virtiofs";
-      tag = "nix-secrets";
-      source = nixSecretsWorkspace;
-      mountPoint = nixSecretsMountPoint;
-      readOnly = !hasNixfilesAsWorkspace;
-    }
-  ];
   hostExecCli = pkgs.writers.writePython3Bin "hostexec" { } ''
     import argparse
     import errno
@@ -214,9 +157,29 @@ in
   networking.hostName = vm.hostName;
 
   system.stateVersion = "25.11";
+  # Virtio block devices can appear late under cloud-hypervisor.
+  # Avoid dropping to emergency mode on the default 90s timeout.
+  boot.initrd.systemd.settings.Manager.DefaultDeviceTimeoutSec = "3min";
 
-  services.openssh.enable = true;
-  services.openssh.authorizedKeysFiles = [ "/etc/ssh/host-keys/ssh_user_%u_ed25519.pub" ];
+  services.openssh = {
+    enable = true;
+    startWhenNeeded = true;
+    # Keep host keys guest-generated, but avoid RSA generation failures in this VM.
+    hostKeys = [
+      {
+        path = "/etc/ssh/ssh_host_ed25519_key";
+        type = "ed25519";
+      }
+    ];
+    authorizedKeysFiles = [ "/etc/ssh/host-keys/ssh_user_root_ed25519.pub" ];
+    settings = {
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+      PermitRootLogin = "yes";
+    };
+  };
+  # Keep only the VSOCK-activated SSH socket; do not expose the guest over TCP.
+  systemd.sockets.sshd.enable = false;
 
   nix = {
     # Make legacy nix-shell resolve <nixpkgs> from the VM's system nixpkgs.
@@ -267,6 +230,24 @@ in
   ];
 
   fileSystems = {
+    "/nix/.rw-store" = {
+      device = "tmpfs";
+      fsType = "tmpfs";
+      neededForBoot = true;
+      options = [
+        "mode=0755"
+        "size=${toString vm.overlaySizeMiB}M"
+      ];
+    };
+    ${rwVarNixDb} = {
+      device = "tmpfs";
+      fsType = "tmpfs";
+      neededForBoot = true;
+      options = [
+        "mode=0755"
+        "size=200M"
+      ];
+    };
     ${roVarNixDb} = {
       device = "ro-var-nix-db";
       fsType = "virtiofs";
@@ -292,30 +273,12 @@ in
     };
   };
 
-  services.openssh.hostKeys = [
-    {
-      path = "/etc/ssh/host-keys/ssh_host_ed25519_key";
-      type = "ed25519";
-    }
-  ];
-
   microvm = lib.mkMerge [
     {
+      vsock.ssh.enable = true;
       writableStoreOverlay = "/nix/.rw-store";
 
       volumes = [
-        {
-          image = "nix-store-overlay.img";
-          mountPoint = config.microvm.writableStoreOverlay;
-          size = vm.overlaySizeMiB;
-          # XFS uses dynamic inode allocation; ext4 ran out of inodes in the RW overlay.
-          fsType = "xfs";
-        }
-        {
-          image = "nix-var-overlay.img";
-          mountPoint = rwVarNixDb;
-          size = 200;
-        }
         {
           mountPoint = "/var";
           image = "var.img";
@@ -340,7 +303,7 @@ in
         }
         {
           proto = "virtiofs";
-          tag = "ssh-host-keys";
+          tag = "ssh-authorized-keys";
           source = vm.hostSshKeyDir;
           mountPoint = "/etc/ssh/host-keys";
           readOnly = true;
@@ -358,10 +321,7 @@ in
           mountPoint = "/run/host-credentials/codex";
           readOnly = true;
         }
-      ]
-      ++ sharedNixfilesShares
-      ++ sharedNixSecretsShares
-      ++ relativeWorkspaceShares;
+      ];
 
       interfaces = [
         {
