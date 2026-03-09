@@ -157,6 +157,8 @@ in
             [app_id="Logseq" tiling] focus; [app_id="Logseq" floating] scratchpad show
           '';
           "${mod}+x" = "exec warpd --hint";
+          "ssharp" = "exec voxtype record start";
+          "--release ssharp" = "exec voxtype record stop";
           "XF86AudioRaiseVolume" =
             "exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+ && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
           "XF86AudioLowerVolume" =

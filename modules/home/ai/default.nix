@@ -31,6 +31,7 @@ in
 {
   imports = [
     ./aichat.nix
+    inputs.voxtype.homeManagerModules.default
   ];
   options.my.profiles.ai = {
     enable = lib.mkEnableOption "ai";
@@ -65,6 +66,23 @@ in
       pkgs.nil
       #inputs.nix-ai-tools.packages.${pkgs.system}.openclaw
     ];
+
+    programs.voxtype = {
+      enable = true;
+      package = pkgs.voxtype-vulkan;
+      service.enable = true;
+      settings = {
+        hotkey.enabled = false;
+        status.icon_theme = "material";
+        whisper.model = "medium.en";
+      };
+    };
+
+    # Workaround for voxtype user-service PATH issue (see upstream issue #253).
+    systemd.user.services.voxtype = lib.mkIf config.programs.voxtype.service.enable {
+      Service.Environment = [ "PATH=/run/current-system/sw/bin" ];
+    };
+
     services.ollama = {
       enable = true;
       package = pkgs.ollama-vulkan;

@@ -1,4 +1,9 @@
 {
+  lib,
+  pkgs,
+  ...
+}:
+{
   programs.waybar = {
     enable = true;
     systemd.enable = true;
@@ -14,6 +19,7 @@
           "inhibitor"
           "bluetooth"
           "network"
+          "custom/voxtype"
           "pulseaudio"
           "battery"
         ];
@@ -81,6 +87,18 @@
           on-click = "pavucontrol";
         };
 
+        "custom/voxtype" =
+          let
+            voxtypeExe = lib.getExe pkgs.voxtype-vulkan;
+          in
+          {
+            exec = "${voxtypeExe} status --follow --format json --icon-theme material";
+            return-type = "json";
+            format = "{}";
+            tooltip = true;
+            on-click = "${voxtypeExe} record toggle";
+          };
+
         "inhibitor" = {
           what = [ "sleep" ];
           format = "{icon}";
@@ -124,6 +142,7 @@
       #battery,
       #network,
       #bluetooth,
+      #custom-voxtype,
       #pulseaudio,
       #inhibitor {
         margin: 5px 0;
@@ -152,6 +171,14 @@
 
       #network.disconnected {
         color: #f7768e;
+      }
+
+      #custom-voxtype.recording {
+        color: #f7768e;
+      }
+
+      #custom-voxtype.transcribing {
+        color: #6699CC;
       }
 
       #pulseaudio.muted {

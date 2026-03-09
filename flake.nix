@@ -89,6 +89,10 @@
       url = "github:lorenzbischof/alias-watch";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    voxtype = {
+      url = "github:peteonrails/voxtype";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -114,6 +118,7 @@
       lanzaboote,
       microvm,
       alias-watch,
+      voxtype,
       ...
     }@inputs:
     let
