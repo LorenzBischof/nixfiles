@@ -53,7 +53,7 @@ in
         })
         (import ./zha-light-button.nix {
           button = "e038f9f74dc4c2e727cd7b5bf507a4ff";
-          light = "light.wohnzimmer";
+          light = "light.living_room";
         })
         (import ./zha-light-button.nix {
           button = "9e8989b727e66a27d6a11715bd438b19";
@@ -93,7 +93,7 @@ in
           actions = [
             {
               service = "light.toggle";
-              data.entity_id = "light.wohnzimmer";
+              data.entity_id = "light.living_room";
             }
           ];
         }
@@ -125,7 +125,7 @@ in
               }
               {
                 type = "tile";
-                entity = "light.wohnzimmer";
+                entity = "light.living_room";
               }
               {
                 type = "tile";

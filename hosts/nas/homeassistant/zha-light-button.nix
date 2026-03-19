@@ -139,6 +139,7 @@
             {
               service = "light.toggle";
               data.entity_id = light;
+              data.transition = 0.3;
             }
           ];
         }
