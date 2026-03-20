@@ -183,6 +183,9 @@ in
         "5824:10203:Glove80_Left_Keyboard" = {
           xkb_layout = "ch(de_nodeadkeys)";
         };
+        "7504:24926:ZMK_Project_Piantor_Keyboard" = {
+          xkb_layout = "ch(de_nodeadkeys)";
+        };
         "1133:50184:Logitech_USB_Trackball" = {
           left_handed = "enabled";
           scroll_button = "BTN_EXTRA";
