@@ -331,6 +331,12 @@ in
           mountPoint = "/run/host-credentials/github-token";
           readOnly = true;
         }
+        {
+          proto = "virtiofs";
+          tag = "host-claude";
+          source = "/var/lib/microvm-claude";
+          mountPoint = "/run/host-credentials/claude";
+        }
       ];
 
       interfaces = [
@@ -342,6 +348,13 @@ in
       ];
 
       hypervisor = lib.mkDefault "cloud-hypervisor";
+      # Workaround for microvm.nix#366: cloud-hypervisor's default --serial tty
+      # severely slows systemd-journald during boot (up to 60s delay).
+      # Use virtio-console instead.
+      cloud-hypervisor.extraArgs = [
+        "--serial" "off"
+        "--console" "tty"
+      ];
       vcpu = lib.mkDefault 8;
       mem = lib.mkDefault 16384;
       socket = "control.socket";

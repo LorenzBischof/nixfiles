@@ -116,6 +116,9 @@ ${knownVmsArrayEntries}      )
 
       ensure_writable_mountpoint_dir() {
         local path="$1"
+        if mountpoint -q "$path"; then
+          return 0
+        fi
         if [ -L "$path" ]; then
           sudo rm -f "$path"
         fi
@@ -224,7 +227,15 @@ if [ -e /run/host-credentials/codex/auth.json ]; then
   ln -sfn /run/host-credentials/codex/auth.json /home/microvm/.codex/auth.json
 fi
 ln -sfn $(printf '%q' "$workspace_path") /home/microvm/$(printf '%q' "$cwd_name")
-exec su - microvm -c $(printf '%q' "exec sh -lc $(printf '%q' "$remote_cmd")")
+# Source login environment for PATH (includes home-manager per-user profile)
+# but use runuser instead of su - to avoid setsid() which would break
+# SIGWINCH propagation and cause terminal resize garbling.
+export HOME=/home/microvm
+export USER=microvm
+set +u
+. /etc/set-environment
+set -u
+exec runuser -u microvm -- bash -c $(printf '%q' "$remote_cmd")
 EOF
 )
       else
@@ -250,7 +261,6 @@ EOF
       coreutils
       git
       gnused
-      openssh
     ];
     text = ''
       set -euo pipefail
@@ -263,9 +273,6 @@ EOF
       fi
       if [ "''${1-}" = "--" ]; then
         shift
-      elif [ "$#" -gt 0 ]; then
-        echo "Unexpected arguments. Use: codex-yolo [profile] [-- <codex args...>]" >&2
-        exit 1
       fi
 
       repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -280,16 +287,60 @@ EOF
         exit 1
       fi
 
-      remote_cmd="cd $(printf '%q' "/home/microvm/$cwd_name") && exec codex"
+      tool_args=""
       if [ "$#" -gt 0 ]; then
-        quoted_args=""
-        for arg in "$@"; do
-          quoted_args="$quoted_args $(printf '%q' "$arg")"
-        done
-        remote_cmd="$remote_cmd$quoted_args"
+        printf -v tool_args ' %q' "$@"
+      fi
+      remote_cmd="cd $(printf '%q' "/home/microvm/$cwd_name") && exec codex$tool_args"
+
+      if [ -n "$profile_name" ]; then
+        exec microvm-here "$vm_name" -- "$remote_cmd"
+      fi
+      exec microvm-here -- "$remote_cmd"
+    '';
+  };
+  claudeYoloScript = pkgs.writeShellApplication {
+    name = "claude-yolo";
+    runtimeInputs = with pkgs; [
+      coreutils
+      git
+      gnused
+    ];
+    text = ''
+      set -euo pipefail
+
+      profile_name="''${1-}"
+      if [ -n "$profile_name" ] && [ "$profile_name" != "--" ]; then
+        shift
+      else
+        profile_name=""
+      fi
+      if [ "''${1-}" = "--" ]; then
+        shift
       fi
 
-      exec microvm-here "$vm_name" -- "$remote_cmd"
+      repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+      cwd_name="$(basename "$repo_root" | sed -E 's/[^A-Za-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
+      vm_name="$cwd_name"
+      if [ -n "$profile_name" ]; then
+        vm_name="$profile_name"
+      fi
+
+      if [ -z "$vm_name" ]; then
+        echo "Failed to derive VM name from path: $repo_root" >&2
+        exit 1
+      fi
+
+      tool_args=""
+      if [ "$#" -gt 0 ]; then
+        printf -v tool_args ' %q' "$@"
+      fi
+      remote_cmd="cd $(printf '%q' "/home/microvm/$cwd_name") && CLAUDE_CONFIG_DIR=/run/host-credentials/claude exec claude --dangerously-skip-permissions$tool_args"
+
+      if [ -n "$profile_name" ]; then
+        exec microvm-here "$vm_name" -- "$remote_cmd"
+      fi
+      exec microvm-here -- "$remote_cmd"
     '';
   };
   cleanupWorkspaceMountsScript = pkgs.writeShellApplication {
@@ -344,6 +395,14 @@ EOF
 
     install -d -m 0700 -o "$host_user" -g "$host_group" "/home/$host_user/.ssh"
     install -m 0644 -o root -g root "$user_key_pub" "$key_dir/ssh_user_root_ed25519.pub"
+  '';
+  prepareClaudeStateScript = pkgs.writeShellScript "microvm-prepare-claude-state" ''
+    set -eu
+    host_user="lbischof"
+    host_group="$(${pkgs.coreutils}/bin/id -gn "$host_user")"
+    base_dir="/var/lib/microvm-claude"
+
+    install -d -m 0700 -o "$host_user" -g "$host_group" "$base_dir"
   '';
 in
 {
@@ -414,12 +473,15 @@ in
     environment.systemPackages = [
       microvmHereScript
       codexYoloScript
+      claudeYoloScript
     ];
 
     systemd.services =
       lib.mapAttrs' (name: vm: {
         name = "microvm@${name}";
         value = {
+          requires = [ "microvm-prepare-claude-state@${name}.service" ];
+          after = [ "microvm-prepare-claude-state@${name}.service" ];
           serviceConfig = {
             TimeoutStopSec = lib.mkDefault 30;
             ExecStartPost = lib.mkAfter (
@@ -436,6 +498,9 @@ in
         value = {
           requires = [ "microvm-prepare-ssh@${name}.service" ];
           after = [ "microvm-prepare-ssh@${name}.service" ];
+          # Workaround for microvm.nix#262: virtiofsd supervisord doesn't
+          # exit cleanly after child processes stop, causing a 90s timeout.
+          serviceConfig.TimeoutStopSec = lib.mkDefault 10;
         };
       }) config.my.microvms
       // {
@@ -446,6 +511,13 @@ in
             # Re-run on each activation path so regenerated user keys are copied
             # into the shared authorized keys file before SSH login.
             ExecStart = "${prepareHostSshScript} %i";
+          };
+        };
+        "microvm-prepare-claude-state@" = {
+          description = "Prepare isolated Claude state directory for MicroVM '%i'";
+          serviceConfig = {
+            Type = "oneshot";
+            ExecStart = "${prepareClaudeStateScript} %i";
           };
         };
       };

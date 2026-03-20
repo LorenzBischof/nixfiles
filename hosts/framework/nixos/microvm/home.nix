@@ -24,6 +24,7 @@
 
   home.file.".codex/auth.json".source =
     config.lib.file.mkOutOfStoreSymlink "/run/host-credentials/codex/auth.json";
+  home.sessionVariables.CLAUDE_CONFIG_DIR = "/run/host-credentials/claude";
 
   home.packages = [ pkgs.github-cli ];
 
