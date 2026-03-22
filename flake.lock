@@ -34,11 +34,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1774188714,
-        "narHash": "sha256-mRHcBRIOtEihFOUWTF0SZNUy7oLCAKkraCV86JOK4Z0=",
+        "lastModified": 1774190438,
+        "narHash": "sha256-LAdxuFEe4bDAv+0JAScM0xqj5T7buGZpmnr5IescCHA=",
         "owner": "alexbakker",
         "repo": "alertmanager-ntfy",
-        "rev": "1c412615d5256bd63aea00bf2a4546adb462e228",
+        "rev": "31bd69a202d1eeac25699e91e7af8db20ca7858d",
         "type": "github"
       },
       "original": {
@@ -624,11 +624,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1774188996,
-        "narHash": "sha256-h3XZdS6oFAj3zPV52Umw2eQ03jYGVO6TspFHH6HoztM=",
+        "lastModified": 1774190239,
+        "narHash": "sha256-j1CRpjQSAChzvkh+4P2WQpO7aJJn514ZpbQ03T1fk38=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "cfeef6699e4cedfc15ff4983e4abc6c3cc0b78bb",
+        "rev": "20277623694c39636c6d6cc709461931d0fe64d3",
         "type": "github"
       },
       "original": {
