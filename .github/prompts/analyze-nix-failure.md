@@ -47,6 +47,18 @@ nix eval --raw nixpkgs#nixosModules.<relevant-path> 2>&1 | head -30
 ```
 or search for rename/deprecation messages in the nixpkgs tree if available.
 
+**If the error trace contains a store path ending in `-source`** (e.g.
+`/nix/store/abc123-source/nix/mkNeovim.nix`), that is the source of a flake
+input fetched during evaluation — it is readable on disk. Extract the store
+path prefix (e.g. `/nix/store/abc123-source`) and search the relevant files:
+```
+grep -rn "<suspicious-attribute>" /nix/store/<hash>-source/
+cat /nix/store/<hash>-source/<file-the-error-points-to>
+```
+This lets you read the actual upstream source code that caused the error
+without needing network access. Cross-reference with `flake.lock` to identify
+which input the store hash belongs to (match against the `narHash` or `rev`).
+
 Do NOT explore the repo broadly. Only read files and logs the error points to.
 
 ## Step 3 — Check what changed upstream
@@ -74,17 +86,22 @@ Note which inputs changed and to what revisions.
    → **Upstream bug** — a source moved or was re-tagged. Wait or report upstream.
 6. Is it a build failure in a package we overlay or patch locally?
    → **Our overlay needs updating** — the overlay likely conflicts with upstream changes.
-7. None of the above?
+7. Does the error originate in a non-nixpkgs flake input (identifiable by a `-source` store path
+   that doesn't match a nixpkgs hash)? E.g. an option defined in an upstream flake that is now
+   invalid against the new nixpkgs.
+   → **Upstream input bug** — the other flake (e.g. neovim-config, home-manager module) needs
+   to be updated to be compatible with the new nixpkgs. Note which repo needs the fix.
+8. None of the above?
    → **Uncertain**
 
 ## Output format
 
-Respond with ONLY this markdown. No preamble. No explanation outside the template.
+Write ONLY the following markdown to `analysis.md`. No preamble. No explanation outside the template.
 
 ## 🔍 Nix Build Failure Analysis
 
 ### Classification
-**[Breaking change · adapt our code | Upstream bug · wait | Our overlay needs updating | Uncertain]**
+**[Breaking change · adapt our code | Upstream bug · wait | Our overlay needs updating | Upstream input bug · fix other repo | Uncertain]**
 
 ### What failed
 <Exact derivation, attribute path, or error. Copy the key error line from the log.>

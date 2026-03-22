@@ -106,6 +106,15 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.prompt.outputs.content }}
+      - name: Comment on PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f analysis.md ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" \
+              --body-file analysis.md \
+              --repo "${{ github.repository }}"
+          fi
 
   analyze-codex:
     needs: build
