@@ -13,14 +13,29 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
+      - uses: actions/checkout@v4
         with:
-          # We set our custom GitHub token for any private flake inputs we might have
+          # Rebase in the manual-change path needs full history, especially
+          # when main gets rewritten by force-push.
+          fetch-depth: 0
+          token: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+      - uses: cachix/install-nix-action@v31
+        with:
           github_access_token: ${{ secrets.GH_TOKEN }}
+
+      - name: Check for PR with non-flake.lock changes
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN_FOR_UPDATES }}
+        run: |
+          CHANGED=$(gh pr list --head update_flake_lock_action --json changedFiles --jq '.[0].changedFiles // 0')
+          if [ "$CHANGED" -gt 1 ]; then
+            echo "manual=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Default path: the action resets the branch and creates/updates the PR
       - name: Update flake.lock
+        if: steps.pr.outputs.manual != 'true'
         uses: DeterminateSystems/update-flake-lock@main
         id: update
         with:
@@ -33,9 +48,47 @@ jobs:
             ```
             {{ env.GIT_COMMIT_MESSAGE }}
             ```
-      - run: |
-          if [ -n "${{ steps.update.outputs.pull-request-number }}" ]; then
-            gh pr merge --auto --rebase ${{ steps.update.outputs.pull-request-number }}
+
+      # PR has non-flake.lock changes: update on top of the existing branch
+      - name: Update flake.lock (preserving manual changes)
+        if: steps.pr.outputs.manual == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --prune origin main update_flake_lock_action
+          OLD_BRANCH=origin/update_flake_lock_action
+          MANUAL_PATCH=$(mktemp)
+          # Capture only manual changes relative to current main, excluding flake.lock.
+          git diff --binary origin/main...$OLD_BRANCH -- . ':(exclude)flake.lock' > "$MANUAL_PATCH"
+          # Rebuild the update branch from latest main to avoid rebase conflicts
+          # when main was force-pushed and commit SHAs were rewritten.
+          git checkout -B update_flake_lock_action origin/main
+          if [ -s "$MANUAL_PATCH" ]; then
+            if ! git apply --3way "$MANUAL_PATCH"; then
+              # If both branches changed the same lines, prefer main's version
+              # for conflicted files.
+              CONFLICTS="$(git diff --name-only --diff-filter=U)"
+              if [ -z "$CONFLICTS" ]; then
+                echo "Failed to apply manual changes patch"
+                exit 1
+              fi
+              while IFS= read -r FILE; do
+                [ -n "$FILE" ] || continue
+                git checkout --ours -- "$FILE"
+                git add -- "$FILE"
+              done <<< "$CONFLICTS"
+            fi
+            git add -A
+            git diff --cached --quiet || git commit -m "preserve manual changes"
           fi
+          nix flake update
+          git add flake.lock
+          git diff --cached --quiet && echo "Already up to date" && exit 0
+          git commit -m "flake: update"
+          git push --force-with-lease origin update_flake_lock_action
+
+      - name: Enable auto-merge
+        if: steps.update.outputs.pull-request-operation == 'created'
         env:
           GH_TOKEN: ${{ github.token }}
+        run: gh pr merge --auto --rebase ${{ steps.update.outputs.pull-request-number }}

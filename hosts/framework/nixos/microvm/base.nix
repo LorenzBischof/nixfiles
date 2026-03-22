@@ -197,7 +197,10 @@ in
     isNormalUser = true;
     group = "microvm";
     uid = 1000;
+    shell = pkgs.zsh;
   };
+
+  programs.zsh.enable = true;
 
   services.resolved.enable = true;
   networking.useDHCP = false;
@@ -319,6 +322,13 @@ in
           tag = "host-codex";
           source = "/home/lbischof/.codex";
           mountPoint = "/run/host-credentials/codex";
+          readOnly = true;
+        }
+        {
+          proto = "virtiofs";
+          tag = "host-github-token";
+          source = "/run/host-github-token";
+          mountPoint = "/run/host-credentials/github-token";
           readOnly = true;
         }
       ];

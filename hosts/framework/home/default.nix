@@ -68,6 +68,7 @@
   # The home.packages option allows you to install Nix packages into your
   # environment.
   home.packages = with pkgs; [
+    github-cli
     mullvad-browser
     keepassxc
     gnumake
@@ -173,6 +174,12 @@
       };
     };
   };
+
+  programs.zsh.initContent = lib.mkAfter ''
+    if [[ -r /run/agenix/github-token ]]; then
+      export GH_TOKEN=$(grep -oP '(?<=github\.com=)\S+' /run/agenix/github-token)
+    fi
+  '';
 
   services.etesync-dav.enable = true;
 

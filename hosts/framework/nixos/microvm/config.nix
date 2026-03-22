@@ -1,10 +1,29 @@
-{ lib, ... }:
+{ lib, pkgs, ... }:
 
 {
   imports = [
     ./module.nix
     ./hostexec.nix
   ];
+
+  # Expose the github token to microvms via a dedicated directory.
+  # Must be a real file copy, not a symlink, because virtiofs passes symlinks
+  # through as-is and the target (/run/agenix/...) doesn't exist inside the VM.
+  systemd.tmpfiles.rules = [
+    "d /run/host-github-token 0755 root root -"
+  ];
+  systemd.services.copy-github-token = {
+    description = "Copy GitHub token for microVM access";
+    after = [ "agenix.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = toString (pkgs.writeShellScript "copy-github-token" ''
+        install -m 0400 -o 1000 -g root /run/agenix/github-token /run/host-github-token/github-token
+      '');
+    };
+  };
 
   my.microvmHostExec.enable = true;
 

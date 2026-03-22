@@ -25,8 +25,15 @@
   home.file.".codex/auth.json".source =
     config.lib.file.mkOutOfStoreSymlink "/run/host-credentials/codex/auth.json";
 
+  home.packages = [ pkgs.github-cli ];
+
   programs.zsh = {
     enable = true;
+    initContent = lib.mkAfter ''
+      if [[ -r /run/host-credentials/github-token/github-token ]]; then
+        export GH_TOKEN=$(grep -oP '(?<=github\.com=)\S+' /run/host-credentials/github-token/github-token)
+      fi
+    '';
     history = {
       size = 4000;
       save = 10000000;
