@@ -8,6 +8,7 @@
 let
   cfg = config.my.profiles.ai;
   baseCodex = inputs.llm-agents.packages.${pkgs.system}.codex;
+  baseClaude = inputs.llm-agents.packages.${pkgs.system}.claude-code;
   codexNotifyConfigArg = "notify=[\"${lib.getExe codexNotify}\"]";
   codexNotify = pkgs.writeShellScriptBin "codex-notify" ''
     set -eu
@@ -26,6 +27,111 @@ let
   wrappedCodex = pkgs.writeShellScriptBin "codex" ''
     exec ${lib.getExe baseCodex} -c ${lib.escapeShellArg codexNotifyConfigArg} ${lib.escapeShellArgs cfg.codexArgs} "$@"
   '';
+  mkBwrapTool =
+    {
+      name,
+      executable,
+      configDirName,
+      extraArgs ? [ ],
+    }:
+    pkgs.writeShellApplication {
+      inherit name;
+      runtimeInputs = with pkgs; [
+        bubblewrap
+        coreutils
+        git
+        gnugrep
+      ];
+      text = ''
+        set -euo pipefail
+
+        repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+        sandbox_root="$(mktemp -d -t ${name}.XXXXXX)"
+        sandbox_home="$sandbox_root/home/${config.home.username}"
+        config_source="$HOME/${configDirName}"
+        config_target="$sandbox_home/${configDirName}"
+        ca_bundle="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+        ca_cert_dir="${pkgs.cacert}/etc/ssl/certs"
+        github_token_file="/run/agenix/github-token"
+        github_token=""
+
+        cleanup() {
+          rm -rf "$sandbox_root"
+        }
+        trap cleanup EXIT
+
+        mkdir -p "$sandbox_home"
+
+        if [ -r "$github_token_file" ]; then
+          github_token="$(grep -oP '(?<=github\.com=)\S+' "$github_token_file" || true)"
+        fi
+
+        declare -a bwrap_args=(
+          --die-with-parent
+          --unshare-all
+          --share-net
+          --new-session
+          --proc /proc
+          --dev /dev
+          --tmpfs /tmp
+          --dir /run
+          --dir /etc
+          --dir /home
+          --ro-bind /nix/store /nix/store
+          --ro-bind /run/current-system/sw /run/current-system/sw
+          --ro-bind /etc/static /etc/static
+          --ro-bind /etc/profiles /etc/profiles
+          --ro-bind /etc/resolv.conf /etc/resolv.conf
+          --ro-bind /etc/hosts /etc/hosts
+          --ro-bind /etc/nsswitch.conf /etc/nsswitch.conf
+          --ro-bind "$ca_cert_dir" /etc/ssl/certs
+          --bind "$sandbox_home" "$HOME"
+          --bind "$repo_root" "$repo_root"
+          --chdir "$repo_root"
+          --setenv HOME "$HOME"
+          --setenv USER "${config.home.username}"
+          --setenv PATH "$PATH"
+          --setenv SSL_CERT_FILE "$ca_bundle"
+          --setenv NIX_SSL_CERT_FILE "$ca_bundle"
+        )
+
+        if [ -e "$HOME/.nix-profile" ]; then
+          bwrap_args+=(--ro-bind "$HOME/.nix-profile" "$HOME/.nix-profile")
+        fi
+
+        if [ -d "$HOME/.local/state/nix/profiles" ]; then
+          bwrap_args+=(--ro-bind "$HOME/.local/state/nix/profiles" "$HOME/.local/state/nix/profiles")
+        fi
+
+        if [ -d "$config_source" ]; then
+          mkdir -p "$config_target"
+          bwrap_args+=(--bind "$config_source" "$HOME/${configDirName}")
+        fi
+
+        if [ -f "$HOME/${configDirName}.json" ]; then
+          bwrap_args+=(--bind "$HOME/${configDirName}.json" "$HOME/${configDirName}.json")
+        fi
+
+        if [ -n "$github_token" ]; then
+          bwrap_args+=(
+            --setenv GH_TOKEN "$github_token"
+            --setenv GITHUB_TOKEN "$github_token"
+          )
+        fi
+
+        exec bwrap "''${bwrap_args[@]}" -- ${lib.escapeShellArg executable} ${lib.escapeShellArgs extraArgs} "$@"
+      '';
+    };
+  codexBwrap = mkBwrapTool {
+    name = "codex-bwrap";
+    executable = lib.getExe wrappedCodex;
+    configDirName = ".codex";
+  };
+  claudeBwrap = mkBwrapTool {
+    name = "claude-bwrap";
+    executable = lib.getExe baseClaude;
+    configDirName = ".claude";
+  };
   renderedAgentsMd = builtins.readFile cfg.agentsFile;
 in
 {
@@ -64,6 +170,8 @@ in
     home.packages = [
       inputs.mcp-nixos.packages.${pkgs.system}.default
       pkgs.nil
+      codexBwrap
+      claudeBwrap
       #inputs.nix-ai-tools.packages.${pkgs.system}.openclaw
     ];
 
