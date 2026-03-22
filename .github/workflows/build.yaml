@@ -101,11 +101,16 @@ jobs:
             echo 'PROMPT_EOF'
           } >> "$GITHUB_OUTPUT"
       - name: Analyze failure with Claude Code
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.prompt.outputs.content }}
+      - name: Extract analysis from execution file
+        run: |
+          jq -r '.[] | select(.type == "result") | .result' \
+            "${{ steps.claude.outputs.execution_file }}" > analysis.md
       - name: Comment on PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

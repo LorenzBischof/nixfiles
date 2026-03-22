@@ -96,7 +96,8 @@ Note which inputs changed and to what revisions.
 
 ## Output format
 
-Write ONLY the following markdown to `analysis.md`. No preamble. No explanation outside the template.
+Your response must be ONLY the following markdown, with every `<...>` placeholder replaced
+by real information from your investigation. Do not add any preamble, summary, or other text.
 
 ## 🔍 Nix Build Failure Analysis
 
