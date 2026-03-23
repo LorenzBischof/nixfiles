@@ -117,10 +117,9 @@ jobs:
         if: ${{ hashFiles('analysis.md') != '' }}
         uses: marocchino/sticky-pull-request-comment@v3
         with:
-          header: nix-build-analysis-claude
           path: analysis.md
-          recreate: true
-          skip_unchanged: true
+          hide_and_recreate: true
+          hide_classify: "OUTDATED"
 
   analyze-codex:
     needs: [build, analyze-claude]
@@ -149,10 +148,9 @@ jobs:
         if: ${{ hashFiles('analysis.md') != '' }}
         uses: marocchino/sticky-pull-request-comment@v3
         with:
-          header: nix-build-analysis-codex
           path: analysis.md
-          recreate: true
-          skip_unchanged: true
+          hide_and_recreate: true
+          hide_classify: "OUTDATED"
 
   cleanup-analysis-comments:
     needs: [build]
@@ -163,12 +161,8 @@ jobs:
     steps:
       - uses: marocchino/sticky-pull-request-comment@v3
         with:
-          header: nix-build-analysis-claude
-          delete: true
-      - uses: marocchino/sticky-pull-request-comment@v3
-        with:
-          header: nix-build-analysis-codex
-          delete: true
+          hide: true
+          hide_classify: "OUTDATED"
 
   failure-alert:
     runs-on: ubuntu-latest
