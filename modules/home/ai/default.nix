@@ -7,8 +7,9 @@
 }:
 let
   cfg = config.my.profiles.ai;
-  baseCodex = inputs.llm-agents.packages.${pkgs.system}.codex;
-  baseClaude = inputs.llm-agents.packages.${pkgs.system}.claude-code;
+  system = pkgs.stdenv.hostPlatform.system;
+  baseCodex = inputs.llm-agents.packages.${system}.codex;
+  baseClaude = inputs.llm-agents.packages.${system}.claude-code;
   codexNotifyConfigArg = "notify=[\"${lib.getExe codexNotify}\"]";
   codexNotify = pkgs.writeShellScriptBin "codex-notify" ''
     set -eu
@@ -168,11 +169,11 @@ in
   };
   config = lib.mkIf cfg.enable {
     home.packages = [
-      inputs.mcp-nixos.packages.${pkgs.system}.default
+      inputs.mcp-nixos.packages.${system}.default
       pkgs.nil
       codexBwrap
       claudeBwrap
-      #inputs.nix-ai-tools.packages.${pkgs.system}.openclaw
+      #inputs.nix-ai-tools.packages.${system}.openclaw
     ];
 
     programs.voxtype = {
@@ -202,12 +203,12 @@ in
 
     programs.opencode = {
       enable = true;
-      package = inputs.llm-agents.packages.${pkgs.system}.opencode;
+      package = inputs.llm-agents.packages.${system}.opencode;
     };
 
     programs.claude-code = {
       enable = true;
-      package = inputs.llm-agents.packages.${pkgs.system}.claude-code;
+      package = inputs.llm-agents.packages.${system}.claude-code;
     };
 
     programs.codex = {

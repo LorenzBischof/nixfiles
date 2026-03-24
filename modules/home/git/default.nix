@@ -57,6 +57,7 @@ in
     programs.git = {
       enable = true;
       lfs.enable = true;
+      signing.format = "ssh";
       settings = {
         lfs.ssh.automultiplex = false; # https://github.com/git-lfs/git-lfs/issues/5784
         core = {

@@ -42,6 +42,7 @@ in
   ];
 
   services.dunst.enable = true;
+  gtk.gtk4.theme = config.gtk.theme;
 
   stylix.targets.swaylock.useWallpaper = false;
   programs = {
