@@ -42,6 +42,7 @@ let
         coreutils
         git
         gnugrep
+        systemd
       ];
       text = ''
         set -euo pipefail
@@ -53,6 +54,8 @@ let
         config_target="$sandbox_home/${configDirName}"
         ca_bundle="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
         ca_cert_dir="${pkgs.cacert}/etc/ssl/certs"
+        nix_daemon_socket_dir="/nix/var/nix/daemon-socket"
+        nix_conf_dir="/etc/nix"
         github_token_file="/run/agenix/github-token"
         github_token=""
 
@@ -71,7 +74,6 @@ let
           --die-with-parent
           --unshare-all
           --share-net
-          --new-session
           --proc /proc
           --dev /dev
           --tmpfs /tmp
@@ -94,6 +96,7 @@ let
           --setenv PATH "$PATH"
           --setenv SSL_CERT_FILE "$ca_bundle"
           --setenv NIX_SSL_CERT_FILE "$ca_bundle"
+          --setenv NIX_REMOTE daemon
         )
 
         if [ -e "$HOME/.nix-profile" ]; then
@@ -102,6 +105,15 @@ let
 
         if [ -d "$HOME/.local/state/nix/profiles" ]; then
           bwrap_args+=(--ro-bind "$HOME/.local/state/nix/profiles" "$HOME/.local/state/nix/profiles")
+        fi
+
+        # Allow sandboxed tools to use the host Nix daemon without exposing the DB.
+        if [ -S "$nix_daemon_socket_dir/socket" ]; then
+          bwrap_args+=(--bind "$nix_daemon_socket_dir" "$nix_daemon_socket_dir")
+        fi
+
+        if [ -d "$nix_conf_dir" ]; then
+          bwrap_args+=(--ro-bind "$nix_conf_dir" "$nix_conf_dir")
         fi
 
         if [ -d "$config_source" ]; then
@@ -120,18 +132,30 @@ let
           )
         fi
 
-        exec bwrap "''${bwrap_args[@]}" -- ${lib.escapeShellArg executable} ${lib.escapeShellArgs extraArgs} "$@"
+        exec systemd-inhibit \
+          --what=sleep \
+          --mode=block \
+          --why="AI sandbox session" \
+          bwrap "''${bwrap_args[@]}" -- ${lib.escapeShellArg executable} ${lib.escapeShellArgs extraArgs} "$@"
       '';
     };
   codexBwrap = mkBwrapTool {
     name = "codex-bwrap";
-    executable = lib.getExe wrappedCodex;
+    executable = lib.getExe baseCodex;
     configDirName = ".codex";
+    extraArgs = [
+      "-c"
+      codexNotifyConfigArg
+      "-c"
+      "tui.animations=false"
+      "--dangerously-bypass-approvals-and-sandbox"
+    ];
   };
   claudeBwrap = mkBwrapTool {
     name = "claude-bwrap";
     executable = lib.getExe baseClaude;
     configDirName = ".claude";
+    extraArgs = [ "--dangerously-skip-permissions" ];
   };
   renderedAgentsMd = builtins.readFile cfg.agentsFile;
 in
