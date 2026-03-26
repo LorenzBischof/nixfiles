@@ -55,7 +55,6 @@ let
         ca_bundle="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
         ca_cert_dir="${pkgs.cacert}/etc/ssl/certs"
         nix_daemon_socket_dir="/nix/var/nix/daemon-socket"
-        nix_conf_dir="/etc/nix"
         github_token_file="/run/agenix/github-token"
         github_token=""
 
@@ -96,6 +95,7 @@ let
           --setenv PATH "$PATH"
           --setenv SSL_CERT_FILE "$ca_bundle"
           --setenv NIX_SSL_CERT_FILE "$ca_bundle"
+          --setenv NIX_CONFIG "experimental-features = nix-command flakes"
           --setenv NIX_REMOTE daemon
         )
 
@@ -110,10 +110,6 @@ let
         # Allow sandboxed tools to use the host Nix daemon without exposing the DB.
         if [ -S "$nix_daemon_socket_dir/socket" ]; then
           bwrap_args+=(--bind "$nix_daemon_socket_dir" "$nix_daemon_socket_dir")
-        fi
-
-        if [ -d "$nix_conf_dir" ]; then
-          bwrap_args+=(--ro-bind "$nix_conf_dir" "$nix_conf_dir")
         fi
 
         if [ -d "$config_source" ]; then
