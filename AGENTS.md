@@ -10,7 +10,6 @@ There are two relevant AGENTS.md sources in this repo setup:
   - Repository-specific guidance for working in `nixfiles`.
 - **Global AGENTS.md sources**:
   - Host/default: `modules/home/ai/AGENTS.md`
-  - MicroVM guest: `hosts/framework/nixos/AGENTS.microvm.md`
 
 ## Repository Architecture
 
@@ -111,8 +110,3 @@ nix flake check
 # Run specific test
 nix build .#checks.x86_64-linux.attic --print-build-logs
 ```
-
-## Focused Docs
-
-- MicroVM workspace/symlink/share behavior: `docs/microvm-workspace-shares.md`
-- MicroVM per-VM Home Manager overrides: `hosts/microvms/<vmName>/default.nix`

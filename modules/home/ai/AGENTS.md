@@ -7,7 +7,6 @@ This system is running NixOS, a declarative Linux distribution.
 The NixOS system configuration is managed in: `~/git/github.com/lorenzbischof/nixfiles`
 
 To update the host/global AGENTS.md file for Codex, edit the source file in `modules/home/ai/AGENTS.md` in the repository and run `just switch` to apply changes.
-For MicroVM guests, edit `hosts/framework/nixos/AGENTS.microvm.md`.
 
 ## Important: System Changes Require Rebuilds
 
@@ -29,12 +28,3 @@ nix-shell -p jq python3 nodejs
 You can search for packages at https://search.nixos.org/packages
 
 For permanent installation, packages should be added to the NixOS configuration repository.
-
-## MicroVM SSH Debugging (No sudo)
-
-If a MicroVM is already running, connect from host without sudo:
-
-```bash
-microvm -s <vm>
-microvm -s <vm> uname -a
-```

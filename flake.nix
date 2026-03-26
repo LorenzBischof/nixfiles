@@ -81,10 +81,6 @@
       url = "github:mafredri/asustor-platform-driver";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    microvm = {
-      url = "github:microvm-nix/microvm.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     alias-watch = {
       url = "github:lorenzbischof/alias-watch";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -116,7 +112,6 @@
       disko,
       mcp-nixos,
       lanzaboote,
-      microvm,
       alias-watch,
       voxtype,
       ...
@@ -205,24 +200,6 @@
           };
           imports = [ module ];
         };
-      microvmDefinitions = import ./hosts/framework/nixos/microvm/profiles.nix { };
-      microvmHomeConfigurations = lib.mapAttrs' (
-        name: vm:
-        let
-          perVmHomeModulePath = ./hosts/microvms + "/${name}/default.nix";
-          perVmHomeModules = lib.optional (builtins.pathExists perVmHomeModulePath) perVmHomeModulePath;
-        in
-        lib.nameValuePair "microvm-${name}" (
-          home-manager.lib.homeManagerConfiguration {
-            inherit pkgs;
-            extraSpecialArgs = {
-              inherit inputs;
-              vmName = vm.hostName or name;
-            };
-            modules = [ ./hosts/framework/nixos/microvm/home.nix ] ++ perVmHomeModules;
-          }
-        )
-      ) microvmDefinitions;
     in
     {
       nixosConfigurations = {
@@ -236,7 +213,6 @@
             home-manager.nixosModules.home-manager
             nix-secrets.nixosModules.laptop
             lanzaboote.nixosModules.lanzaboote
-            microvm.nixosModules.host
             {
               home-manager = {
                 useGlobalPkgs = true;
@@ -341,8 +317,7 @@
             }
           ];
         };
-      }
-      // microvmHomeConfigurations;
+      };
       images = {
         rpi2 = self.nixosConfigurations.rpi2.config.system.build.sdImage;
         rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
@@ -352,10 +327,6 @@
         attic = mkTest {
           name = "attic";
           module = import ./tests/attic.nix { inherit inputs self; };
-        };
-        microvm = mkTest {
-          name = "microvm";
-          module = import ./tests/microvm.nix { inherit inputs self; };
         };
       };
       checks.${system} = {
