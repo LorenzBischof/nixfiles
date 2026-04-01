@@ -18,6 +18,11 @@
   my.programs.git.enable = true;
   my.profiles.ai.enable = true;
 
+  systemd.user.services.kanshi = {
+    Service.ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
+    Unit.X-Reload-Triggers = [ "${config.xdg.configFile."kanshi/config".source}" ];
+  };
+
   services.kanshi = {
     enable = true;
     systemdTarget = "sway-session.target";
@@ -58,6 +63,38 @@
             criteria = "eDP-1";
             mode = "2880x1920@120Hz";
             position = "3140,2761";
+            scale = 2.0;
+          }
+        ];
+      }
+      {
+        profile.outputs = [
+          {
+            criteria = "eDP-1";
+            mode = "2880x1920@120Hz";
+            position = "591,1440";
+            scale = 2.0;
+          }
+          {
+            criteria = "Lenovo Group Limited P27q-30 V30BGZ9H";
+            mode = "2560x1440";
+            position = "0,0";
+            scale = 1.0;
+          }
+        ];
+      }
+      {
+        profile.outputs = [
+          {
+            criteria = "eDP-1";
+            mode = "2880x1920";
+            position = "568,1080";
+            scale = 2.0;
+          }
+          {
+            criteria = "Dell Inc. DELL U4025QW 4MQ6FP3";
+            mode = "5120x2160";
+            position = "0,0";
             scale = 2.0;
           }
         ];

@@ -115,9 +115,16 @@ in
     config = rec {
       modifier = "Mod4";
       terminal = "foot";
-      startup = [
-        #{ command = "autotiling-rs"; always = true; }
-      ];
+      startup =
+        lib.optionals config.services.kanshi.enable [
+          {
+            command = "${pkgs.kanshi}/bin/kanshictl reload";
+            always = true;
+          }
+        ]
+        ++ [
+          #{ command = "autotiling-rs"; always = true; }
+        ];
       window = {
         border = 5;
         titlebar = false;
@@ -199,7 +206,7 @@ in
           adaptive_sync = "on";
         };
         "eDP-1" = {
-          bg = builtins.toString ./wallpaper_cropped_0.png + " fill";
+          bg = "${./wallpaper_cropped_0.png} fill";
         };
       };
     };
