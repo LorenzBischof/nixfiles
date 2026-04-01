@@ -83,7 +83,7 @@
     };
     script = ''
       # reduce brightness
-      echo 200 | tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/pwm3
+      echo 245 | tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/pwm3
       # stop blinking
       echo 0 | tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink
     '';
