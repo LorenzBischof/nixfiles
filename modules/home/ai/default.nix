@@ -76,7 +76,8 @@ let
           --proc /proc
           --dev /dev
           --tmpfs /tmp
-          --dir /run
+          --tmpfs /run
+          --dir /run/user/1000
           --dir /etc
           --dir /home
           --ro-bind /nix/store /nix/store
@@ -128,6 +129,19 @@ let
           )
         fi
 
+        # Allow the AI wrappers to launch local test VMs from inside bubblewrap.
+        if [ -e /dev/kvm ]; then
+          bwrap_args+=(--dev-bind /dev/kvm /dev/kvm)
+        fi
+
+        if [ -d /dev/dri ]; then
+          bwrap_args+=(--dev-bind /dev/dri /dev/dri)
+        fi
+
+        if [ -d /run/opengl-driver ]; then
+          bwrap_args+=(--bind /run/opengl-driver /run/opengl-driver)
+        fi
+
         exec systemd-inhibit \
           --what=sleep \
           --mode=block \
@@ -151,7 +165,11 @@ let
     name = "claude-bwrap";
     executable = lib.getExe baseClaude;
     configDirName = ".claude";
-    extraArgs = [ "--dangerously-skip-permissions" ];
+    extraArgs = [
+      "--dangerously-skip-permissions"
+      "--settings"
+      (builtins.toJSON { sandbox.enabled = false; })
+    ];
   };
   renderedAgentsMd = builtins.readFile cfg.agentsFile;
 in

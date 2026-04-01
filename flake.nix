@@ -323,6 +323,83 @@
         rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
       };
       formatter.${system} = treefmtEval.config.build.wrapper;
+      apps.${system}.framework-vm =
+        let
+          vm = pkgs.testers.runNixOSTest {
+            name = "framework-vm";
+            node.pkgs = pkgs;
+            node.pkgsReadOnly = false;
+            node.specialArgs = self.nixosConfigurations.framework._module.specialArgs;
+            imports = [
+              {
+                nodes.machine =
+                  { lib, pkgs, ... }:
+                  {
+                    imports = self.nixosConfigurations.framework._module.args.modules ++ [
+                      {
+                        boot.consoleLogLevel = lib.mkForce 3;
+                        boot.lanzaboote.enable = lib.mkForce false;
+                        # Keep keyboard input predictable for send_chars() in the VM driver.
+                        console.keyMap = lib.mkForce "us";
+
+                        virtualisation = {
+                          memorySize = 4096;
+                          cores = 4;
+                          graphics = true;
+                          qemu.options = [
+                            "-vga none"
+                            "-device virtio-gpu-pci"
+                          ];
+                        };
+
+                        services.greetd = {
+                          restart = lib.mkForce false;
+                          settings.initial_session = {
+                            command = "${pkgs.bash}/bin/bash -lc 'export WLR_RENDERER_ALLOW_SOFTWARE=1; exec ${pkgs.sway}/bin/sway'";
+                            user = "lbischof";
+                          };
+                        };
+                        services.tailscale.enable = lib.mkForce false;
+                        services.syncthing.enable = lib.mkForce false;
+                        virtualisation.docker.enable = lib.mkForce false;
+                        virtualisation.libvirtd.enable = lib.mkForce false;
+                        my.system.autoUpgrade.enable = lib.mkForce false;
+                        home-manager.users.lbischof.programs.voxtype.service.enable = lib.mkForce false;
+                      }
+                    ];
+                  };
+
+                testScript = # python
+                  ''
+                    import json, traceback, socket
+
+                    start_all()
+                    machine.wait_for_unit("default.target")
+
+                    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    srv.bind("/tmp/vm.sock")
+                    srv.listen(1)
+                    print("VM_READY", flush=True)
+
+                    while True:
+                        conn, _ = srv.accept()
+                        cmd = conn.makefile().read().strip()
+                        try:
+                            result = eval(cmd)
+                            resp = {"ok": True, "result": str(result) if result is not None else None}
+                        except Exception:
+                            resp = {"ok": False, "error": traceback.format_exc()}
+                        conn.sendall(json.dumps(resp).encode())
+                        conn.close()
+                  '';
+              }
+            ];
+          };
+        in
+        {
+          type = "app";
+          program = "${vm.driver}/bin/nixos-test-driver";
+        };
       nixosTests.${system} = {
         attic = mkTest {
           name = "attic";
