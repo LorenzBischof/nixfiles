@@ -28,6 +28,8 @@ nix run .#framework-vm -L > /tmp/vm-log 2>&1 &
 while ! grep -q "VM_READY" /tmp/vm-log 2>/dev/null; do sleep 1; done
 ```
 
+If the background launch exits unexpectedly or `/tmp/vm-log` stays empty, rerun `nix run .#framework-vm -L` in the foreground once to capture the failure before retrying.
+
 ## Using the test driver
 
 Interact with the NixOS test driver by sending Python expressions via `socat` and getting JSON back on the same connection:
@@ -36,6 +38,8 @@ Interact with the NixOS test driver by sending Python expressions via `socat` an
 echo 'machine.succeed("hostname")' | socat - UNIX-CONNECT:/tmp/vm.sock
 # {"ok": true, "result": "framework\n"}
 ```
+
+`/tmp/vm.sock` is a plain Unix socket. If `socat` is unavailable, use another local Unix-socket client such as a short `perl` or Python snippet rather than giving up on VM validation.
 
 Response format:
 - Success: `{"ok": true, "result": "..."}`
@@ -76,6 +80,12 @@ After making changes to Nix configuration files, you must restart the VM for the
 echo 'machine.wait_for_unit("graphical.target")' | socat - UNIX-CONNECT:/tmp/vm.sock
 ```
 
+For Sway-specific checks, also verify that the compositor is responding before testing app behavior, for example:
+
+```bash
+echo 'machine.succeed("SWAYSOCK=/run/user/1000/sway-ipc.1000.2073.sock swaymsg -t get_version")' | socat - UNIX-CONNECT:/tmp/vm.sock
+```
+
 ## Gotchas
 
 - **Keyboard layout**: The VM forces `console.keyMap = "us"` because the host uses ADNW. Without this, `send_chars()` sends incorrect keys.
@@ -83,6 +93,7 @@ echo 'machine.wait_for_unit("graphical.target")' | socat - UNIX-CONNECT:/tmp/vm.
 - **`vde_plug2tap` warnings**: Non-fatal, can be ignored.
 - **No reboot needed between commands**: The VM stays running. Send as many commands as you need.
 - **Screenshots**: Always use absolute paths under `/tmp/` (e.g. `/tmp/shot.png`). Relative paths write to the repo root.
+- **Validation standard**: For tasks about desktop runtime behavior, use the VM to validate the final state after your code change, not just the hypothesis before editing.
 
 ## Keeping this skill up to date
 

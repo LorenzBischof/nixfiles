@@ -209,6 +209,7 @@ in
     home.packages = [
       inputs.mcp-nixos.packages.${system}.default
       pkgs.nil
+      pkgs.socat
       codexBwrap
       claudeBwrap
       #inputs.nix-ai-tools.packages.${system}.openclaw
