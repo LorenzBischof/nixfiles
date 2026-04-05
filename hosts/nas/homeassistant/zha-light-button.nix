@@ -31,9 +31,9 @@
     }
     {
       variables = {
-        min_mireds = "{{ state_attr(light, 'min_mireds') }}";
-        max_mireds = "{{ state_attr(light, 'max_mireds') }}";
-        initial_mireds = "{{ state_attr(light, 'color_temp') | float(666) }}";
+        min_kelvin = "{{ state_attr(light, 'min_color_temp_kelvin') }}";
+        max_kelvin = "{{ state_attr(light, 'max_color_temp_kelvin') }}";
+        initial_kelvin = "{{ state_attr(light, 'color_temp_kelvin') | float(1500) }}";
         initial_brightness = "{{ state_attr(light, 'brightness') | float(0.0) }}";
       };
     }
@@ -76,7 +76,7 @@
                             data = {
                               transition = transitionStepLength;
                               brightness_step_pct = "{{ brightness_step_pct_negative }}";
-                              color_temp = "{{ max_mireds - ((max_mireds - initial_mireds) * (state_attr(light, 'brightness') / initial_brightness)) | int }}";
+                              color_temp_kelvin = "{{ (min_kelvin + ((initial_kelvin - min_kelvin) * (state_attr(light, 'brightness') / initial_brightness))) | int }}";
                             };
                             entity_id = light;
                           }
@@ -106,7 +106,7 @@
                         data = {
                           transition = transitionStepLength;
                           brightness_step_pct = "{{ brightness_step_pct_positive }}";
-                          color_temp = "{{ initial_mireds - ((initial_mireds - min_mireds) * ((state_attr(light, 'brightness') | float(0.0) - initial_brightness) / (max_brightness - initial_brightness))) | int }}";
+                          color_temp_kelvin = "{{ (initial_kelvin + ((max_kelvin - initial_kelvin) * ((state_attr(light, 'brightness') | float(0.0) - initial_brightness) / (max_brightness - initial_brightness)))) | int }}";
                         };
                         entity_id = light;
                       }
@@ -153,7 +153,7 @@
               data = {
                 entity_id = light;
                 brightness_pct = 100;
-                color_temp = 250;
+                color_temp_kelvin = 4000;
               };
             }
           ];
