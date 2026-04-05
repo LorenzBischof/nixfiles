@@ -76,6 +76,22 @@ git diff origin/main...HEAD -- flake.lock | head -80
 
 Note which inputs changed and to what revisions.
 
+## Step 3.5 — Search nixpkgs for related issues and PRs
+
+Extract the **package name** or **module name** from the error. Then search for
+existing nixpkgs issues and PRs that mention the same failure:
+
+```
+gh search issues --repo NixOS/nixpkgs --state open --limit 5 "<package-or-module-name>"
+gh search prs --repo NixOS/nixpkgs --state open --limit 5 "<package-or-module-name>"
+```
+
+If the initial query returns too many unrelated results, refine by adding error
+keywords (e.g. `"<package> build failure"`, `"<package> hash mismatch"`).
+
+If you find a matching issue or PR, note its number and URL — include it in the
+output under **Action needed**.
+
 ## Step 4 — Classify using this decision tree
 
 1. Does the error say an option/attribute "has been removed", "has been renamed", or "deprecated"?
@@ -123,6 +139,10 @@ Do not add any preamble, summary, lead-in sentence, code fence, or other text.
  If our overlay: what to update in the overlay to be compatible.
  If upstream bug: say "wait for upstream fix" and name the package/derivation to watch.
  If uncertain: what to investigate next.>
+
+### Related nixpkgs issues/PRs
+<List any matching open issues or PRs found in NixOS/nixpkgs, with links.
+ If none found, write "No related issues or PRs found.">
 
 ---
 <sub>Automated analysis of flake.lock bump — verify before acting</sub>
