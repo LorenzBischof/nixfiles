@@ -55,8 +55,6 @@ let
         ca_bundle="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
         ca_cert_dir="${pkgs.cacert}/etc/ssl/certs"
         nix_daemon_socket_dir="/nix/var/nix/daemon-socket"
-        github_token_file="/run/agenix/github-token"
-        github_token=""
 
         cleanup() {
           rm -rf "$sandbox_root"
@@ -65,9 +63,6 @@ let
 
         mkdir -p "$sandbox_home"
 
-        if [ -r "$github_token_file" ]; then
-          github_token="$(grep -oP '(?<=github\.com=)\S+' "$github_token_file" || true)"
-        fi
 
         declare -a bwrap_args=(
           --die-with-parent
@@ -96,7 +91,6 @@ let
           --setenv PATH "$PATH"
           --setenv SSL_CERT_FILE "$ca_bundle"
           --setenv NIX_SSL_CERT_FILE "$ca_bundle"
-          --setenv NIX_CONFIG "experimental-features = nix-command flakes"
           --setenv NIX_REMOTE daemon
         )
 
@@ -122,12 +116,20 @@ let
           bwrap_args+=(--bind "$HOME/${configDirName}.json" "$HOME/${configDirName}.json")
         fi
 
-        if [ -n "$github_token" ]; then
+        nix_config="experimental-features = nix-command flakes"
+
+        github_token_file="/run/agenix/github-token"
+        if [ -r "$github_token_file" ]; then
+          nix_config="$nix_config
+          $(cat "$github_token_file")"
+          github_token="$(grep -oP '(?<=github\.com=)\S+' "$github_token_file" || true)"
           bwrap_args+=(
             --setenv GH_TOKEN "$github_token"
             --setenv GITHUB_TOKEN "$github_token"
           )
         fi
+
+        bwrap_args+=(--setenv NIX_CONFIG "$nix_config")
 
         # Allow the AI wrappers to launch local test VMs from inside bubblewrap.
         if [ -e /dev/kvm ]; then

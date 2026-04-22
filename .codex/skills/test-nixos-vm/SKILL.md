@@ -16,7 +16,7 @@ Use the upstream NixOS test documentation as the canonical reference for test-dr
 - Defined in `flake.nix` under `apps.framework-vm`
 - Boots the real framework config with overrides for virtualisation (software rendering, disabled services)
 - Auto-logs in via `greetd` and starts a Sway session with `WLR_RENDERER_ALLOW_SOFTWARE=1`
-- The NixOS test driver listens on a Unix socket at `/tmp/vm.sock` and evaluates Python expressions sent to it
+- The NixOS test driver listens on a Unix socket at `$XDG_RUNTIME_DIR/framework-vm.sock` and evaluates Python expressions sent to it
 - Results are returned as JSON on the same connection
 
 ## Launching the VM
@@ -35,11 +35,13 @@ If the background launch exits unexpectedly or `/tmp/vm-log` stays empty, rerun 
 Interact with the NixOS test driver by sending Python expressions via `socat` and getting JSON back on the same connection:
 
 ```bash
-echo 'machine.succeed("hostname")' | socat - UNIX-CONNECT:/tmp/vm.sock
+echo 'machine.succeed("hostname")' | socat -t 120 - UNIX-CONNECT:$XDG_RUNTIME_DIR/framework-vm.sock
 # {"ok": true, "result": "framework\n"}
 ```
 
-`/tmp/vm.sock` is a plain Unix socket. If `socat` is unavailable, use another local Unix-socket client such as a short `perl` or Python snippet rather than giving up on VM validation.
+**Always use `socat -t 120`** (or a higher value for very slow commands). Without `-t`, socat closes the socket as soon as stdin is exhausted. For fast commands this works by accident; for slow commands the response is silently lost. `-t N` tells socat to wait N seconds after stdin closes before giving up on reading the response.
+
+`$XDG_RUNTIME_DIR/framework-vm.sock` is a plain Unix socket. If `socat` is unavailable, use another local Unix-socket client such as a short `perl` or Python snippet rather than giving up on VM validation.
 
 Response format:
 - Success: `{"ok": true, "result": "..."}`
@@ -67,28 +69,23 @@ The `machine` object exposed here is the standard NixOS test driver machine obje
 When done, or when you need to test Nix configuration changes, shut down the VM:
 
 ```bash
-echo 'exit()' | socat - UNIX-CONNECT:/tmp/vm.sock
+echo 'exit()' | socat -t 5 - UNIX-CONNECT:$XDG_RUNTIME_DIR/framework-vm.sock
 ```
 
 After making changes to Nix configuration files, you must restart the VM for them to take effect — the VM boots from a build of the config, so a rebuild and relaunch is required.
 
 ## Waiting for the graphical session
 
-`VM_READY` fires once `default.target` is reached, but the graphical session may still be starting. Before taking screenshots or interacting with the GUI, wait for the graphical target:
+`VM_READY` fires once `default.target` is reached, but the graphical session may still be starting. Before taking screenshots or interacting with the GUI:
 
 ```bash
-echo 'machine.wait_for_unit("graphical.target")' | socat - UNIX-CONNECT:/tmp/vm.sock
-```
-
-For Sway-specific checks, also verify that the compositor is responding before testing app behavior, for example:
-
-```bash
-echo 'machine.succeed("SWAYSOCK=/run/user/1000/sway-ipc.1000.2073.sock swaymsg -t get_version")' | socat - UNIX-CONNECT:/tmp/vm.sock
+echo 'machine.wait_for_unit("graphical.target")' | socat -t 120 - UNIX-CONNECT:$XDG_RUNTIME_DIR/framework-vm.sock
 ```
 
 ## Gotchas
 
-- **Keyboard layout**: The VM forces `console.keyMap = "us"` because the host uses ADNW. Without this, `send_chars()` sends incorrect keys.
+- **Keyboard layout**: The VM forces `console.keyMap = "us"` because the host uses ADNW. Without this, `send_chars()` sends incorrect keys. Sway's XKB layout must also be forced to `us` for keybindings to work correctly — `console.keyMap` alone is not enough.
+- **Super key name**: Use `"meta_l"` not `"super"` for the Super/Mod4 key in `send_key()`. Example: `machine.send_key("meta_l-t")` triggers `Mod4+t`.
 - **`agenix` failures**: Decryption errors are expected — the VM lacks host secret keys.
 - **`vde_plug2tap` warnings**: Non-fatal, can be ignored.
 - **No reboot needed between commands**: The VM stays running. Send as many commands as you need.

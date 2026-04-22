@@ -341,14 +341,18 @@
                         boot.lanzaboote.enable = lib.mkForce false;
                         # Keep keyboard input predictable for send_chars() in the VM driver.
                         console.keyMap = lib.mkForce "us";
+                        home-manager.users.lbischof.wayland.windowManager.sway.config.input."*".xkb_layout =
+                          lib.mkForce "us";
 
                         virtualisation = {
                           memorySize = 4096;
                           cores = 4;
                           graphics = true;
+                          qemu.package = lib.mkForce pkgs.qemu;
                           qemu.options = [
                             "-vga none"
                             "-device virtio-gpu-pci"
+                            "-display gtk,gl=off"
                           ];
                         };
 
@@ -371,26 +375,40 @@
 
                 testScript = # python
                   ''
-                    import json, traceback, socket
+                    import json, traceback, socket, os
+                    from pathlib import Path
 
                     start_all()
                     machine.wait_for_unit("default.target")
 
-                    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    srv.bind("/tmp/vm.sock")
-                    srv.listen(1)
-                    print("VM_READY", flush=True)
+                    runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+                    sock_path = Path(runtime_dir) / "framework-vm.sock"
+                    sock_path.unlink(missing_ok=True)
 
-                    while True:
-                        conn, _ = srv.accept()
-                        cmd = conn.makefile().read().strip()
-                        try:
-                            result = eval(cmd)
-                            resp = {"ok": True, "result": str(result) if result is not None else None}
-                        except Exception:
-                            resp = {"ok": False, "error": traceback.format_exc()}
-                        conn.sendall(json.dumps(resp).encode())
-                        conn.close()
+                    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    try:
+                        srv.bind(str(sock_path))
+                        srv.listen(1)
+                        print("VM_READY", flush=True)
+
+                        while True:
+                            conn, _ = srv.accept()
+                            with conn:
+                                try:
+                                    cmd = conn.makefile().read().strip()
+                                    try:
+                                        result = eval(cmd)
+                                        resp = {"ok": True, "result": str(result) if result is not None else None}
+                                    except Exception:
+                                        resp = {"ok": False, "error": traceback.format_exc()}
+                                    conn.sendall(json.dumps(resp).encode())
+                                except SystemExit:
+                                    raise
+                                except Exception:
+                                    pass  # client disconnected mid-command
+                    finally:
+                        srv.close()
+                        sock_path.unlink(missing_ok=True)
                   '';
               }
             ];
