@@ -99,6 +99,22 @@
           }
         ];
       }
+      {
+        profile.outputs = [
+          {
+            criteria = "eDP-1";
+            mode = "2880x1920";
+            position = "240,1080";
+            scale = 2.0;
+          }
+          {
+            criteria = "Dell Inc. DELL U2720Q 6YSSY13";
+            mode = "3840x2160";
+            position = "0,0";
+            scale = 2.0;
+          }
+        ];
+      }
     ];
   };
 
