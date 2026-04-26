@@ -24,8 +24,11 @@ Use the upstream NixOS test documentation as the canonical reference for test-dr
 ```bash
 nix run .#framework-vm -L > /tmp/vm-log 2>&1 &
 
-# Wait for the VM to be ready (typically ~30-60s)
-while ! grep -q "VM_READY" /tmp/vm-log 2>/dev/null; do sleep 1; done
+# Wait for the socket to appear (typically ~30-60s)
+while ! test -S "$XDG_RUNTIME_DIR/framework-vm.sock" 2>/dev/null; do sleep 1; done
+
+# Wait for default.target to be reached
+echo 'machine.wait_for_unit("default.target")' | socat -t 120 - UNIX-CONNECT:$XDG_RUNTIME_DIR/framework-vm.sock
 ```
 
 If the background launch exits unexpectedly or `/tmp/vm-log` stays empty, rerun `nix run .#framework-vm -L` in the foreground once to capture the failure before retrying.
@@ -76,7 +79,7 @@ After making changes to Nix configuration files, you must restart the VM for the
 
 ## Waiting for the graphical session
 
-`VM_READY` fires once `default.target` is reached, but the graphical session may still be starting. Before taking screenshots or interacting with the GUI:
+`default.target` is reached before the graphical session is fully up. Before taking screenshots or interacting with the GUI:
 
 ```bash
 echo 'machine.wait_for_unit("graphical.target")' | socat -t 120 - UNIX-CONNECT:$XDG_RUNTIME_DIR/framework-vm.sock

@@ -379,7 +379,6 @@
                     from pathlib import Path
 
                     start_all()
-                    machine.wait_for_unit("default.target")
 
                     runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
                     sock_path = Path(runtime_dir) / "framework-vm.sock"
@@ -389,7 +388,6 @@
                     try:
                         srv.bind(str(sock_path))
                         srv.listen(1)
-                        print("VM_READY", flush=True)
 
                         while True:
                             conn, _ = srv.accept()
