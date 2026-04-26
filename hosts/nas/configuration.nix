@@ -58,6 +58,7 @@
       "asustor_it87"
     ];
     initrd = {
+      systemd.enable = false;
       kernelModules = config.boot.kernelModules;
       network = {
         enable = true;
