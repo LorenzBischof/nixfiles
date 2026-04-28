@@ -893,6 +893,7 @@
         "nixpkgs-umap": "nixpkgs-umap",
         "numen": "numen",
         "pre-commit-hooks": "pre-commit-hooks",
+        "sandix": "sandix",
         "stylix": "stylix",
         "talon": "talon",
         "treefmt-nix": "treefmt-nix",
@@ -917,6 +918,26 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "sandix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1778684109,
+        "narHash": "sha256-4w0YGQYmW8KtpVT/0oFUsa6/4G2U1GoicWUrxDQibyA=",
+        "owner": "LorenzBischof",
+        "repo": "sandix",
+        "rev": "e1cb112ae061d7706100b92d55a9ff627cac588a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "LorenzBischof",
+        "repo": "sandix",
         "type": "github"
       }
     },

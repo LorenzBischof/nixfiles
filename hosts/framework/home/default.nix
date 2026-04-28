@@ -12,11 +12,14 @@
   imports = [
     ../../../modules/home
     inputs.nix-secrets.homeManagerModule
+    inputs.sandix.homeManagerModules.direnv-sandbox
   ];
 
   my.programs.firefox.enable = true;
   my.programs.git.enable = true;
   my.profiles.ai.enable = true;
+
+  programs.direnv.sandbox.enable = true;
 
   systemd.user.services.kanshi = {
     Service.ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
