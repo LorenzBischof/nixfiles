@@ -67,11 +67,6 @@
       inputs.treefmt-nix.follows = "treefmt-nix";
       #inputs.blueprint.inputs.nixpkgs.follows = "nixpkgs";
     };
-    mcp-nixos = {
-      url = "github:utensils/mcp-nixos";
-      inputs.nixpkgs.follows = "nixpkgs";
-      #inputs.devshell.inputs.nixpkgs.follows = "nixpkgs";
-    };
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v0.4.3";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -110,7 +105,6 @@
       nixhome,
       alertmanager-ntfy,
       disko,
-      mcp-nixos,
       lanzaboote,
       alias-watch,
       voxtype,

@@ -209,7 +209,6 @@ in
   };
   config = lib.mkIf cfg.enable {
     home.packages = [
-      inputs.mcp-nixos.packages.${system}.default
       pkgs.nil
       pkgs.socat
       codexBwrap
