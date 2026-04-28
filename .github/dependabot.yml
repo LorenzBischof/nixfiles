@@ -1,0 +1,26 @@
+version: 2
+
+registries:
+  github:
+    type: "git"
+    url: "https://github.com"
+    username: "x-access-token"
+    password: "${{secrets.GH_TOKEN}}"
+
+updates:
+  - package-ecosystem: "nix"
+    directory: "/"
+    schedule:
+      interval: "cron"
+      cronjob: "0 4 */3 * *"
+      timezone: "Etc/UTC"
+    commit-message:
+      prefix: "flake"
+      include: "scope"
+    registries:
+      - "github"
+    groups:
+      flake:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
