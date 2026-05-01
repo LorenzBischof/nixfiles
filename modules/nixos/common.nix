@@ -2,9 +2,12 @@
   lib,
   pkgs,
   config,
+  inputs,
   ...
 }:
 {
+  system.configurationRevision = inputs.self.rev or inputs.self.dirtyRev or null;
+
 
   networking.nameservers = [
     "1.1.1.1"
