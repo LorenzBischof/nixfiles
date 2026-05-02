@@ -48,3 +48,4 @@ check_input() {
 check_input "nix-secrets" "../nix-secrets"
 check_input "numen" "../numen-nix"
 check_input "neovim-config" "../neovim-config"
+check_input "sandix" "../sandix"

@@ -330,7 +330,7 @@
             node.specialArgs = self.nixosConfigurations.framework._module.specialArgs;
             imports = [
               {
-                nodes.machine =
+                nodes.vm =
                   { lib, pkgs, ... }:
                   {
                     imports = self.nixosConfigurations.framework._module.args.modules ++ [

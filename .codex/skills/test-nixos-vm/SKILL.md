@@ -85,6 +85,18 @@ After making changes to Nix configuration files, you must restart the VM for the
 echo 'machine.wait_for_unit("graphical.target")' | socat -t 120 - UNIX-CONNECT:$XDG_RUNTIME_DIR/framework-vm.sock
 ```
 
+## Launching Wayland Applications
+
+Commands run through `machine.succeed()` execute outside the logged-in Sway session. To launch GUI apps with the same environment as the real desktop, open a terminal in Sway and type the command there:
+
+```bash
+echo 'machine.send_key("meta_l-t")' \
+  | socat -t 120 - UNIX-CONNECT:$XDG_RUNTIME_DIR/framework-vm.sock
+
+echo 'machine.send_chars("logseq\n")' \
+  | socat -t 120 - UNIX-CONNECT:$XDG_RUNTIME_DIR/framework-vm.sock
+```
+
 ## Gotchas
 
 - **Keyboard layout**: The VM forces `console.keyMap = "us"` because the host uses ADNW. Without this, `send_chars()` sends incorrect keys. Sway's XKB layout must also be forced to `us` for keybindings to work correctly — `console.keyMap` alone is not enough.

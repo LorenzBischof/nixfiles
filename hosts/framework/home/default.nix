@@ -8,6 +8,16 @@
   inputs,
   ...
 }:
+let
+  # This is required, so that app_id is set and we can create Sway window rules
+  logseqWithDesktopName = pkgs.logseq.overrideAttrs (old: {
+    postInstall = (old.postInstall or "") + ''
+      packageJson="$out/share/logseq/resources/app/package.json"
+      ${lib.getExe pkgs.jq} '.desktopName = "Logseq"' "$packageJson" > package.json.tmp
+      mv package.json.tmp "$packageJson"
+    '';
+  });
+in
 {
   imports = [
     ../../../modules/home
@@ -128,7 +138,7 @@
     mullvad-browser
     keepassxc
     gnumake
-    logseq
+    logseqWithDesktopName
     pavucontrol
     #jellyfin-media-player   # insecure because of qtwebengine-5.15.19
     xournalpp
