@@ -19,6 +19,47 @@
   ];
 
   services.open-webui.enable = false;
+  services.llama-cpp = {
+    enable = true;
+    package = pkgs.llama-cpp-vulkan;
+    extraFlags = [
+      "--flash-attn"
+      "on"
+      "--split-mode"
+      "row"
+      "--no-context-shift"
+    ];
+    modelsPreset = {
+      "qwen3-coder" = {
+        hf-repo = "unsloth/Qwen3-Coder-Next-GGUF";
+        hf-file = "Qwen3-Coder-Next-UD-Q4_K_XL.gguf";
+        alias = "qwen3-coder";
+        fit = "on";
+        jinja = "on";
+        ctx-size = "32768";
+        temp = "1.0";
+        top-p = "0.95";
+        top-k = "40";
+        min-p = "0";
+      };
+      "gemma4" = {
+        hf-repo = "unsloth/gemma-4-26B-A4B-it-GGUF:Q8_0";
+        alias = "gemma4";
+        fit = "on";
+        jinja = "on";
+        ctx-size = "32768";
+        ubatch-size = "1024";
+        image-min-tokens = "256";
+        image-max-tokens = "512";
+        temp = "1.0";
+        top-p = "0.95";
+        top-k = "64";
+      };
+    };
+  };
+  # Work around llama-cpp-vulkan trying to create //.cache for shader cache:
+  # https://github.com/NixOS/nixpkgs/issues/441531
+  systemd.services.llama-cpp.environment.XDG_CACHE_HOME = "/var/cache/llama-cpp";
 
   my.services = {
     detect-reboot-required.enable = true;

@@ -173,6 +173,11 @@ let
       (builtins.toJSON { sandbox.enabled = false; })
     ];
   };
+  piBwrap = mkBwrapTool {
+    name = "pi-bwrap";
+    executable = lib.getExe inputs.llm-agents.packages.${system}.pi;
+    configDirName = ".pi";
+  };
   renderedAgentsMd = builtins.readFile cfg.agentsFile;
 in
 {
@@ -213,6 +218,8 @@ in
       pkgs.socat
       codexBwrap
       claudeBwrap
+      piBwrap
+      inputs.llm-agents.packages.${system}.pi
       #inputs.nix-ai-tools.packages.${system}.openclaw
     ];
 
@@ -230,15 +237,6 @@ in
     # Workaround for voxtype user-service PATH issue (see upstream issue #253).
     systemd.user.services.voxtype = lib.mkIf config.programs.voxtype.service.enable {
       Service.Environment = [ "PATH=/run/current-system/sw/bin" ];
-    };
-
-    services.ollama = {
-      enable = true;
-      package = pkgs.ollama-vulkan;
-      environmentVariables = {
-        OLLAMA_CONTEXT_LENGTH = "20000";
-        OLLAMA_KEEP_ALIVE = "20m";
-      };
     };
 
     programs.opencode = {
@@ -261,6 +259,35 @@ in
 
     # Global Codex context file
     home.file.".codex/AGENTS.md".text = renderedAgentsMd;
+
+    # Global Pi context file
+    home.file.".pi/agent/AGENTS.md".text = renderedAgentsMd;
+
+    home.file.".pi/agent/models.json".text = builtins.toJSON {
+      providers = {
+        llama-cpp = {
+          baseUrl = "http://127.0.0.1:8080/v1";
+          api = "openai-completions";
+          apiKey = "none";
+          compat = {
+            supportsDeveloperRole = false;
+            supportsReasoningEffort = false;
+          };
+          models = [
+            {
+              id = "qwen3-coder";
+            }
+            {
+              id = "gemma4";
+              input = [
+                "text"
+                "image"
+              ];
+            }
+          ];
+        };
+      };
+    };
 
     # Nix documentation skill
     home.file.".claude/skills/nix-docs/SKILL.md".source = ./skills/nix-docs/SKILL.md;
