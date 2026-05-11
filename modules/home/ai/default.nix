@@ -73,8 +73,13 @@ let
           --tmpfs /tmp
           --tmpfs /run
           --dir /run/user/1000
+          --dir /bin
+          --dir /usr
+          --dir /usr/bin
           --dir /etc
           --dir /home
+          --ro-bind /bin/sh /bin/sh
+          --ro-bind /usr/bin/env /usr/bin/env
           --ro-bind /nix/store /nix/store
           --ro-bind /run/current-system/sw /run/current-system/sw
           --ro-bind /etc/static /etc/static
