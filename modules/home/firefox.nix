@@ -16,6 +16,7 @@ in
     stylix.targets.firefox.enable = false;
     programs.firefox = {
       enable = true;
+      configPath = ".mozilla/firefox";
 
       policies = {
         DisableTelemetry = true;
