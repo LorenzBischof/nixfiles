@@ -51,7 +51,6 @@ let
         sandbox_root="$(mktemp -d -t ${name}.XXXXXX)"
         sandbox_home="$sandbox_root/home/${config.home.username}"
         config_source="$HOME/${configDirName}"
-        config_target="$sandbox_home/${configDirName}"
         ca_bundle="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
         ca_cert_dir="${pkgs.cacert}/etc/ssl/certs"
         nix_daemon_socket_dir="/nix/var/nix/daemon-socket"
@@ -113,8 +112,11 @@ let
         fi
 
         if [ -d "$config_source" ]; then
-          mkdir -p "$config_target"
           bwrap_args+=(--bind "$config_source" "$HOME/${configDirName}")
+        fi
+
+        if [ -d "$HOME/.agents" ]; then
+          bwrap_args+=(--bind "$HOME/.agents" "$HOME/.agents")
         fi
 
         if [ -f "$HOME/${configDirName}.json" ]; then
@@ -259,42 +261,44 @@ in
       package = wrappedCodex;
     };
 
-    # Global Claude Code context file
-    home.file.".claude/CLAUDE.md".text = renderedAgentsMd;
+    home.file = {
+      ".agents/skills".source = ./skills;
+      ".claude/skills".source = ./skills;
 
-    # Global Codex context file
-    home.file.".codex/AGENTS.md".text = renderedAgentsMd;
+      # Global Claude Code context file
+      ".claude/CLAUDE.md".text = renderedAgentsMd;
 
-    # Global Pi context file
-    home.file.".pi/agent/AGENTS.md".text = renderedAgentsMd;
+      # Global Codex context file
+      ".codex/AGENTS.md".text = renderedAgentsMd;
 
-    home.file.".pi/agent/models.json".text = builtins.toJSON {
-      providers = {
-        llama-cpp = {
-          baseUrl = "http://127.0.0.1:8080/v1";
-          api = "openai-completions";
-          apiKey = "none";
-          compat = {
-            supportsDeveloperRole = false;
-            supportsReasoningEffort = false;
+      # Global Pi context file
+      ".pi/agent/AGENTS.md".text = renderedAgentsMd;
+
+      ".pi/agent/models.json".text = builtins.toJSON {
+        providers = {
+          llama-cpp = {
+            baseUrl = "http://127.0.0.1:8080/v1";
+            api = "openai-completions";
+            apiKey = "none";
+            compat = {
+              supportsDeveloperRole = false;
+              supportsReasoningEffort = false;
+            };
+            models = [
+              {
+                id = "qwen3-coder";
+              }
+              {
+                id = "gemma4";
+                input = [
+                  "text"
+                  "image"
+                ];
+              }
+            ];
           };
-          models = [
-            {
-              id = "qwen3-coder";
-            }
-            {
-              id = "gemma4";
-              input = [
-                "text"
-                "image"
-              ];
-            }
-          ];
         };
       };
     };
-
-    # Nix documentation skill
-    home.file.".claude/skills/nix-docs/SKILL.md".source = ./skills/nix-docs/SKILL.md;
   };
 }
