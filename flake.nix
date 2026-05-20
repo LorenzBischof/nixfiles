@@ -88,6 +88,7 @@
       url = "github:peteonrails/voxtype";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    nixos-agent-test-vm.url = "github:lorenzbischof/nixos-agent-test-vm";
   };
 
   outputs =
@@ -112,6 +113,7 @@
       lanzaboote,
       alias-watch,
       voxtype,
+      nixos-agent-test-vm,
       ...
     }@inputs:
     let
@@ -198,6 +200,7 @@
           };
           imports = [ module ];
         };
+
     in
     {
       nixosConfigurations = {
@@ -321,99 +324,33 @@
         rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
       };
       formatter.${system} = treefmtEval.config.build.wrapper;
-      apps.${system}.framework-vm =
-        let
-          vm = pkgs.testers.runNixOSTest {
-            name = "framework-vm";
-            node.pkgs = pkgs;
-            node.pkgsReadOnly = false;
-            node.specialArgs = self.nixosConfigurations.framework._module.specialArgs;
-            imports = [
-              {
-                nodes.vm =
-                  { lib, pkgs, ... }:
-                  {
-                    imports = self.nixosConfigurations.framework._module.args.modules ++ [
-                      {
-                        boot.consoleLogLevel = lib.mkForce 3;
-                        boot.lanzaboote.enable = lib.mkForce false;
-                        # Keep keyboard input predictable for send_chars() in the VM driver.
-                        console.keyMap = lib.mkForce "us";
-                        home-manager.users.lbischof.wayland.windowManager.sway.config.input."*".xkb_layout =
-                          lib.mkForce "us";
-
-                        virtualisation = {
-                          memorySize = 4096;
-                          cores = 4;
-                          graphics = true;
-                          qemu.package = lib.mkForce pkgs.qemu;
-                          qemu.options = [
-                            "-vga none"
-                            "-device virtio-gpu-pci"
-                            "-display gtk,gl=off"
-                          ];
-                        };
-
-                        services.greetd = {
-                          restart = lib.mkForce false;
-                          settings.initial_session = {
-                            command = "${pkgs.bash}/bin/bash -lc 'export WLR_RENDERER_ALLOW_SOFTWARE=1; exec ${pkgs.sway}/bin/sway'";
-                            user = "lbischof";
-                          };
-                        };
-                        services.tailscale.enable = lib.mkForce false;
-                        services.syncthing.enable = lib.mkForce false;
-                        virtualisation.docker.enable = lib.mkForce false;
-                        virtualisation.libvirtd.enable = lib.mkForce false;
-                        my.system.autoUpgrade.enable = lib.mkForce false;
-                        home-manager.users.lbischof.programs.voxtype.service.enable = lib.mkForce false;
-                      }
-                    ];
-                  };
-
-                testScript = # python
-                  ''
-                    import json, traceback, socket, os
-                    from pathlib import Path
-
-                    start_all()
-
-                    runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
-                    sock_path = Path(runtime_dir) / "framework-vm.sock"
-                    sock_path.unlink(missing_ok=True)
-
-                    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    try:
-                        srv.bind(str(sock_path))
-                        srv.listen(1)
-
-                        while True:
-                            conn, _ = srv.accept()
-                            with conn:
-                                try:
-                                    cmd = conn.makefile().read().strip()
-                                    try:
-                                        result = eval(cmd)
-                                        resp = {"ok": True, "result": str(result) if result is not None else None}
-                                    except Exception:
-                                        resp = {"ok": False, "error": traceback.format_exc()}
-                                    conn.sendall(json.dumps(resp).encode())
-                                except SystemExit:
-                                    raise
-                                except Exception:
-                                    pass  # client disconnected mid-command
-                    finally:
-                        srv.close()
-                        sock_path.unlink(missing_ok=True)
-                  '';
-              }
-            ];
+      apps.${system}.framework-agent-vm = nixos-agent-test-vm.mkAgentVm {
+        inherit pkgs;
+        host = "framework";
+        nixosConfig = self.nixosConfigurations.framework;
+        extraConfig =
+          { lib, pkgs, ... }:
+          {
+            # framework sets consoleLogLevel=3; runNixOSTest sets it to 7 — pick one.
+            boot.consoleLogLevel = lib.mkForce 3;
+            boot.lanzaboote.enable = lib.mkForce false;
+            home-manager.users.lbischof.wayland.windowManager.sway.config.input."*".xkb_layout =
+              lib.mkForce "us";
+            services.greetd = {
+              restart = lib.mkForce false;
+              settings.initial_session = {
+                command = "${pkgs.bash}/bin/bash -lc 'export WLR_RENDERER_ALLOW_SOFTWARE=1; exec ${pkgs.sway}/bin/sway'";
+                user = "lbischof";
+              };
+            };
+            services.tailscale.enable = lib.mkForce false;
+            services.syncthing.enable = lib.mkForce false;
+            virtualisation.docker.enable = lib.mkForce false;
+            virtualisation.libvirtd.enable = lib.mkForce false;
+            my.system.autoUpgrade.enable = lib.mkForce false;
+            home-manager.users.lbischof.programs.voxtype.service.enable = lib.mkForce false;
           };
-        in
-        {
-          type = "app";
-          program = "${vm.driver}/bin/nixos-test-driver";
-        };
+      };
       nixosTests.${system} = {
         attic = mkTest {
           name = "attic";

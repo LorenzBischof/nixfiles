@@ -113,7 +113,7 @@ nix build .#checks.x86_64-linux.attic --print-build-logs
 
 ## VM Validation Expectations
 
-When a task is about runtime behavior on the `framework` desktop session, prefer validating it in `framework-vm` instead of stopping at static inspection or a successful build. This especially applies to:
+When a task is about runtime behavior on the `framework` desktop session, prefer validating it in `framework-agent-vm` instead of stopping at static inspection or a successful build. This especially applies to:
 
 - Sway/Wayland/XWayland behavior, window matching, and keybindings
 - GUI app launch behavior and Electron/Chromium Wayland mode
@@ -121,6 +121,6 @@ When a task is about runtime behavior on the `framework` desktop session, prefer
 
 For those tasks:
 
-- Start `nix run .#framework-vm` early once you have a plausible hypothesis
+- Start `nix run .#framework-agent-vm` early once you have a plausible hypothesis
 - Treat local code inspection as preliminary; verify the final behavior in the VM before closing the task
 - If VM validation is not possible, say exactly what blocked it and what was verified instead

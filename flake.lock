@@ -697,6 +697,21 @@
         "type": "github"
       }
     },
+    "nixos-agent-test-vm": {
+      "locked": {
+        "lastModified": 1779453312,
+        "narHash": "sha256-CvNvSMb0HNApD6/l6dtHtT6El8Uftgi1PnSfCyj6JqQ=",
+        "owner": "lorenzbischof",
+        "repo": "nixos-agent-test-vm",
+        "rev": "f9f58c33858c68135aa5f3cbe0dcdaf51a71c0e4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lorenzbischof",
+        "repo": "nixos-agent-test-vm",
+        "type": "github"
+      }
+    },
     "nixos-generators": {
       "inputs": {
         "nixlib": "nixlib",
@@ -901,6 +916,7 @@
         "nix-index-database": "nix-index-database",
         "nix-secrets": "nix-secrets",
         "nixhome": "nixhome",
+        "nixos-agent-test-vm": "nixos-agent-test-vm",
         "nixos-generators": "nixos-generators",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs_2",
