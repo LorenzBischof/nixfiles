@@ -177,7 +177,16 @@ let
     extraArgs = [
       "--dangerously-skip-permissions"
       "--settings"
-      (builtins.toJSON { sandbox.enabled = false; })
+      (builtins.toJSON {
+        sandbox.enabled = false;
+        spinnerVerbs = {
+          mode = "replace";
+          verbs = [ "Working" ];
+        };
+        spinnerTipsEnabled = false;
+        prefersReducedMotion = true;
+        feedbackSurveyRate = 0;
+      })
     ];
   };
   piBwrap = mkBwrapTool {
