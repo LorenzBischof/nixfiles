@@ -114,6 +114,10 @@
     #image = ../home/sway/wallpaper_cropped_1.png;
     base16Scheme = "${pkgs.base16-schemes}/share/themes/eighties.yaml";
     autoEnable = true;
+    # Stylix's kmscon target still sets services.kmscon.{extraConfig,fonts},
+    # which nixpkgs removed (use services.kmscon.config now). We don't run
+    # kmscon, so disable the target until stylix catches up upstream.
+    targets.kmscon.enable = false;
     fonts.sizes = {
       popups = 18;
       desktop = 14;
@@ -305,4 +309,8 @@
 
   system.stateVersion = "23.05"; # Did you read the comment?
   nixpkgs.config.allowUnfree = true;
+  # logseq still ships the EOL electron 39.8.10; allow it until upstream bumps.
+  nixpkgs.config.permittedInsecurePackages = [
+    "electron-39.8.10"
+  ];
 }
