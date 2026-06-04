@@ -42,7 +42,10 @@ in
   ];
 
   services.dunst.enable = true;
-  gtk.gtk4.theme = config.gtk.theme;
+
+  # https://github.com/nix-community/home-manager/pull/7817
+  # mkForce overrides stylix, which now sets gtk4.theme explicitly (stylix#2330)
+  gtk.gtk4.theme = lib.mkForce null;
 
   stylix.targets.swaylock.useWallpaper = false;
   programs = {
