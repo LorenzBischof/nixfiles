@@ -82,6 +82,23 @@ in
                 annotations:
                   summary: "Systemd {{ $labels.name }} has failed"
                   description: Service failed
+          - name: watchdog
+            rules:
+              # Always-firing alert. Routed every 30m through the real
+              # Alertmanager -> alertmanager-ntfy path, where the bridge turns it
+              # into a self-replacing ntfy scheduled message (X-Delay 90m, same
+              # X-Sequence-ID). While the whole pipeline is healthy the message
+              # keeps getting pushed into the future and is never delivered. If
+              # Prometheus stops evaluating, Alertmanager stops dispatching, the
+              # bridge breaks, or the NAS dies, the held alert fires. The
+              # annotations therefore describe the *failure* condition.
+              - alert: Watchdog
+                expr: vector(1)
+                labels:
+                  severity: none
+                annotations:
+                  summary: "NAS monitoring pipeline is DOWN"
+                  description: "No Watchdog heartbeat reached ntfy for over 90m. Prometheus, Alertmanager, the alertmanager-ntfy bridge, or the NAS itself is down."
         ''
       ];
       alertmanagers = [
@@ -108,6 +125,16 @@ in
             "group_interval" = "2m";
             "repeat_interval" = "4h";
             "receiver" = "ntfy";
+            # Re-send the always-firing Watchdog every 30m so the bridge keeps
+            # rescheduling the ntfy dead man's switch (X-Delay 90m > 30m).
+            "routes" = [
+              {
+                "matchers" = [ ''alertname="Watchdog"'' ];
+                "receiver" = "ntfy";
+                "group_wait" = "0s";
+                "repeat_interval" = "30m";
+              }
+            ];
           };
           "receivers" = [
             {
@@ -182,6 +209,15 @@ in
             templates = {
               title = ''{{ if eq .Status "resolved" }}Resolved: {{ end }}{{ index .Annotations "summary" }}'';
               description = ''{{ index .Annotations "description" }}'';
+              # Turn the Watchdog alert into a self-replacing ntfy scheduled
+              # message: delivered 90m in the future, replaced on every 30m
+              # re-send via the shared sequence id. Both headers render empty
+              # for all other alerts, which ntfy ignores (so real alerts are
+              # delivered immediately, as before).
+              headers = {
+                "X-Delay" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}90m{{ end }}'';
+                "X-Sequence-ID" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}heartbeat-watchdog{{ end }}'';
+              };
             };
           };
         };
