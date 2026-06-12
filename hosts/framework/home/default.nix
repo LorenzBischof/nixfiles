@@ -186,53 +186,52 @@ in
     ssh = {
       enable = true;
       enableDefaultConfig = false;
-      matchBlocks = {
+      settings = {
         "*" = {
-          identitiesOnly = true;
+          IdentitiesOnly = true;
         };
         "gitlab.com" = {
           # SSH connection multiplexing to avoid multiple yubikey touches (e.g. for git-lfs)
           # https://github.com/git-lfs/git-lfs/issues/5784
-          controlMaster = "auto";
-          controlPersist = "5s";
-          controlPath = "~/.ssh/controlmasters/%C";
+          ControlMaster = "auto";
+          ControlPersist = "5s";
+          ControlPath = "~/.ssh/controlmasters/%C";
         };
         "scanner" = {
-          hostname = "192.168.0.157";
-          user = "pi";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
+          HostName = "192.168.0.157";
+          User = "pi";
+          IdentityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "ha" = {
-          hostname = "192.168.0.103";
-          user = "hassio";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
+          HostName = "192.168.0.103";
+          User = "hassio";
+          IdentityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "rpi3" = {
-          hostname = "192.168.0.108";
-          user = "nixos";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
+          HostName = "192.168.0.108";
+          User = "nixos";
+          IdentityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
-        "nas-tailscale" = lib.hm.dag.entryBefore [ "nas" ] {
-          match = ''originalhost nas exec "tailscale status"'';
-          hostname = "nas";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
+        "Match originalhost nas exec \"tailscale status\"" = lib.hm.dag.entryBefore [ "nas" ] {
+          HostName = "nas";
+          IdentityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "nas" = {
-          hostname = "192.168.0.124";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
+          HostName = "192.168.0.124";
+          IdentityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "nas-unlock" = {
-          hostname = "192.168.0.124";
-          user = "root";
-          port = 2222;
-          identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
+          HostName = "192.168.0.124";
+          User = "root";
+          Port = 2222;
+          IdentityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "nas.local" = {
-          hostname = "192.168.1.2";
-          identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
+          HostName = "192.168.1.2";
+          IdentityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
         "vps" = {
-          identityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
+          IdentityFile = "~/.ssh/id_ed25519_sk_rk_homelab";
         };
       };
     };
