@@ -7,10 +7,103 @@
 let
   inherit (config.my.homelab) domain;
   textfileDir = "/var/lib/prometheus-node-exporter-textfile";
+
+  # Dead man's switch timing. The delay must exceed the re-send interval so each
+  # re-send reschedules the held ntfy message before it can deliver; on failure
+  # the alarm fires up to one delay later.
+  watchdogDelay = "90m";
+  watchdogInterval = "30m";
+
+  # Keeps the ntfy "heartbeat-watchdog" notification in sync with the dead man's
+  # switch. Both modes reconcile against watchdog_armed (see below): clear
+  # (frequent) heals the DOWN notification on recovery, nag (daily) re-fires the
+  # alert while the switch stays down.
+  watchdogCheckScript = pkgs.writeShellScript "watchdog-check" ''
+    set -euo pipefail
+
+    topic="https://ntfy.sh/${secrets.ntfy-alertmanager}"
+
+    # The single source of truth for pipeline health: a scheduled (undelivered)
+    # Watchdog message in ntfy means the switch is still deferring its firing
+    # into the future, so the whole pipeline (Prometheus -> Alertmanager ->
+    # bridge -> ntfy) is healthy. Its absence means the switch has fired and not
+    # re-armed -> something in that chain is down.
+    watchdog_armed() {
+      local pending
+      pending=$(${pkgs.curl}/bin/curl -fsS --get "$topic/json" \
+        --data-urlencode "poll=1" \
+        --data-urlencode "sched=1" \
+        --data-urlencode "since=0s" \
+        --data-urlencode "tags=alertname = Watchdog")
+      [ -n "$pending" ]
+    }
+
+    case "''${1:-}" in
+      clear)
+        # Recovery: armed again, so heal the DOWN notification within minutes
+        # instead of waiting for the daily nag. Only acts while armed, so it can
+        # never dismiss an active nag during an outage.
+        if watchdog_armed; then
+          ${pkgs.curl}/bin/curl -fsS -X PUT "$topic/heartbeat-watchdog/clear" > /dev/null || true
+        fi
+        ;;
+      nag)
+        # Still down: (re)publish the alert. ntfy re-alerts on each daily update,
+        # even after a dismissal.
+        if ! watchdog_armed; then
+          ${pkgs.curl}/bin/curl -fsS \
+            -H "Title: NAS monitoring dead man's switch is not armed" \
+            -H "Priority: high" \
+            -H "Tags: rotating_light" \
+            -d "No Watchdog heartbeat is scheduled on ntfy: the switch has fired and the pipeline is still down, or it is misconfigured. Repeats daily until armed." \
+            "$topic/heartbeat-watchdog"
+        fi
+        ;;
+    esac
+  '';
 in
 {
   systemd.tmpfiles.settings."10-monitoring" = {
     ${textfileDir}.d = { };
+  };
+
+  systemd.services.watchdog-clear = {
+    description = "Clear the ntfy DOWN notification once the dead man's switch re-arms";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${watchdogCheckScript} clear";
+      User = "nobody";
+      Group = "nogroup";
+    };
+  };
+
+  systemd.timers.watchdog-clear = {
+    description = "Frequently clear the DOWN notification after recovery";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*:0/10";
+      Persistent = true;
+    };
+  };
+
+  systemd.services.watchdog-nag = {
+    description = "Re-publish the ntfy DOWN alert while the dead man's switch is not armed";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${watchdogCheckScript} nag";
+      User = "nobody";
+      Group = "nogroup";
+    };
+  };
+
+  systemd.timers.watchdog-nag = {
+    description = "Daily re-trigger of the DOWN alert while not armed";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "daily";
+      Persistent = true;
+      RandomizedDelaySec = "1h";
+    };
   };
 
   # https://grahamc.com/blog/nixos-system-version-prometheus/
@@ -98,7 +191,7 @@ in
                   severity: none
                 annotations:
                   summary: "NAS monitoring pipeline is DOWN"
-                  description: "No Watchdog heartbeat reached ntfy for over 90m. Prometheus, Alertmanager, the alertmanager-ntfy bridge, or the NAS itself is down."
+                  description: "No Watchdog heartbeat reached ntfy for over ${watchdogDelay}. Prometheus, Alertmanager, the alertmanager-ntfy bridge, or the NAS itself is down."
         ''
       ];
       alertmanagers = [
@@ -125,14 +218,16 @@ in
             "group_interval" = "2m";
             "repeat_interval" = "4h";
             "receiver" = "ntfy";
-            # Re-send the always-firing Watchdog every 30m so the bridge keeps
-            # rescheduling the ntfy dead man's switch (X-Delay 90m > 30m).
+            # Re-send the always-firing Watchdog every interval so the bridge
+            # reschedules the ntfy switch (delay > interval). send_resolved=false:
+            # a resolve (e.g. Prometheus stops) would overwrite the armed firing
+            # message via the shared X-Sequence-ID instead of letting it fire.
             "routes" = [
               {
                 "matchers" = [ ''alertname="Watchdog"'' ];
-                "receiver" = "ntfy";
+                "receiver" = "watchdog";
                 "group_wait" = "0s";
-                "repeat_interval" = "30m";
+                "repeat_interval" = watchdogInterval;
               }
             ];
           };
@@ -143,6 +238,23 @@ in
                 {
                   "url" = "http://${config.services.alertmanager-ntfy.settings.http.addr}/hook";
                   "send_resolved" = true;
+                }
+              ];
+            }
+            {
+              "name" = "watchdog";
+              "webhook_configs" = [
+                {
+                  "url" = "http://${config.services.alertmanager-ntfy.settings.http.addr}/hook";
+                  "send_resolved" = false;
+                }
+                {
+                  # Independent external dead-man's switch: pinged on each firing
+                  # re-send, so a Prometheus/Alertmanager/NAS failure stops the pings
+                  # and healthchecks.io alerts through a path separate from ntfy (and
+                  # can escalate/repeat via its own notification integrations).
+                  "url" = "https://hc-ping.com/${secrets.healthchecks-watchdog}";
+                  "send_resolved" = false;
                 }
               ];
             }
@@ -210,12 +322,12 @@ in
               title = ''{{ if eq .Status "resolved" }}Resolved: {{ end }}{{ index .Annotations "summary" }}'';
               description = ''{{ index .Annotations "description" }}'';
               # Turn the Watchdog alert into a self-replacing ntfy scheduled
-              # message: delivered 90m in the future, replaced on every 30m
+              # message: delivered one delay in the future, replaced on every
               # re-send via the shared sequence id. Both headers render empty
               # for all other alerts, which ntfy ignores (so real alerts are
               # delivered immediately, as before).
               headers = {
-                "X-Delay" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}90m{{ end }}'';
+                "X-Delay" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}${watchdogDelay}{{ end }}'';
                 "X-Sequence-ID" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}heartbeat-watchdog{{ end }}'';
               };
             };
