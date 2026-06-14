@@ -14,6 +14,7 @@
   imports = [
     ./hardware-configuration.nix
     ./autoupgrade.nix
+    ./monitoring.nix
     ./disko.nix
     ./low-battery-power-button-led.nix
   ];
@@ -97,11 +98,7 @@
   my.services = {
     detect-reboot-required.enable = true;
     detect-syncthing-conflicts.enable = true;
-    nixpkgs-age-monitor = {
-      enable = true;
-      alertThresholdDays = 7;
-      ntfyTopic = secrets.ntfy-alertmanager;
-    };
+    nixpkgs-age-monitor.enable = true;
   };
   # upower automatically hibernates when battery is low
   services.upower = {
