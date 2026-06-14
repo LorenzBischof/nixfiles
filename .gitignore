@@ -7,3 +7,5 @@ nas-efi-vars.fd
 .env
 .crush
 .nixos-test-history
+data-alloy
+.claude/settings.local.json
