@@ -7,6 +7,39 @@
 }:
 let
   cfg = config.my.system.autoUpgrade;
+
+  # Records the outcome of the last completed upgrade run as a node-exporter
+  # textfile metric. $1 is 1 (success) or 0 (failure). Written atomically so a
+  # concurrent scrape never sees a half-written file.
+  upgradeMetricScript = pkgs.writeShellScript "autoupgrade-write-metric" ''
+    set -euo pipefail
+    dir="${cfg.textfileMetrics.directory}"
+    tmp="$dir/autoupgrade.prom.$$"
+    {
+      echo "# HELP node_autoupgrade_success Whether the last completed NixOS auto-upgrade run succeeded (1) or failed (0)."
+      echo "# TYPE node_autoupgrade_success gauge"
+      echo "node_autoupgrade_success $1"
+      echo "# HELP node_autoupgrade_last_run_timestamp_seconds Unix time of the last completed NixOS auto-upgrade run."
+      echo "# TYPE node_autoupgrade_last_run_timestamp_seconds gauge"
+      echo "node_autoupgrade_last_run_timestamp_seconds $(${pkgs.coreutils}/bin/date +%s)"
+    } > "$tmp"
+    mv "$tmp" "$dir/autoupgrade.prom"
+  '';
+
+  # Records whether auto-upgrade is actually active (1) or disabled, e.g. by a
+  # dirty git deploy (0). The value is the build-time `enabled` flag, so it only
+  # changes on a switch; written atomically.
+  statusMetricScript = pkgs.writeShellScript "autoupgrade-status-metric" ''
+    set -euo pipefail
+    dir="${cfg.textfileMetrics.directory}"
+    tmp="$dir/autoupgrade-enabled.prom.$$"
+    {
+      echo "# HELP node_config_autoupgrade_enabled Whether NixOS auto-upgrade is active (1) or disabled, e.g. by a dirty git deploy (0)."
+      echo "# TYPE node_config_autoupgrade_enabled gauge"
+      echo "node_config_autoupgrade_enabled ${if cfg.enabled then "1" else "0"}"
+    } > "$tmp"
+    mv "$tmp" "$dir/autoupgrade-enabled.prom"
+  '';
 in
 {
   options.my.system.autoUpgrade = {
@@ -114,116 +147,120 @@ in
         subject to the delay imposed by RandomizedDelaySec=. This is
         useful to catch up on missed runs of the service when the
         system was powered down.
-        '';
+      '';
     };
-    ntfy = {
+    textfileMetrics = {
       enable = lib.mkOption {
         type = lib.types.bool;
         default = false;
         description = ''
-          Whether to send ntfy notifications for autoupgrade events.
+          Whether to record the outcome of each upgrade run as a
+          node-exporter textfile metric (`node_autoupgrade_success`) instead
+          of (or in addition to) notifying directly. Intended to be collected
+          by a node exporter / Alloy and alerted on via Prometheus.
         '';
       };
-      url = lib.mkOption {
+      directory = lib.mkOption {
         type = lib.types.str;
-        default = "https://ntfy.sh";
+        default = "/var/lib/prometheus-node-exporter-textfile";
         description = ''
-          ntfy server URL.
-        '';
-      };
-      topic = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = ''
-          ntfy topic for notifications.
+          Directory served by the node exporter textfile collector where the
+          upgrade metric is written.
         '';
       };
     };
   };
-  config = lib.mkIf (cfg.enabled) {
-    assertions = [
-      {
-        assertion = (!cfg.ntfy.enable) || (cfg.ntfy.topic != null);
-        message = "my.system.autoUpgrade.ntfy.topic must be set when my.system.autoUpgrade.ntfy.enable = true";
-      }
-    ];
+  config = lib.mkMerge [
+    # Exports node_config_autoupgrade_enabled for every host that *wants*
+    # auto-upgrade (cfg.enable), carrying the effective `enabled` value. Gated on
+    # enable rather than enabled so a dirty deploy (enabled=false) still reports
+    # 0 instead of dropping the series, which would read as "host offline"
+    # rather than "auto-upgrade disabled".
+    (lib.mkIf (cfg.enable && cfg.textfileMetrics.enable) {
+      systemd.tmpfiles.settings."10-autoupgrade-metrics" = {
+        ${cfg.textfileMetrics.directory}.d = {
+          # World-readable so a node exporter running under a (dynamic) user can
+          # scrape the textfiles written here.
+          mode = "0755";
+        };
+      };
 
-    environment.etc.git-revision.text = inputs.self.rev;
+      # Build-time-static value, so no timer: a oneshot (RemainAfterExit) re-runs
+      # on each switch where `enabled` changed (its ExecStart path changes) and
+      # on boot; the textfile otherwise persists in /var/lib.
+      systemd.services.autoupgrade-status = {
+        description = "Export the auto-upgrade enabled-state metric for Prometheus";
+        wantedBy = [ "multi-user.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = statusMetricScript;
+        };
+      };
+    })
 
-    system.autoUpgrade = {
-      enable = true;
-      inherit (cfg)
-        operation
-        flake
-        flags
-        dates
-        randomizedDelaySec
-        fixedRandomDelay
-        persistent
-        ;
-    };
+    (lib.mkIf cfg.enabled {
+      environment.etc.git-revision.text = inputs.self.rev;
 
-    systemd.services.nixos-upgrade = {
-      serviceConfig = {
-        CPUSchedulingPolicy = "idle";
-        IOSchedulingClass = "idle";
+      system.autoUpgrade = {
+        enable = true;
+        inherit (cfg)
+          operation
+          flake
+          flags
+          dates
+          randomizedDelaySec
+          fixedRandomDelay
+          persistent
+          ;
+      };
 
-        ExecCondition = pkgs.writeShellScript "check-upgrade-conditions" ''
-          status="$(${pkgs.curl}/bin/curl -s "https://api.github.com/repos/lorenzbischof/nixfiles/compare/HEAD...${inputs.self.rev or ""}" | ${pkgs.jq}/bin/jq -r .status)"
-          if [ "$status" = "behind" ]; then
-              echo "Commit ${inputs.self.rev or ""} is behind the default branch. Updating..."
-          elif [ "$status" = "ahead" ]; then
-              echo "Commit ${inputs.self.rev or ""} is ahead of the default branch. Did you merge your PR?"
-              exit 1
-          elif [ "$status" = "identical" ]; then
-              echo "Already up to date. Skipping."
-              exit 1
-          elif [ "$status" = "404" ]; then
-              echo "Commit ${inputs.self.rev or ""} does not exist on remote. Did you push your changes?"
-              exit 1
-          else
-              echo "Did not receive a response. Maybe you are rate-limited?"
-              exit 1
+      systemd.services.nixos-upgrade = {
+        serviceConfig = {
+          CPUSchedulingPolicy = "idle";
+          IOSchedulingClass = "idle";
+
+          ExecCondition = pkgs.writeShellScript "check-upgrade-conditions" ''
+            status="$(${pkgs.curl}/bin/curl -s "https://api.github.com/repos/lorenzbischof/nixfiles/compare/HEAD...${inputs.self.rev or ""}" | ${pkgs.jq}/bin/jq -r .status)"
+            if [ "$status" = "behind" ]; then
+                echo "Commit ${inputs.self.rev or ""} is behind the default branch. Updating..."
+            elif [ "$status" = "ahead" ]; then
+                echo "Commit ${inputs.self.rev or ""} is ahead of the default branch. Did you merge your PR?"
+                exit 1
+            elif [ "$status" = "identical" ]; then
+                echo "Already up to date. Skipping."
+                exit 1
+            elif [ "$status" = "404" ]; then
+                echo "Commit ${inputs.self.rev or ""} does not exist on remote. Did you push your changes?"
+                exit 1
+            else
+                echo "Did not receive a response. Maybe you are rate-limited?"
+                exit 1
+            fi
+          '';
+        };
+        # Prefer not to autoupgrade when on battery
+        unitConfig.ConditionACPower = true;
+
+        onSuccess = lib.optional cfg.textfileMetrics.enable "metric-upgrade-success.service";
+        onFailure = lib.optional cfg.textfileMetrics.enable "metric-upgrade-failure.service";
+      };
+
+      systemd.services."metric-upgrade-success" = lib.mkIf cfg.textfileMetrics.enable {
+        script = ''
+          # A skipped run (e.g. on battery, already up to date) is neither a
+          # success nor a failure, so leave the last recorded outcome untouched.
+          if [ "$(systemctl show nixos-upgrade -p ConditionResult --value)" = "no" ]; then
+            exit 0
           fi
+          ${upgradeMetricScript} 1
         '';
       };
-      # Prefer not to autoupgrade when on battery
-      unitConfig.ConditionACPower = true;
 
-      onSuccess = lib.mkIf cfg.ntfy.enable [ "ntfy-upgrade-success.service" ];
-      onFailure = lib.mkIf cfg.ntfy.enable [ "ntfy-upgrade-failure.service" ];
-    };
+      systemd.services."metric-upgrade-failure" = lib.mkIf cfg.textfileMetrics.enable {
+        script = "${upgradeMetricScript} 0";
+      };
 
-    systemd.services."ntfy-upgrade-success" = lib.mkIf cfg.ntfy.enable {
-      script = ''
-        hostname="$(${pkgs.nettools}/bin/hostname)"
-        sequence_id="nixos-upgrade-$hostname"
-        notification_url="${cfg.ntfy.url}/${cfg.ntfy.topic}/$sequence_id"
-
-        if [ "$(systemctl show nixos-upgrade -p ConditionResult --value)" = "no" ]; then
-          exit 0
-        fi
-        ${pkgs.curl}/bin/curl -fsS \
-          -H "Title: NixOS Upgrade Succeeded on $hostname" \
-          -H "Tags: white_check_mark" \
-          -d "System updated successfully to ${inputs.self.rev or "unknown"}" \
-          "$notification_url"
-      '';
-    };
-
-    systemd.services."ntfy-upgrade-failure" = lib.mkIf cfg.ntfy.enable {
-      script = ''
-        hostname="$(${pkgs.nettools}/bin/hostname)"
-        sequence_id="nixos-upgrade-$hostname"
-        notification_url="${cfg.ntfy.url}/${cfg.ntfy.topic}/$sequence_id"
-
-        ${pkgs.curl}/bin/curl -fsS \
-          -H "Title: NixOS Upgrade Failed on $hostname" \
-          -H "Tags: warning" \
-          -H "Priority: high" \
-          -d "System upgrade failed!" \
-          "$notification_url"
-      '';
-    };
-  };
+    })
+  ];
 }
