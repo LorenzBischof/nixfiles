@@ -31,11 +31,7 @@
     ../../modules/nixos
   ];
 
-  my.services.nixpkgs-age-monitor = {
-    enable = true;
-    alertThresholdDays = 7;
-    ntfyTopic = secrets.ntfy-alertmanager;
-  };
+  my.services.nixpkgs-age-monitor.enable = true;
 
   my.system.autoUpgrade = {
     enable = true;

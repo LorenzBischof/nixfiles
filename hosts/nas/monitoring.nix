@@ -131,14 +131,31 @@ in
     prometheus = {
       enable = true;
       webExternalUrl = "https://prometheus.${domain}";
+      # Accept remote_write from intermittently-online hosts (e.g. the framework
+      # laptop via Alloy) that the nas cannot reliably scrape itself. Reachable
+      # only over Tailscale (see firewall rule below).
+      extraFlags = [ "--web.enable-remote-write-receiver" ];
       scrapeConfigs = [
         {
+          # Every node exporter shares job="node"; hosts are told apart by the
+          # instance label. nas and vps are always-on and scraped directly here.
+          # The roaming framework laptop remote-writes itself with the same
+          # job="node" (see hosts/framework/nixos/monitoring.nix). Host-scoped
+          # alerts below therefore select on instance, never on job.
           job_name = "node";
           static_configs = [
             {
               targets = [
                 "localhost:${toString config.services.prometheus.exporters.node.port}"
               ];
+              labels.instance = "nas";
+            }
+            {
+              # vps is always-on and reachable on its stable tailnet IP.
+              targets = [
+                "100.91.84.39:${toString config.services.prometheus.exporters.node.port}"
+              ];
+              labels.instance = "vps";
             }
           ];
         }
@@ -159,8 +176,12 @@ in
           groups:
           - name: node
             rules:
+              # Scoped to instance="nas": these always-on-host alerts must not
+              # fire for the roaming framework laptop (which shares job="node").
+              # To cover another always-on host (e.g. vps) add it here, e.g.
+              # instance=~"nas|vps".
               - alert: DiskWillFillIn4Hours
-                expr: predict_linear(node_filesystem_free_bytes{job="node"}[1h], 4 * 3600) < 0
+                expr: predict_linear(node_filesystem_free_bytes{instance="nas"}[1h], 4 * 3600) < 0
                 for: 5m
                 labels:
                   severity: warning
@@ -168,13 +189,57 @@ in
                   summary: Disk will fill in 4 hours
                   description: Something is filling up the disk
               - alert: ServiceDown
-                expr: node_systemd_unit_state{state="failed", type="simple"} == 1
+                expr: node_systemd_unit_state{instance="nas", state="failed", type="simple"} == 1
                 for: 5m
                 labels:
                   severity: warning
                 annotations:
                   summary: "Systemd {{ $labels.name }} has failed"
                   description: Service failed
+              # Fires per host whose running system's nixpkgs is older than the
+              # threshold. The age is derived from the exported build timestamp,
+              # so the threshold lives here instead of on each host. While a host
+              # is offline its series goes stale and the alert does not evaluate.
+              # Expression value is the age in days, so {{ $value }} renders it
+              # in the notification.
+              - alert: NixpkgsOutdated
+                expr: (time() - node_nixpkgs_build_timestamp_seconds) / 86400 > 7
+                for: 1h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "nixpkgs is outdated on {{ $labels.instance }}"
+                  description: "The running system's nixpkgs is {{ $value | printf \"%.0f\" }} days old."
+          - name: autoupgrade
+            rules:
+              # No host filter: fires for any host exporting the gauge (every
+              # host that auto-upgrades, identified by its instance label).
+              # Fires when the last completed auto-upgrade run failed; the
+              # subsequent successful run flips the gauge back to 1, resolving
+              # the alert -> the resolved ntfy notification is the "recovered"
+              # signal. While a host is offline the series goes stale.
+              - alert: AutoUpgradeFailed
+                expr: node_autoupgrade_success == 0
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "NixOS auto-upgrade failed on {{ $labels.instance }}"
+                  description: "The last completed auto-upgrade run on {{ $labels.instance }} failed."
+              # Fires when a host that wants auto-upgrade has had it disabled
+              # (gauge 0, e.g. a dirty git deploy) at every scrape for the past
+              # week and never re-enabled. max_over_time over a range tolerates
+              # offline gaps (unlike `for:`, which resets when an intermittent
+              # host's series goes stale), so this works for the roaming laptop.
+              # Needs TSDB retention >= 1w (default 15d).
+              - alert: AutoUpgradeDisabled
+                expr: max_over_time(node_config_autoupgrade_enabled[1w]) == 0
+                for: 30m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "NixOS auto-upgrade disabled on {{ $labels.instance }}"
+                  description: "Auto-upgrade has been disabled on {{ $labels.instance }} for over a week (likely a dirty git deploy); the host is not receiving automatic updates."
           - name: watchdog
             rules:
               # Always-firing alert. Routed every 30m through the real
@@ -368,6 +433,13 @@ in
       };
     };
   };
+
+  # Expose the Prometheus remote_write receiver to other tailnet hosts only.
+  # The public UI stays behind nginx + Authelia; this opens the raw port solely
+  # on the Tailscale interface, trusting tailnet ACLs for authentication.
+  networking.firewall.interfaces."tailscale0".allowedTCPPorts = [
+    config.services.prometheus.port
+  ];
 
   my.homelab.ports = [
     config.services.prometheus.port
