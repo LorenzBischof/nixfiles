@@ -182,6 +182,14 @@ in
                 annotations:
                   summary: "Systemd {{ $labels.name }} has failed"
                   description: Service failed
+              - alert: TargetDown
+                expr: up == 0
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Prometheus target {{ $labels.job }} ({{ $labels.instance }}) is down"
+                  description: "Prometheus on the NAS has failed to scrape {{ $labels.job }} at {{ $labels.instance }} for over 5 minutes."
               # last_over_time bridges scrape gaps so the sleeping laptop doesn't
               # spuriously resolve; it tracks the current system, so a rollback to
               # older nixpkgs re-fires (max_over_time would mask it). $value is the
