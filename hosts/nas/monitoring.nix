@@ -9,26 +9,20 @@ let
   # Single-owner path, created by my.monitoring.client.
   textfileDir = config.my.monitoring.client.textfileDirectory;
 
-  # Dead man's switch timing. The delay must exceed the re-send interval so each
-  # re-send reschedules the held ntfy message before it can deliver; on failure
-  # the alarm fires up to one delay later.
+  # Delay must exceed the re-send interval so each re-send reschedules the held
+  # ntfy message before it delivers; on failure it fires up to one delay later.
   watchdogDelay = "90m";
   watchdogInterval = "30m";
 
-  # Keeps the ntfy "heartbeat-watchdog" notification in sync with the dead man's
-  # switch. Both modes reconcile against watchdog_armed (see below): clear
-  # (frequent) heals the DOWN notification on recovery, nag (daily) re-fires the
-  # alert while the switch stays down.
+  # Reconciles the "heartbeat-watchdog" notification against watchdog_armed:
+  # clear (frequent) heals it on recovery, nag (daily) re-fires while down.
   watchdogCheckScript = pkgs.writeShellScript "watchdog-check" ''
     set -euo pipefail
 
     topic="https://ntfy.sh/${secrets.ntfy-alertmanager}"
 
-    # The single source of truth for pipeline health: a scheduled (undelivered)
-    # Watchdog message in ntfy means the switch is still deferring its firing
-    # into the future, so the whole pipeline (Prometheus -> Alertmanager ->
-    # bridge -> ntfy) is healthy. Its absence means the switch has fired and not
-    # re-armed -> something in that chain is down.
+    # Pipeline health = a scheduled (undelivered) Watchdog message exists in
+    # ntfy. Its absence means the switch has fired -> something is down.
     watchdog_armed() {
       local pending
       pending=$(${pkgs.curl}/bin/curl -fsS --get "$topic/json" \
@@ -41,16 +35,13 @@ let
 
     case "''${1:-}" in
       clear)
-        # Recovery: armed again, so heal the DOWN notification within minutes
-        # instead of waiting for the daily nag. Only acts while armed, so it can
-        # never dismiss an active nag during an outage.
+        # Only acts while armed, so it can't dismiss an active nag mid-outage.
         if watchdog_armed; then
           ${pkgs.curl}/bin/curl -fsS -X PUT "$topic/heartbeat-watchdog/clear" > /dev/null || true
         fi
         ;;
       nag)
-        # Still down: (re)publish the alert. ntfy re-alerts on each daily update,
-        # even after a dismissal.
+        # Still down: (re)publish. ntfy re-alerts on each update, even if dismissed.
         if ! watchdog_armed; then
           ${pkgs.curl}/bin/curl -fsS \
             -H "Title: NAS monitoring dead man's switch is not armed" \
@@ -173,10 +164,8 @@ in
           groups:
           - name: node
             rules:
-              # Scoped to instance="nas": these always-on-host alerts must not
-              # fire for the roaming framework laptop (which shares job="node").
-              # To cover another always-on host (e.g. vps) add it here, e.g.
-              # instance=~"nas|vps".
+              # Scoped to instance="nas" so these always-on-host alerts don't
+              # fire for the roaming laptop. Add hosts via instance=~"nas|vps".
               - alert: DiskWillFillIn4Hours
                 expr: predict_linear(node_filesystem_free_bytes{instance="nas"}[1h], 4 * 3600) < 0
                 for: 5m
@@ -193,15 +182,12 @@ in
                 annotations:
                   summary: "Systemd {{ $labels.name }} has failed"
                   description: Service failed
-              # Fires per host whose running system's nixpkgs is older than the
-              # threshold. The age is derived from the exported build timestamp,
-              # so the threshold lives here instead of on each host. While a host
-              # is offline its series goes stale and the alert does not evaluate.
-              # Expression value is the age in days, so {{ $value }} renders it
-              # in the notification.
+              # last_over_time bridges scrape gaps so the sleeping laptop doesn't
+              # spuriously resolve; it tracks the current system, so a rollback to
+              # older nixpkgs re-fires (max_over_time would mask it). $value is the
+              # age in days. Needs TSDB retention >= 1w.
               - alert: NixpkgsOutdated
-                expr: (time() - node_nixpkgs_build_timestamp_seconds) / 86400 > 7
-                for: 1h
+                expr: (time() - last_over_time(node_nixpkgs_build_timestamp_seconds[1w])) / 86400 > 7
                 labels:
                   severity: warning
                 annotations:
@@ -209,26 +195,22 @@ in
                   description: "The running system's nixpkgs is {{ $value | printf \"%.0f\" }} days old."
           - name: autoupgrade
             rules:
-              # No host filter: fires for any host exporting the gauge (every
-              # host that auto-upgrades, identified by its instance label).
-              # Fires when the last completed auto-upgrade run failed; the
-              # subsequent successful run flips the gauge back to 1, resolving
-              # the alert -> the resolved ntfy notification is the "recovered"
-              # signal. While a host is offline the series goes stale.
+              # Fires when the last auto-upgrade run failed; the next successful
+              # run flips the gauge to 1 and resolves it. last_over_time bridges
+              # scrape gaps so the sleeping laptop doesn't spuriously resolve.
+              # Needs TSDB retention >= 1w.
               - alert: AutoUpgradeFailed
-                expr: node_autoupgrade_success == 0
+                expr: last_over_time(node_autoupgrade_success[1w]) == 0
                 for: 5m
                 labels:
                   severity: warning
                 annotations:
                   summary: "NixOS auto-upgrade failed on {{ $labels.instance }}"
                   description: "The last completed auto-upgrade run on {{ $labels.instance }} failed."
-              # Fires when a host that wants auto-upgrade has had it disabled
-              # (gauge 0, e.g. a dirty git deploy) at every scrape for the past
-              # week and never re-enabled. max_over_time over a range tolerates
-              # offline gaps (unlike `for:`, which resets when an intermittent
-              # host's series goes stale), so this works for the roaming laptop.
-              # Needs TSDB retention >= 1w (default 15d).
+              # Fires when auto-upgrade has been disabled (gauge 0) for a whole
+              # week (e.g. a dirty git deploy). max_over_time over a range
+              # tolerates offline gaps (unlike `for:`, which resets on stale
+              # series). Needs TSDB retention >= 1w.
               - alert: AutoUpgradeDisabled
                 expr: max_over_time(node_config_autoupgrade_enabled[1w]) == 0
                 for: 30m
@@ -239,14 +221,10 @@ in
                   description: "Auto-upgrade has been disabled on {{ $labels.instance }} for over a week (likely a dirty git deploy); the host is not receiving automatic updates."
           - name: watchdog
             rules:
-              # Always-firing alert. Routed every 30m through the real
-              # Alertmanager -> alertmanager-ntfy path, where the bridge turns it
-              # into a self-replacing ntfy scheduled message (X-Delay 90m, same
-              # X-Sequence-ID). While the whole pipeline is healthy the message
-              # keeps getting pushed into the future and is never delivered. If
-              # Prometheus stops evaluating, Alertmanager stops dispatching, the
-              # bridge breaks, or the NAS dies, the held alert fires. The
-              # annotations therefore describe the *failure* condition.
+              # Always-firing, routed every 30m. The bridge turns it into a
+              # self-replacing scheduled ntfy message (X-Delay 90m) pushed into
+              # the future while healthy, delivered if the pipeline breaks. The
+              # annotations describe the failure condition.
               - alert: Watchdog
                 expr: vector(1)
                 labels:
@@ -280,10 +258,9 @@ in
             "group_interval" = "2m";
             "repeat_interval" = "4h";
             "receiver" = "ntfy";
-            # Re-send the always-firing Watchdog every interval so the bridge
-            # reschedules the ntfy switch (delay > interval). send_resolved=false:
-            # a resolve (e.g. Prometheus stops) would overwrite the armed firing
-            # message via the shared X-Sequence-ID instead of letting it fire.
+            # Re-send the Watchdog every interval so the bridge reschedules the
+            # ntfy switch (delay > interval). send_resolved=false: a resolve would
+            # overwrite the armed message via X-Sequence-ID instead of firing it.
             "routes" = [
               {
                 "matchers" = [ ''alertname="Watchdog"'' ];
@@ -311,10 +288,9 @@ in
                   "send_resolved" = false;
                 }
                 {
-                  # Independent external dead-man's switch: pinged on each firing
-                  # re-send, so a Prometheus/Alertmanager/NAS failure stops the pings
-                  # and healthchecks.io alerts through a path separate from ntfy (and
-                  # can escalate/repeat via its own notification integrations).
+                  # Independent dead-man's switch: pinged on each firing re-send,
+                  # so a pipeline/NAS failure stops the pings and healthchecks.io
+                  # alerts through a path separate from ntfy.
                   "url" = "https://hc-ping.com/${secrets.healthchecks-watchdog}";
                   "send_resolved" = false;
                 }
@@ -383,14 +359,15 @@ in
             templates = {
               title = ''{{ if eq .Status "resolved" }}Resolved: {{ end }}{{ index .Annotations "summary" }}'';
               description = ''{{ index .Annotations "description" }}'';
-              # Turn the Watchdog alert into a self-replacing ntfy scheduled
-              # message: delivered one delay in the future, replaced on every
-              # re-send via the shared sequence id. Both headers render empty
-              # for all other alerts, which ntfy ignores (so real alerts are
-              # delivered immediately, as before).
+              # Watchdog: X-Delay schedules it into the future, shared
+              # X-Sequence-ID makes each re-send replace it. X-Delay is empty for
+              # other alerts (delivered immediately). Every other alert uses its
+              # fingerprint as the sequence id; it's stable across re-sends and the
+              # resolved message, so ntfy updates one notification instead of
+              # stacking.
               headers = {
                 "X-Delay" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}${watchdogDelay}{{ end }}'';
-                "X-Sequence-ID" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}heartbeat-watchdog{{ end }}'';
+                "X-Sequence-ID" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}heartbeat-watchdog{{ else }}{{ .Fingerprint }}{{ end }}'';
               };
             };
           };
