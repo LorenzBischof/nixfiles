@@ -20,7 +20,7 @@ let
     nixpkgs_date=$(echo "$nixos_version" | ${pkgs.gnused}/bin/sed 's/.*\.\([0-9]\{8\}\)\..*/\1/')
     nixpkgs_epoch=$(${pkgs.coreutils}/bin/date -d "$nixpkgs_date" +%s)
 
-    dir="${cfg.textfileDirectory}"
+    dir="${config.my.monitoring.client.textfileDirectory}"
     tmp="$dir/nixpkgs-age.prom.$$"
     {
       echo "# HELP node_nixpkgs_build_timestamp_seconds Unix time of the nixpkgs snapshot the running system was built from."
@@ -33,26 +33,10 @@ in
 {
   options.my.services.nixpkgs-age-monitor = {
     enable = lib.mkEnableOption "nixpkgs age monitoring";
-
-    textfileDirectory = lib.mkOption {
-      type = lib.types.str;
-      default = "/var/lib/prometheus-node-exporter-textfile";
-      description = ''
-        Directory served by the node exporter textfile collector where the
-        nixpkgs build-timestamp metric is written.
-      '';
-    };
   };
 
   config = lib.mkIf cfg.enable {
-    systemd.tmpfiles.settings."10-nixpkgs-age-monitor" = {
-      ${cfg.textfileDirectory}.d = {
-        # World-readable so a node exporter running under a (dynamic) user can
-        # scrape the textfiles written here.
-        mode = "0755";
-      };
-    };
-
+    # The textfile directory is created by my.monitoring.client.
     systemd = {
       services.nixpkgs-age-check = {
         description = "Export the nixpkgs build-timestamp metric for Prometheus";

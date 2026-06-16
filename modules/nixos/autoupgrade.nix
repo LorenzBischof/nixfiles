@@ -7,13 +7,15 @@
 }:
 let
   cfg = config.my.system.autoUpgrade;
+  # Shared, single-owner textfile path (created by my.monitoring.client).
+  textfileDir = config.my.monitoring.client.textfileDirectory;
 
   # Records the outcome of the last completed upgrade run as a node-exporter
   # textfile metric. $1 is 1 (success) or 0 (failure). Written atomically so a
   # concurrent scrape never sees a half-written file.
   upgradeMetricScript = pkgs.writeShellScript "autoupgrade-write-metric" ''
     set -euo pipefail
-    dir="${cfg.textfileMetrics.directory}"
+    dir="${textfileDir}"
     tmp="$dir/autoupgrade.prom.$$"
     {
       echo "# HELP node_autoupgrade_success Whether the last completed NixOS auto-upgrade run succeeded (1) or failed (0)."
@@ -31,7 +33,7 @@ let
   # changes on a switch; written atomically.
   statusMetricScript = pkgs.writeShellScript "autoupgrade-status-metric" ''
     set -euo pipefail
-    dir="${cfg.textfileMetrics.directory}"
+    dir="${textfileDir}"
     tmp="$dir/autoupgrade-enabled.prom.$$"
     {
       echo "# HELP node_config_autoupgrade_enabled Whether NixOS auto-upgrade is active (1) or disabled, e.g. by a dirty git deploy (0)."
@@ -157,15 +159,8 @@ in
           Whether to record the outcome of each upgrade run as a
           node-exporter textfile metric (`node_autoupgrade_success`) instead
           of (or in addition to) notifying directly. Intended to be collected
-          by a node exporter / Alloy and alerted on via Prometheus.
-        '';
-      };
-      directory = lib.mkOption {
-        type = lib.types.str;
-        default = "/var/lib/prometheus-node-exporter-textfile";
-        description = ''
-          Directory served by the node exporter textfile collector where the
-          upgrade metric is written.
+          by a node exporter / Alloy and alerted on via Prometheus. Requires
+          `my.monitoring.client` to be enabled (it owns the textfile directory).
         '';
       };
     };
@@ -177,13 +172,7 @@ in
     # 0 instead of dropping the series, which would read as "host offline"
     # rather than "auto-upgrade disabled".
     (lib.mkIf (cfg.enable && cfg.textfileMetrics.enable) {
-      systemd.tmpfiles.settings."10-autoupgrade-metrics" = {
-        ${cfg.textfileMetrics.directory}.d = {
-          # World-readable so a node exporter running under a (dynamic) user can
-          # scrape the textfiles written here.
-          mode = "0755";
-        };
-      };
+      # The textfile directory is created by my.monitoring.client.
 
       # Build-time-static value, so no timer: a oneshot (RemainAfterExit) re-runs
       # on each switch where `enabled` changed (its ExecStart path changes) and

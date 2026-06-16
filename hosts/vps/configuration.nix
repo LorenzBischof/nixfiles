@@ -17,23 +17,8 @@
 
   my.services.nixpkgs-age-monitor.enable = true;
 
-  # Always-on and reachable on its stable tailnet IP, so the nas scrapes this
-  # node exporter directly (pull) rather than pushing via Alloy. The textfile
-  # collector picks up the nixpkgs build-timestamp metric.
-  services.prometheus.exporters.node = {
-    enable = true;
-    listenAddress = "100.91.84.39";
-    enabledCollectors = [
-      "systemd"
-      "textfile"
-    ];
-    extraFlags = [
-      "--collector.textfile.directory=${config.my.services.nixpkgs-age-monitor.textfileDirectory}"
-    ];
-  };
-  networking.firewall.interfaces."tailscale0".allowedTCPPorts = [
-    config.services.prometheus.exporters.node.port
-  ];
+  # Always-on with a stable tailnet address, so the nas scrapes it (pull).
+  my.monitoring.client.enable = true;
 
   my.system.autoUpgrade = {
     enable = true;

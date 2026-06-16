@@ -6,7 +6,8 @@
 }:
 let
   inherit (config.my.homelab) domain;
-  textfileDir = "/var/lib/prometheus-node-exporter-textfile";
+  # Single-owner path, created by my.monitoring.client.
+  textfileDir = config.my.monitoring.client.textfileDirectory;
 
   # Dead man's switch timing. The delay must exceed the re-send interval so each
   # re-send reschedules the held ntfy message before it can deliver; on failure
@@ -63,8 +64,15 @@ let
   '';
 in
 {
-  systemd.tmpfiles.settings."10-monitoring" = {
-    ${textfileDir}.d = { };
+  # Scraped locally by its own Prometheus (pull); see scrapeConfigs below.
+  my.monitoring.client = {
+    enable = true;
+    mode = "pull";
+    enabledCollectors = [
+      "systemd"
+      "processes"
+      "textfile"
+    ];
   };
 
   systemd.services.watchdog-clear = {
@@ -117,17 +125,6 @@ in
   '';
 
   services = {
-    prometheus.exporters.node = {
-      enable = true;
-      enabledCollectors = [
-        "systemd"
-        "processes"
-        "textfile"
-      ];
-      extraFlags = [
-        "--collector.textfile.directory=${textfileDir}"
-      ];
-    };
     prometheus = {
       enable = true;
       webExternalUrl = "https://prometheus.${domain}";
@@ -151,9 +148,9 @@ in
               labels.instance = "nas";
             }
             {
-              # vps is always-on and reachable on its stable tailnet IP.
+              # vps is always-on and reachable on its Tailscale MagicDNS name.
               targets = [
-                "100.91.84.39:${toString config.services.prometheus.exporters.node.port}"
+                "vps:${toString config.services.prometheus.exporters.node.port}"
               ];
               labels.instance = "vps";
             }
