@@ -6,6 +6,7 @@
 }:
 {
   imports = [
+    ./alloy-validate.nix
     ./autoupgrade.nix
     ./common.nix
     ./monitoring-client.nix
