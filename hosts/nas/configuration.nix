@@ -154,12 +154,15 @@
     settings.KbdInteractiveAuthentication = false;
   };
 
+  services.resolved.enable = true;
+
   services.tailscale = {
     enable = true;
     openFirewall = true;
     authKeyFile = config.age.secrets.tailscale-preauth.path;
     extraUpFlags = [
       "--advertise-routes=192.168.0.0/24"
+      "--accept-dns=true"
     ];
   };
 
