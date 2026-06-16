@@ -23,13 +23,13 @@
       {
         "datasource": {
           "type": "prometheus",
-          "uid": "P1809F7CD0C75ACF3"
+          "uid": "${datasource}"
         },
         "enable": true,
-        "expr": "changes(system_version[5m])",
+        "expr": "changes(system_version{instance=\"$node\",job=\"$job\"}[5m]) * on(instance, job) group_left(generation) system_version_info",
         "iconColor": "green",
         "name": "System Version",
-        "textFormat": "",
+        "textFormat": "generation {{generation}}",
         "titleFormat": "System Version"
       }
     ]
@@ -14573,11 +14573,11 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "P1809F7CD0C75ACF3"
+            "uid": "${datasource}"
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "node_hwmon_fan_rpm{sensor=\"fan1\"}",
+          "expr": "node_hwmon_fan_rpm{instance=\"$node\",job=\"$job\",sensor=\"fan1\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,

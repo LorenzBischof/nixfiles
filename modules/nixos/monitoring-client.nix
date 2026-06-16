@@ -86,6 +86,28 @@ in
       };
     };
 
+    # Emit the current system generation number as a textfile metric, so the
+    # central Prometheus can tell which generation each host is running on.
+    # https://grahamc.com/blog/nixos-system-version-prometheus/
+    #
+    # Two series are emitted from the same generation number:
+    #   - `system_version <gen>`: value carries the generation, so
+    #     `changes(system_version[5m])` fires on each deploy (stable labels,
+    #     changing value). This drives the Grafana annotation.
+    #   - `system_version_info{generation="<gen>"} 1`: carries the generation
+    #     as a *label*. Grafana annotation text can only template label values,
+    #     never the sample value, so the annotation query joins this in to show
+    #     which generation a deploy moved to.
+    system.activationScripts.node-exporter-system-version = ''
+      cd ${cfg.textfileDirectory}
+      gen=$(readlink /nix/var/nix/profiles/system | cut -d- -f2)
+      {
+        echo "system_version ''${gen}"
+        echo "system_version_info{generation=\"''${gen}\"} 1"
+      } > system-version.prom.next
+      mv system-version.prom.next system-version.prom
+    '';
+
     services.prometheus.exporters.node = lib.mkIf (cfg.mode == "pull") {
       enable = true;
       enabledCollectors = cfg.enabledCollectors;

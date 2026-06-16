@@ -6,8 +6,6 @@
 }:
 let
   inherit (config.my.homelab) domain;
-  # Single-owner path, created by my.monitoring.client.
-  textfileDir = config.my.monitoring.client.textfileDirectory;
 
   # Delay must exceed the re-send interval so each re-send reschedules the held
   # ntfy message before it delivers; on failure it fires up to one delay later.
@@ -104,16 +102,6 @@ in
       RandomizedDelaySec = "1h";
     };
   };
-
-  # https://grahamc.com/blog/nixos-system-version-prometheus/
-  system.activationScripts.node-exporter-system-version = ''
-    cd ${textfileDir}
-    (
-      echo -n "system_version ";
-      readlink /nix/var/nix/profiles/system | cut -d- -f2
-    ) > system-version.prom.next
-    mv system-version.prom.next system-version.prom
-  '';
 
   services = {
     prometheus = {
