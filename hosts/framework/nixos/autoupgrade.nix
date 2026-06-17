@@ -10,10 +10,6 @@
     enable = true;
     dates = "hourly";
     flake = "github:LorenzBischof/nixfiles";
-    # Upgrade outcomes are exported as a Prometheus textfile metric and shipped
-    # to the nas via Alloy (see ./monitoring.nix) instead of notifying ntfy
-    # directly; alerting/notification happens centrally on the nas.
-    textfileMetrics.enable = true;
   };
 
   systemd.services = lib.mkIf config.my.system.autoUpgrade.enabled {

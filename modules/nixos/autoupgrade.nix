@@ -151,29 +151,15 @@ in
         system was powered down.
       '';
     };
-    textfileMetrics = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Whether to record the outcome of each upgrade run as a
-          node-exporter textfile metric (`node_autoupgrade_success`) instead
-          of (or in addition to) notifying directly. Intended to be collected
-          by a node exporter / Alloy and alerted on via Prometheus. Requires
-          `my.monitoring.client` to be enabled (it owns the textfile directory).
-        '';
-      };
-    };
   };
   config = lib.mkMerge [
     # Exports node_config_autoupgrade_enabled for every host that *wants*
     # auto-upgrade (cfg.enable), carrying the effective `enabled` value. Gated on
     # enable rather than enabled so a dirty deploy (enabled=false) still reports
     # 0 instead of dropping the series, which would read as "host offline"
-    # rather than "auto-upgrade disabled".
-    (lib.mkIf (cfg.enable && cfg.textfileMetrics.enable) {
-      # The textfile directory is created by my.monitoring.client.
-
+    # rather than "auto-upgrade disabled". Requires my.monitoring.client (it owns
+    # the textfile directory), which every auto-upgrading host enables.
+    (lib.mkIf cfg.enable {
       # Build-time-static value, so no timer: a oneshot (RemainAfterExit) re-runs
       # on each switch where `enabled` changed (its ExecStart path changes) and
       # on boot; the textfile otherwise persists in /var/lib.
@@ -231,11 +217,11 @@ in
         # Prefer not to autoupgrade when on battery
         unitConfig.ConditionACPower = true;
 
-        onSuccess = lib.optional cfg.textfileMetrics.enable "metric-upgrade-success.service";
-        onFailure = lib.optional cfg.textfileMetrics.enable "metric-upgrade-failure.service";
+        onSuccess = [ "metric-upgrade-success.service" ];
+        onFailure = [ "metric-upgrade-failure.service" ];
       };
 
-      systemd.services."metric-upgrade-success" = lib.mkIf cfg.textfileMetrics.enable {
+      systemd.services."metric-upgrade-success" = {
         script = ''
           # A skipped run (e.g. on battery, already up to date) is neither a
           # success nor a failure, so leave the last recorded outcome untouched.
@@ -246,7 +232,7 @@ in
         '';
       };
 
-      systemd.services."metric-upgrade-failure" = lib.mkIf cfg.textfileMetrics.enable {
+      systemd.services."metric-upgrade-failure" = {
         script = "${upgradeMetricScript} 0";
       };
 
