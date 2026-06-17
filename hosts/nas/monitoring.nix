@@ -185,7 +185,7 @@ in
               - alert: NixpkgsOutdated
                 expr: (time() - last_over_time(node_nixpkgs_build_timestamp_seconds[1w])) / 86400 > 7
                 labels:
-                  severity: warning
+                  severity: info
                 annotations:
                   summary: "nixpkgs is outdated on {{ $labels.instance }}"
                   description: "The running system's nixpkgs is {{ $value | printf \"%.0f\" }} days old."
@@ -199,7 +199,7 @@ in
                 expr: last_over_time(node_autoupgrade_success[1w]) == 0
                 for: 5m
                 labels:
-                  severity: warning
+                  severity: info
                 annotations:
                   summary: "NixOS auto-upgrade failed on {{ $labels.instance }}"
                   description: "The last completed auto-upgrade run on {{ $labels.instance }} failed."
@@ -224,7 +224,7 @@ in
               - alert: Watchdog
                 expr: vector(1)
                 labels:
-                  severity: none
+                  severity: critical
                 annotations:
                   summary: "NAS monitoring pipeline is DOWN"
                   description: "No Watchdog heartbeat reached ntfy for over ${watchdogDelay}. Prometheus, Alertmanager, the alertmanager-ntfy bridge, or the NAS itself is down."
@@ -263,6 +263,13 @@ in
                 "receiver" = "watchdog";
                 "group_wait" = "0s";
                 "repeat_interval" = watchdogInterval;
+              }
+              {
+                # info-severity alerts are slow-moving nudges, not incidents:
+                # one re-send per day is plenty. severity also drives their ntfy
+                # priority (see the bridge below).
+                "matchers" = [ ''severity="info"'' ];
+                "repeat_interval" = "24h";
               }
             ];
           };
@@ -339,17 +346,32 @@ in
           baseurl = "https://ntfy.sh";
           notification = {
             topic = secrets.ntfy-alertmanager;
+            # Delivery policy lives here: severity drives ntfy priority. A
+            # resolved alert is always quiet (default); firing maps critical ->
+            # high (pop-over), info -> low (silent), everything else
+            # (warning/unset) -> default. max/min are left as escape hatches.
             priority = ''
-              status == "firing" ? "high" : "default"
+              status == "resolved" ? "default" : (labels["severity"] == "critical" ? "high" : (labels["severity"] == "info" ? "low" : "default"))
             '';
+            # Icon tracks severity (first emoji tag becomes the ntfy icon):
+            # resolved -> check, critical -> siren, warning -> warning sign,
+            # info -> info. Every alert sets a severity so these stay exclusive.
             tags = [
               {
-                tag = "+1";
+                tag = "white_check_mark";
                 condition = ''status == "resolved"'';
               }
               {
                 tag = "rotating_light";
-                condition = ''status == "firing"'';
+                condition = ''status == "firing" && labels["severity"] == "critical"'';
+              }
+              {
+                tag = "warning";
+                condition = ''status == "firing" && labels["severity"] == "warning"'';
+              }
+              {
+                tag = "information_source";
+                condition = ''status == "firing" && labels["severity"] == "info"'';
               }
             ];
             templates = {
