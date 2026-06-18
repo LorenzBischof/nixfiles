@@ -75,7 +75,7 @@ let
           --description="Waybar idle inhibitor" \
           --collect \
           ${pkgs.systemd}/bin/systemd-inhibit \
-            --what=idle \
+            --what=handle-lid-switch:idle:sleep \
             --mode=block \
             --why="Waybar idle inhibitor" \
             ${pkgs.coreutils}/bin/sleep infinity

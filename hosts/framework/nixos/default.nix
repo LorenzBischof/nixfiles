@@ -18,6 +18,7 @@
     ./monitoring.nix
     ./disko.nix
     ./low-battery-power-button-led.nix
+    ./lid-closed-led.nix
   ];
 
   services.open-webui.enable = false;
