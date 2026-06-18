@@ -10,6 +10,8 @@ let
   system = pkgs.stdenv.hostPlatform.system;
   baseCodex = inputs.llm-agents.packages.${system}.codex;
   baseClaude = inputs.llm-agents.packages.${system}.claude-code;
+  signingPubKey = lib.replaceStrings [ "~" ] [ config.home.homeDirectory ] config.programs.jujutsu.settings.signing.key;
+  signingKey = lib.removeSuffix ".pub" signingPubKey;
   codexNotifyConfigArg = "notify=[\"${lib.getExe codexNotify}\"]";
   codexNotify = pkgs.writeShellScriptBin "codex-notify" ''
     set -eu
@@ -86,6 +88,8 @@ let
           --ro-bind /etc/resolv.conf /etc/resolv.conf
           --ro-bind /etc/hosts /etc/hosts
           --ro-bind /etc/nsswitch.conf /etc/nsswitch.conf
+          --ro-bind /etc/passwd /etc/passwd
+          --ro-bind /etc/group /etc/group
           --ro-bind "$ca_cert_dir" /etc/ssl/certs
           --bind "$sandbox_home" "$HOME"
           --bind "$repo_root" "$repo_root"
@@ -98,13 +102,16 @@ let
           --setenv NIX_REMOTE daemon
         )
 
-        if [ -e "$HOME/.nix-profile" ]; then
-          bwrap_args+=(--ro-bind "$HOME/.nix-profile" "$HOME/.nix-profile")
-        fi
+        ro_bind_existing() {
+          if [ -e "$1" ]; then
+            bwrap_args+=(--ro-bind "$1" "$1")
+          fi
+        }
 
-        if [ -d "$HOME/.local/state/nix/profiles" ]; then
-          bwrap_args+=(--ro-bind "$HOME/.local/state/nix/profiles" "$HOME/.local/state/nix/profiles")
-        fi
+        ro_bind_existing "$HOME/.nix-profile"
+        ro_bind_existing "$HOME/.local/state/nix/profiles"
+
+        ro_bind_existing "$HOME/.config/jj/config.toml"
 
         # Allow sandboxed tools to use the host Nix daemon without exposing the DB.
         if [ -S "$nix_daemon_socket_dir/socket" ]; then
@@ -117,6 +124,13 @@ let
 
         if [ -d "$HOME/.agents" ]; then
           bwrap_args+=(--bind "$HOME/.agents" "$HOME/.agents")
+        fi
+
+        if [ -r "${signingKey}" ]; then
+          bwrap_args+=(
+            --ro-bind "${signingKey}" "${signingKey}"
+            --ro-bind "${signingPubKey}" "${signingPubKey}"
+          )
         fi
 
         if [ -f "$HOME/${configDirName}.json" ]; then
