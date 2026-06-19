@@ -1,4 +1,5 @@
 result
+build-logs
 .direnv
 .pre-commit-config.yaml
 nas.qcow2

@@ -69,7 +69,9 @@ jobs:
           fi
           exit $exit_code
       - name: Upload build log
-        if: failure()
+        # Upload on success too: a clean build's log still carries the
+        # deprecation warnings the analyze job scans for.
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ matrix.target }}
@@ -77,81 +79,84 @@ jobs:
 
   analyze-claude:
     needs: build
-    if: ${{ github.event_name == 'pull_request' && failure() }}
+    # Every Dependabot flake.lock bump, pass or fail: diagnose/fix build breaks
+    # and flag deprecation warnings the bump introduced. `!cancelled()` lets it
+    # run regardless of the build result (a plain `needs` would skip on failure).
+    # Dependabot branches live in this repo (never forks), so this never grants
+    # write access to outside code.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
       pull-requests: write
+    env:
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
     steps:
       - uses: actions/checkout@v4
         with:
+          # Check out the PR head branch so the fix commits back onto it; the
+          # persisted GITHUB_TOKEN is what `git push` uses below.
+          ref: ${{ env.HEAD_REF }}
           fetch-depth: 20
+      # Minimal surface for a job running on Dependabot input: disk + public
+      # cache only, no tailnet/private-cache/QEMU. Builds aren't pushed.
+      - uses: wimpysworld/nothing-but-nix@main
+        with:
+          hatchet-protocol: holster
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GH_TOKEN }}
+          extra_nix_config: |
+            fallback = true
+            http-connections = 16
+            max-substitution-jobs = 16
+            max-jobs = 1
+            cores = 2
+            substituters = https://cache.nixos.org/
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
       - uses: actions/download-artifact@v4
         with:
           pattern: build-log-*
           path: build-logs
+      # Build the Claude Code we pin in flake.lock and hand it to the action
+      # below, so it skips its own native install (which runs out of disk on the
+      # nothing-but-nix runner, where root keeps only a ~2GB reserve).
+      - name: Build Claude Code
+        id: claude_bin
+        run: echo "path=$(nix build --no-link --print-out-paths .#claude-code)/bin/claude" >> "$GITHUB_OUTPUT"
       - name: Load prompt
         id: prompt
         run: |
           {
             echo 'content<<PROMPT_EOF'
-            cat .github/prompts/analyze-nix-failure.md
+            cat .github/prompts/analyze-nix-build.md
             echo 'PROMPT_EOF'
           } >> "$GITHUB_OUTPUT"
-      - name: Analyze failure with Claude Code
+      - name: Analyze build with Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          # Claude pushes the fix and edits its status comment, so it needs the
+          # write GITHUB_TOKEN in-shell anyway — no point isolating a read-only
+          # PAT. gh authenticates with this for `gh search` and `gh pr comment`.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          path_to_claude_code_executable: ${{ steps.claude_bin.outputs.path }}
           prompt: ${{ steps.prompt.outputs.content }}
-          allowed_tools: "Bash(gh search issues*),Bash(gh search prs*)"
-      - name: Extract analysis from execution file
-        run: |
-          jq -r '.[] | select(.type == "result") | .result' \
-            "${{ steps.claude.outputs.execution_file }}" > analysis.md
-      - name: Comment on PR
-        if: ${{ hashFiles('analysis.md') != '' }}
-        uses: marocchino/sticky-pull-request-comment@v3
-        with:
-          path: analysis.md
-          hide_and_recreate: true
-          hide_classify: "OUTDATED"
-
-  analyze-codex:
-    needs: [build, analyze-claude]
-    if: ${{ github.event_name == 'pull_request' && needs.build.result == 'failure' && needs.analyze-claude.result == 'failure' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 20
-      - uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GH_TOKEN }}
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: build-log-*
-          path: build-logs
-      - name: Analyze failure with Codex
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: .github/prompts/analyze-nix-failure.md
-          sandbox: workspace-write
-          output-file: analysis.md
-          codex-args: "--full-auto"
-      - name: Comment on PR
-        if: ${{ hashFiles('analysis.md') != '' }}
-        uses: marocchino/sticky-pull-request-comment@v3
-        with:
-          path: analysis.md
-          hide_and_recreate: true
-          hide_classify: "OUTDATED"
+          # Dependabot opens the PR; pushing a fix back re-triggers the run as
+          # github-actions[bot]. The `if` still gates on a Dependabot PR author.
+          allowed_bots: "dependabot[bot],github-actions[bot]"
+          # Surface the full SDK output so failures are diagnosable (the action
+          # otherwise hides it "for security").
+          show_full_output: true
+          # auto mode classifies each tool call (allows safe read/build commands,
+          # fails closed in CI on anything risky). We only pre-allow the mutating
+          # tools (edits, the git commit/push, the status comment), deny raw egress
+          # as a backstop, and domain-lock WebFetch since it's off by default.
+          claude_args: '--permission-mode auto --add-dir "/nix/store" --allowedTools "Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr comment:*),WebFetch(domain:github.com),WebFetch(domain:raw.githubusercontent.com),WebFetch(domain:nixos.org)" --disallowedTools "Bash(curl:*),Bash(wget:*),Bash(nc:*)"'
 
   cleanup-analysis-comments:
     needs: [build]
@@ -166,7 +171,9 @@ jobs:
           hide_classify: "OUTDATED"
 
   automerge-dependabot:
-    needs: [build, cleanup-analysis-comments]
+    # Wait for analyze-claude too, so any deprecation/build fix it pushes lands
+    # before auto-merge is enabled. If that job fails, automerge is skipped.
+    needs: [build, cleanup-analysis-comments, analyze-claude]
     if: ${{ github.event_name == 'pull_request' && needs.build.result == 'success' && github.event.pull_request.user.login == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
