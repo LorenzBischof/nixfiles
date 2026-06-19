@@ -8,7 +8,7 @@
 let
   cfg = config.my.profiles.ai;
   system = pkgs.stdenv.hostPlatform.system;
-  baseCodex = inputs.llm-agents.packages.${system}.codex;
+  baseCodex = pkgs.codex;
   baseClaude = inputs.llm-agents.packages.${system}.claude-code;
   signingPubKey = lib.replaceStrings [ "~" ] [ config.home.homeDirectory ] config.programs.jujutsu.settings.signing.key;
   signingKey = lib.removeSuffix ".pub" signingPubKey;
