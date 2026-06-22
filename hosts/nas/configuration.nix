@@ -121,6 +121,7 @@
   networking.hostId = "115d4c0d";
 
   services.zfs.autoScrub.enable = true;
+  boot.zfs.forceImportRoot = false;
 
   networking.useDHCP = true;
 
