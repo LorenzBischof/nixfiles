@@ -28,6 +28,7 @@
     ./hedgedoc.nix
     ./outline.nix
     ./umap.nix
+    ./gpslogger.nix
     ../../modules/nixos
   ];
 
