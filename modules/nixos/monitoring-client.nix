@@ -113,6 +113,8 @@ in
       enabledCollectors = cfg.enabledCollectors;
       extraFlags = [
         "--collector.textfile.directory=${cfg.textfileDirectory}"
+        # node_systemd_service_restart_total (ServiceFlapping alert) is opt-in.
+        "--collector.systemd.enable-restarts-metrics"
       ];
     };
 
@@ -127,6 +129,10 @@ in
       text = ''
         prometheus.exporter.unix "node" {
           enable_collectors = [${lib.concatMapStringsSep ", " (c: ''"${c}"'') cfg.enabledCollectors}]
+          // Match pull mode: emit node_systemd_service_restart_total.
+          systemd {
+            enable_restarts = true
+          }
           textfile {
             directory = "${cfg.textfileDirectory}"
           }

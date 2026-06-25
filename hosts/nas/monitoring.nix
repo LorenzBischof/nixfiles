@@ -170,6 +170,29 @@ in
                 annotations:
                   summary: "Systemd {{ $labels.name }} has failed"
                   description: Service failed
+              # Crash-loops that ServiceDown misses: a unit systemd keeps
+              # auto-restarting never settles in state="failed". NRestarts needs
+              # the enable-restarts-metrics flag (set in monitoring-client.nix).
+              - alert: ServiceFlapping
+                expr: increase(node_systemd_service_restart_total[15m]) > 3
+                for: 5m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Systemd {{ $labels.name }} is flapping on {{ $labels.instance }}"
+                  description: "{{ $labels.name }} has restarted {{ $value | printf \"%.0f\" }} times in 15m; it is likely crash-looping."
+              # Backoff-robust half of the pair: a unit stuck auto-restarting
+              # parks in activating between tries (longer as backoff grows),
+              # catching the slow tail ServiceFlapping's rate loses. type!="oneshot"
+              # skips long oneshots (e.g. a running backup) that sit in activating.
+              - alert: ServiceStuckActivating
+                expr: node_systemd_unit_state{state="activating", type!="oneshot"} == 1
+                for: 10m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Systemd {{ $labels.name }} is stuck activating on {{ $labels.instance }}"
+                  description: "{{ $labels.name }} has been in activating (auto-restart) for over 10m; it is likely crash-looping behind a restart backoff."
               - alert: TargetDown
                 expr: up == 0
                 for: 5m
