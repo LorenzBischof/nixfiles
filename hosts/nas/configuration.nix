@@ -55,7 +55,6 @@
       "asustor_it87"
     ];
     initrd = {
-      systemd.enable = false;
       kernelModules = config.boot.kernelModules;
       network = {
         enable = true;
@@ -65,12 +64,33 @@
           hostKeys = [ "/boot/initrd-host-key" ];
           authorizedKeys = config.users.users.lbischof.openssh.authorizedKeys.keys;
         };
-        postCommands = ''
-          # blink faster
-          echo 0 | tee /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink_freq
-          echo "zfs load-key -a; killall zfs" >> /root/.profile
-        '';
       };
+      systemd =
+        let
+          unlockShell = pkgs.writeShellScript "zfs-unlock-shell" ''
+            exec ${config.boot.initrd.systemd.package}/bin/systemd-tty-ask-password-agent --watch
+          '';
+        in
+        {
+          enable = true;
+          storePaths = [ unlockShell ];
+          users.root.shell = unlockShell;
+          # Fast-blink the front LED while zfs-import-tank waits for the SSH
+          # passphrase. Ordered after systemd-modules-load so the asustor
+          # hwmon node exists; the LED is reset later by asustor-leds-control.
+          services.blink-led-while-unlocking = {
+            wantedBy = [ "zfs-import-tank.service" ];
+            before = [ "zfs-import-tank.service" ];
+            after = [ "systemd-modules-load.service" ];
+            unitConfig.DefaultDependencies = false;
+            serviceConfig.Type = "oneshot";
+            script = ''
+              for f in /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink_freq; do
+                echo 0 > "$f" 2>/dev/null || true
+              done
+            '';
+          };
+        };
     };
   };
 
@@ -193,6 +213,10 @@
     security.acme.defaults.server = "https://acme-staging-v02.api.letsencrypt.org/directory";
     services.restic.backups.daily.repositoryFile = pkgs.writeText "restic-repo" "/srv/restic-repo";
 
+    # No remote unlock needed for the throwaway pool, and a direct-boot
+    # systemd initrd can't carry the SSH host key as a store secret.
+    boot.initrd.network.ssh.enable = lib.mkForce false;
+
     virtualisation = {
       memorySize = 2048;
       cores = 3;
@@ -212,12 +236,22 @@
       fsType = "zfs";
     };
 
-    # These commands are run on every boot, but fail if the zpool already exists
-    boot.initrd.postDeviceCommands = ''
-      zpool create -O mountpoint=none -O atime=off -O xattr=sa -O acltype=posixacl -o ashift=12 tank /dev/vda
-      zfs create -o mountpoint=legacy tank/root
-      zfs snapshot tank/root@blank
-    '';
+    # systemd initrd replacement for postDeviceCommands: create the throwaway
+    # pool before it's imported (skipped once it exists).
+    boot.initrd.systemd.services.create-tank = {
+      description = "Create the test ZFS pool in the VM";
+      wantedBy = [ "zfs-import-tank.service" ];
+      before = [ "zfs-import-tank.service" ];
+      unitConfig.DefaultDependencies = false;
+      serviceConfig.Type = "oneshot";
+      script = ''
+        if ! zpool list tank >/dev/null 2>&1; then
+          zpool create -O mountpoint=none -O atime=off -O xattr=sa -O acltype=posixacl -o ashift=12 tank /dev/vda
+          zfs create -o mountpoint=legacy tank/root
+          zfs snapshot tank/root@blank
+        fi
+      '';
+    };
 
     # Make sure the password is always correctly set
     users.mutableUsers = false;
