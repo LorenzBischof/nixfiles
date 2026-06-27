@@ -10,7 +10,9 @@ let
   system = pkgs.stdenv.hostPlatform.system;
   baseCodex = pkgs.codex;
   baseClaude = inputs.llm-agents.packages.${system}.claude-code;
-  signingPubKey = lib.replaceStrings [ "~" ] [ config.home.homeDirectory ] config.programs.jujutsu.settings.signing.key;
+  signingPubKey =
+    lib.replaceStrings [ "~" ] [ config.home.homeDirectory ]
+      config.programs.jujutsu.settings.signing.key;
   signingKey = lib.removeSuffix ".pub" signingPubKey;
   codexNotifyConfigArg = "notify=[\"${lib.getExe codexNotify}\"]";
   codexNotify = pkgs.writeShellScriptBin "codex-notify" ''
@@ -21,11 +23,9 @@ let
     # Keep behavior stable if codex adds more events: only notify for agent-turn-complete.
     printf '%s' "$payload" | ${lib.getExe pkgs.jq} -e '.type == "agent-turn-complete"' >/dev/null 2>&1 || exit 0
 
-    ${lib.optionalString cfg.codexNotify.bell.enable ''
-      if [ -t 1 ]; then
-        printf '\a' || true
-      fi
-    ''}
+    if [ -t 1 ]; then
+      printf '\a' || true
+    fi
   '';
   wrappedCodex = pkgs.writeShellScriptBin "codex" ''
     exec ${lib.getExe baseCodex} -c ${lib.escapeShellArg codexNotifyConfigArg} ${lib.escapeShellArgs cfg.codexArgs} "$@"
@@ -200,6 +200,7 @@ let
         spinnerTipsEnabled = false;
         prefersReducedMotion = true;
         feedbackSurveyRate = 0;
+        preferredNotifChannel = "terminal_bell";
       })
     ];
   };
@@ -235,11 +236,6 @@ in
       type = lib.types.path;
       default = ./AGENTS.md;
       description = "Source AGENTS.md file for AI tools.";
-    };
-    codexNotify = {
-      bell.enable = (lib.mkEnableOption "terminal bell for Codex notifications") // {
-        default = true;
-      };
     };
   };
   config = lib.mkIf cfg.enable {
