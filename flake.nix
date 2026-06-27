@@ -308,7 +308,7 @@
           inherit pkgs;
           modules = [
             ./hosts/wsl/home.nix
-            nix-index-database.hmModules.nix-index
+            nix-index-database.homeModules.nix-index
             {
               programs.nix-index-database.comma.enable = true;
             }
