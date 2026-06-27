@@ -32,7 +32,11 @@ in
     settings.SITE_URL = "https://${umapDomain}";
   };
 
-  services.nginx.virtualHosts."${umapDomain}".useACMEHost = domain;
+  services.nginx.virtualHosts."${umapDomain}" = {
+    # The umap module sets enableACME = mkDefault true; override to use the shared wildcard cert instead.
+    enableACME = false;
+    useACMEHost = domain;
+  };
 
   my.homelab.dashboard.Services.UMap.href = "https://${umapDomain}";
 
