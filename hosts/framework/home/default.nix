@@ -9,14 +9,35 @@
   ...
 }:
 let
-  # This is required, so that app_id is set and we can create Sway window rules
-  logseqWithDesktopName = pkgs.logseq.overrideAttrs (old: {
-    postInstall = (old.postInstall or "") + ''
-      packageJson="$out/share/logseq/resources/app/package.json"
-      ${lib.getExe pkgs.jq} '.desktopName = "Logseq"' "$packageJson" > package.json.tmp
-      mv package.json.tmp "$packageJson"
-    '';
-  });
+  # logseq's build freezes on current nixpkgs (NixOS/nixpkgs#535206), and it isn't
+  # cached upstream because its electron_39 is EOL. Pin to the revision right
+  # before electron_39 was marked EOL: there logseq still builds and is cached on
+  # cache.nixos.org (so it's substituted, never built). A bare fetchTarball (not a
+  # flake input) keeps it out of Dependabot's reach.
+  pkgs-logseq = import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/ec0c722e017dfccbb2f66a8aafbe003320266d33.tar.gz";
+    sha256 = "0jws2i94asr1yish76799gmyw51dj98n8badq3snc8prifmsd3a5";
+  }) { inherit (pkgs.stdenv.hostPlatform) system; };
+
+  # The desktopName sets the Wayland app_id so we can target Logseq in Sway window
+  # rules. We must NOT use overrideAttrs for this: that changes the derivation,
+  # busting the cache and re-triggering the build that freezes upstream. Instead,
+  # copy the substituted output and patch the one file in place (a cheap local
+  # copy, no rebuild).
+  logseqWithDesktopName =
+    pkgs.runCommand pkgs-logseq.logseq.name { inherit (pkgs-logseq.logseq) meta; }
+      ''
+        cp -r ${pkgs-logseq.logseq} $out
+        chmod -R u+w $out
+
+        packageJson="$out/share/logseq/resources/app/package.json"
+        ${lib.getExe pkgs.jq} '.desktopName = "Logseq"' "$packageJson" > "$packageJson.tmp"
+        mv "$packageJson.tmp" "$packageJson"
+
+        # The copied wrapper still points electron's --app flag at the original
+        # store path; repoint it at our patched copy.
+        substituteInPlace $out/bin/logseq --replace-fail "${pkgs-logseq.logseq}" "$out"
+      '';
 in
 {
   imports = [

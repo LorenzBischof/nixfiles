@@ -308,8 +308,4 @@
 
   system.stateVersion = "23.05"; # Did you read the comment?
   nixpkgs.config.allowUnfree = true;
-  # logseq still ships the EOL electron 39.8.10; allow it until upstream bumps.
-  nixpkgs.config.permittedInsecurePackages = [
-    "electron-39.8.10"
-  ];
 }
