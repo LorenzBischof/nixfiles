@@ -17,6 +17,7 @@ check-git-revision host:
 # Activate configuration ("", nas, vps)
 switch host="": add
     #!/usr/bin/env bash
+    set -euo pipefail
     if [ -n "{{host}}" ]; then
         just check-git-revision {{host}}
     fi
@@ -36,6 +37,7 @@ switch host="": add
 # Test configuration ("", nas, vps)
 test host="": add
     #!/usr/bin/env bash
+    set -euo pipefail
     overrides=$(./override-input.sh)
     if [ "{{host}}" = "" ]; then
         sudo nixos-rebuild test --flake . $overrides
@@ -51,6 +53,7 @@ test host="": add
 # Run flake checks
 check: add
     #!/usr/bin/env bash
+    set -euo pipefail
     overrides=$(./override-input.sh)
     nix flake check $overrides
 
