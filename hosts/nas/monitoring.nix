@@ -214,6 +214,19 @@ in
                   description: "The running system's nixpkgs is {{ $value | printf \"%.0f\" }} days old."
           - name: autoupgrade
             rules:
+              # Informational heads-up while an upgrade build is actually running.
+              # start > last_run is true only for a real build: the module stamps
+              # the start from an ExecStartPre (skipped by the daily no-op check)
+              # and the end when the run finishes. The activating gate confirms the
+              # build is still running, so a crash mid-build (no end ever written)
+              # clears the alert on reboot instead of leaving it stuck firing.
+              - alert: NixosUpgradeInProgress
+                expr: (node_autoupgrade_start_timestamp_seconds > node_autoupgrade_last_run_timestamp_seconds) and on(instance) (node_systemd_unit_state{name="nixos-upgrade.service", state="activating"} == 1)
+                labels:
+                  severity: info
+                annotations:
+                  summary: "NixOS upgrade in progress on {{ $labels.instance }}"
+                  description: "The nixos-upgrade service is currently running on {{ $labels.instance }}."
               # Fires when the last auto-upgrade run failed; the next successful
               # run flips the gauge to 1 and resolves it. last_over_time bridges
               # scrape gaps so the sleeping laptop doesn't spuriously resolve.

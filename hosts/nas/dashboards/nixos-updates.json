@@ -537,6 +537,109 @@
       ],
       "title": "auto-upgrade outcome history",
       "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Live upgrade state per host. Blue while a real upgrade build is running (the NixosUpgradeInProgress alert window: started but not yet finished, and the unit is still activating; the daily no-op revision check is excluded); once it finishes, green if the last run succeeded or red if it failed. A blue segment's width shows how long that run took.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineWidth": 0,
+            "spanNulls": true
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 2,
+                  "text": "failed"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "success"
+                },
+                "2": {
+                  "color": "blue",
+                  "index": 0,
+                  "text": "running"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              },
+              {
+                "color": "blue",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "id": 7,
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(max by (instance) ((node_systemd_unit_state{name=\"nixos-upgrade.service\", state=\"activating\", instance=~\"$instance\"} == 1) and on(instance) (node_autoupgrade_start_timestamp_seconds{instance=~\"$instance\"} > node_autoupgrade_last_run_timestamp_seconds{instance=~\"$instance\"}))) * 2 or max by (instance) (node_autoupgrade_success{instance=~\"$instance\"})",
+          "legendFormat": "{{instance}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "upgrade runs & outcome",
+      "type": "state-timeline"
     }
   ],
   "refresh": "",

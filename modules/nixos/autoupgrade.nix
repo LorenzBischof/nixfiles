@@ -28,6 +28,24 @@ let
     mv "$tmp" "$dir/autoupgrade.prom"
   '';
 
+  # Records the wall-clock time at which a real upgrade build started. Written
+  # from an ExecStartPre, which systemd runs only *after* the unit's
+  # ExecCondition has passed -- i.e. only when there actually is something to
+  # upgrade. The daily no-op check fails the condition and so never reaches this.
+  # Compared against node_autoupgrade_last_run_timestamp_seconds (the end time)
+  # to tell whether a build is currently in flight, without any time heuristic.
+  startMetricScript = pkgs.writeShellScript "autoupgrade-start-metric" ''
+    set -euo pipefail
+    dir="${textfileDir}"
+    tmp="$dir/autoupgrade-start.prom.$$"
+    {
+      echo "# HELP node_autoupgrade_start_timestamp_seconds Unix time the last NixOS auto-upgrade build started (after the upgrade-needed check passed)."
+      echo "# TYPE node_autoupgrade_start_timestamp_seconds gauge"
+      echo "node_autoupgrade_start_timestamp_seconds $(${pkgs.coreutils}/bin/date +%s)"
+    } > "$tmp"
+    mv "$tmp" "$dir/autoupgrade-start.prom"
+  '';
+
   # Records whether auto-upgrade is actually active (1) or disabled, e.g. by a
   # dirty git deploy (0). The value is the build-time `enabled` flag, so it only
   # changes on a switch; written atomically.
@@ -194,6 +212,11 @@ in
         serviceConfig = {
           CPUSchedulingPolicy = "idle";
           IOSchedulingClass = "idle";
+
+          # Runs only once ExecCondition below has passed, so it marks the start
+          # of a real upgrade build. Leading "-" keeps a metric-write failure from
+          # aborting the upgrade itself.
+          ExecStartPre = "-${startMetricScript}";
 
           ExecCondition = pkgs.writeShellScript "check-upgrade-conditions" ''
             status="$(${pkgs.curl}/bin/curl -s "https://api.github.com/repos/lorenzbischof/nixfiles/compare/HEAD...${inputs.self.rev or ""}" | ${pkgs.jq}/bin/jq -r .status)"
