@@ -32,6 +32,12 @@ in
       ];
     };
   };
+  # Workaround for a quoting bug that leaks literal quotes into the default
+  # DATABASE_URL and crash-loops the service. Fixed upstream, not yet in our
+  # nixpkgs; drop once included: https://github.com/NixOS/nixpkgs/pull/536063
+  systemd.services.outline.environment.DATABASE_URL =
+    "postgres://localhost/outline?host=/run/postgresql";
+
   services.nginx.virtualHosts."${outlineDomain}" = {
     forceSSL = true;
     useACMEHost = domain;
