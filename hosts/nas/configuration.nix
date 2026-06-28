@@ -208,6 +208,23 @@
       '';
     };
 
+  # On this it87 chip, manual fan mode only turns on when a duty below 255 is
+  # written to pwm1 - setting pwm1_enable=1 by itself does nothing. fancontrol
+  # sets pwm1_enable first, so it fails to start. Work around it by writing a duty
+  # before fancontrol runs, but only when the fan is still uncontrolled.
+  # https://github.com/frankcrawford/it87/issues/97
+  systemd.services.fancontrol.serviceConfig.ExecStartPre =
+    let
+      prime = pkgs.writeShellScript "fancontrol-prime-pwm" ''
+        for e in /sys/devices/platform/asustor_it87.*/hwmon/hwmon*/pwm1_enable; do
+          if [ "$(cat "$e")" = "0" ]; then
+            echo 250 > "''${e%_enable}"
+          fi
+        done
+      '';
+    in
+    "${prime}";
+
   virtualisation.vmVariant = {
     my.homelab.domain = secrets.test-domain;
     security.acme.defaults.server = "https://acme-staging-v02.api.letsencrypt.org/directory";
