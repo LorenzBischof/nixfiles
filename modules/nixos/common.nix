@@ -16,6 +16,10 @@
 
   time.timeZone = "Europe/Zurich";
 
+  # Crash-looping services back off 1min between restarts (systemd default is
+  # 100ms), so a broken unit can't hammer in a tight loop. Override per-unit.
+  systemd.settings.Manager.DefaultRestartSec = "1min";
+
   system.activationScripts.diff = {
     supportsDryActivation = true;
     text = # bash

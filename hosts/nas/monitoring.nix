@@ -360,6 +360,7 @@ in
           {
             name = "prometheus";
             type = "prometheus";
+            uid = "prometheus";
             url = "http://127.0.0.1:${toString config.services.prometheus.port}";
             isDefault = true;
           }
@@ -421,7 +422,8 @@ in
               # stacking.
               headers = {
                 "X-Delay" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}${watchdogDelay}{{ end }}'';
-                "X-Sequence-ID" = ''{{ if eq (index .Labels "alertname") "Watchdog" }}heartbeat-watchdog{{ else }}{{ .Fingerprint }}{{ end }}'';
+                "X-Sequence-ID" =
+                  ''{{ if eq (index .Labels "alertname") "Watchdog" }}heartbeat-watchdog{{ else }}{{ .Fingerprint }}{{ end }}'';
               };
             };
           };
