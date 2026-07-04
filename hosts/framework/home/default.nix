@@ -49,11 +49,6 @@ in
   my.programs.git.enable = true;
   my.profiles.ai.enable = true;
 
-  systemd.user.services.kanshi = {
-    Service.ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
-    Unit.X-Reload-Triggers = [ "${config.xdg.configFile."kanshi/config".source}" ];
-  };
-
   services.kanshi = {
     enable = true;
     systemdTarget = "sway-session.target";
