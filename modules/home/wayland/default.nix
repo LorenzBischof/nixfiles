@@ -47,7 +47,7 @@ in
   # mkForce overrides stylix, which now sets gtk4.theme explicitly (stylix#2330)
   gtk.gtk4.theme = lib.mkForce null;
 
-  stylix.targets.swaylock.useWallpaper = false;
+  stylix.targets.swaylock.image.enable = false;
   programs = {
     fuzzel = {
       enable = true;
