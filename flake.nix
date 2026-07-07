@@ -233,7 +233,16 @@
             nix-secrets.nixosModules.nas
             alias-watch.nixosModules.default
             nixhome.nixosModules.nixhome
-            alertmanager-ntfy.nixosModules.${system}.default
+            # Inline the upstream module instead of alertmanager-ntfy.nixosModules.${system}.default,
+            # which uses the deprecated `pkgs.system` (renamed to stdenv.hostPlatform.system).
+            ({ ... }: {
+              imports = [ "${alertmanager-ntfy}/module.nix" ];
+              nixpkgs.overlays = [
+                (_self: _super: {
+                  alertmanager-ntfy = alertmanager-ntfy.packages.${system}.alertmanager-ntfy;
+                })
+              ];
+            })
             inputs.asustor-platform-driver.nixosModules.default
           ];
           specialArgs = {
