@@ -183,6 +183,14 @@
     networkmanager.enable = true;
   };
 
+  # Resolve *.talos to the Talos cluster ingress VIP via NM's dnsmasq plugin.
+  # Don't switch this to systemd-resolved with a global DNS/Domains override:
+  # that hijacks the global resolver and breaks Tailscale MagicDNS.
+  networking.networkmanager.dns = "dnsmasq";
+  environment.etc."NetworkManager/dnsmasq.d/talos.conf".text = ''
+    address=/talos/10.69.0.200
+  '';
+
   # Temporary fix for Swaylock issue TODO: what issue?
   security.pam.services.swaylock = { };
 

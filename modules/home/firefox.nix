@@ -151,6 +151,10 @@ in
           "browser.newtabpage.activity-stream.feeds.topsites" = false;
           "browser.aboutConfig.showWarning" = false;
           "browser.fullscreen.autohide" = false;
+          # Treat the homelab ".talos" suffix as a real domain so typing
+          # "podinfo.talos" navigates there instead of falling back to a web
+          # search. Only affects *.talos; normal address-bar search is unchanged.
+          "browser.fixup.domainsuffixwhitelist.talos" = true;
         };
       };
     };

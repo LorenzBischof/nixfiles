@@ -140,6 +140,7 @@ echo 'machine.send_chars("logseq\n")' \
 - **No reboot needed between commands**: The VM stays running. Send as many commands as you need.
 - **Screenshots**: Always use absolute paths under `/tmp/` (e.g. `/tmp/shot.png`). Relative paths write to the current working directory of the test driver (typically the flake root).
 - **Validation standard**: For tasks about desktop runtime behavior, use the VM to validate the final state after your code change, not just the hypothesis before editing.
+- **DNS false positives via slirp**: The VM's eth0 DNS (10.0.2.3, QEMU slirp) forwards to the **host's** resolver. A name that only the host can resolve (e.g. a host-local dnsmasq zone) still resolves inside the VM through that path, masking broken in-VM DNS routing. When validating DNS config, check *where* the answer came from (`resolvectl query` prints `-- link: ...`; or query the in-VM server directly), not just that a name resolves.
 
 ## Keeping this skill up to date
 
