@@ -6,11 +6,21 @@ add:
     @git add -N .
 
 [private]
-check-git-revision host:
+check-git-revision host="":
     #!/usr/bin/env bash
-    remote_revision=$(ssh {{host}} cat /etc/git-revision 2>/dev/null || echo "")
-    if [ -n "$remote_revision" ] && ! git cat-file -e "$remote_revision" 2>/dev/null; then
-        echo "Error: Git revision $remote_revision from {{host}} is not available locally"
+    if [ -n "{{host}}" ]; then
+        deployed_revision=$(ssh {{host}} nixos-version --configuration-revision 2>/dev/null || echo "")
+        source="{{host}}"
+    else
+        deployed_revision=$(nixos-version --configuration-revision 2>/dev/null || echo "")
+        source="this host"
+    fi
+    # Guards against clobbering a background auto-upgrade with an older local build.
+    # Auto-upgrade only ever deploys clean, pushed commits, so an empty or dirty
+    # revision is a manual deploy with nothing to protect — only guard clean revs.
+    case "$deployed_revision" in ""|*-dirty) exit 0 ;; esac
+    if ! git cat-file -e "$deployed_revision" 2>/dev/null; then
+        echo "Error: Git revision $deployed_revision from $source is not available locally"
         exit 1
     fi
 
@@ -18,10 +28,8 @@ check-git-revision host:
 switch host="": add
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -n "{{host}}" ]; then
-        just check-git-revision {{host}}
-    fi
-    
+    just check-git-revision "{{host}}"
+
     overrides=$(./override-input.sh)
     if [ "{{host}}" = "" ]; then
         sudo nixos-rebuild switch --flake . $overrides
@@ -49,6 +57,10 @@ test host="": add
         echo "Unknown host: {{host}}"
         exit 1
     fi
+
+# Diagnose why a host's nixos-upgrade is stuck ("", nas, vps)
+upgrade-doctor host="":
+    @./scripts/nixos-upgrade-doctor.sh "{{host}}"
 
 # Run flake checks
 check: add

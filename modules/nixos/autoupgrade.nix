@@ -193,8 +193,6 @@ in
     })
 
     (lib.mkIf cfg.enabled {
-      environment.etc.git-revision.text = inputs.self.rev;
-
       system.autoUpgrade = {
         enable = true;
         inherit (cfg)
@@ -215,25 +213,40 @@ in
 
           # Runs only once ExecCondition below has passed, so it marks the start
           # of a real upgrade build. Leading "-" keeps a metric-write failure from
-          # aborting the upgrade itself.
-          ExecStartPre = "-${startMetricScript}";
+          # aborting the upgrade itself. A list so hosts can append their own
+          # start-time hooks (e.g. a desktop notification) via list concatenation.
+          ExecStartPre = [ "-${startMetricScript}" ];
 
+          # Decides whether there is anything to upgrade, and encodes *why* not
+          # in the exit status so a host can react per reason (the framework, for
+          # example, notifies only on a repo/remote mismatch). systemd records
+          # this status on the unit; read it back with
+          # `systemctl show -p ExecCondition`. Exit codes:
+          #   0  proceed with the upgrade
+          #   1  already up to date
+          #   2  local commit is ahead of the branch (PR not merged)
+          #   3  local commit missing on the remote (not pushed)
+          #   4  GitHub unreachable / rate-limited
+          # All non-zero codes are skips -- systemd treats an ExecCondition exit
+          # of 1..254 as "skipped", not "failed". (A battery skip is handled by
+          # ConditionACPower below, which stops the unit before it ever runs, so
+          # it does not reach this script or a host's on-skip notification.)
           ExecCondition = pkgs.writeShellScript "check-upgrade-conditions" ''
             status="$(${pkgs.curl}/bin/curl -s "https://api.github.com/repos/lorenzbischof/nixfiles/compare/HEAD...${inputs.self.rev or ""}" | ${pkgs.jq}/bin/jq -r .status)"
-            if [ "$status" = "behind" ]; then
-                echo "Commit ${inputs.self.rev or ""} is behind the default branch. Updating..."
+            if [ "$status" = "behind" ] || [ "$status" = "diverged" ]; then
+                echo "Commit ${inputs.self.rev or ""} is $status relative to the default branch. Updating..."
             elif [ "$status" = "ahead" ]; then
                 echo "Commit ${inputs.self.rev or ""} is ahead of the default branch. Did you merge your PR?"
-                exit 1
+                exit 2
             elif [ "$status" = "identical" ]; then
                 echo "Already up to date. Skipping."
                 exit 1
             elif [ "$status" = "404" ]; then
                 echo "Commit ${inputs.self.rev or ""} does not exist on remote. Did you push your changes?"
-                exit 1
+                exit 3
             else
                 echo "Did not receive a response. Maybe you are rate-limited?"
-                exit 1
+                exit 4
             fi
           '';
         };
