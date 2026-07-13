@@ -266,6 +266,12 @@ in
       YUBIKEY_TOUCH_DETECTOR_LIBNOTIFY=true
     '';
 
+    # home-manager now warns when home.pointerCursor.{name,size,package} (set by
+    # stylix's `cursor` option) are relied upon to implicitly enable cursor config
+    # generation; explicit enable silences that without changing behavior.
+    # Upstream fix pending: https://github.com/nix-community/stylix/pull/2407
+    pointerCursor.enable = true;
+
     # Home Manager needs a bit of information about you and the paths it should
     # manage.
     username = "lbischof";
