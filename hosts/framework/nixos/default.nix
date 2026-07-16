@@ -213,6 +213,16 @@
     graphics.enable = true;
 
     opentabletdriver.enable = true;
+
+    # The EC's built-in fan curve lets the chassis get hot before spinning up.
+    # Strategies ship with the package; "medium" starts ramping at 40°C.
+    fw-fanctrl = {
+      enable = true;
+      config = {
+        defaultStrategy = "medium";
+        strategyOnDischarging = "lazy";
+      };
+    };
   };
 
   services.thermald.enable = true;
