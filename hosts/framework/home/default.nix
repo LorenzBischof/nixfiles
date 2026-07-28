@@ -266,6 +266,10 @@ in
       YUBIKEY_TOUCH_DETECTOR_LIBNOTIFY=true
     '';
 
+    # home-manager now warns when relying on `home.pointerCursor` (set here by
+    # stylix's cursor target) to implicitly enable cursor config generation.
+    pointerCursor.enable = true;
+
     # Home Manager needs a bit of information about you and the paths it should
     # manage.
     username = "lbischof";
