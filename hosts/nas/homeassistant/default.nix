@@ -98,7 +98,6 @@ in
           ];
         }
       ];
-      input_boolean.light_hold = { };
       http = {
         trusted_proxies = [
           "::1"
