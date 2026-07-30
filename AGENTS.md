@@ -64,6 +64,19 @@ For details, see the ntfy publish docs: https://docs.ntfy.sh/publish/#updating-d
 - Clear/dismiss resolved states by calling:
   - `PUT https://ntfy.sh/<topic>/<sequence-id>/clear`
 
+## SSH Access to Hosts
+
+Run SSH commands with the sandbox disabled. Open one `ControlMaster` per session and reuse it for all further commands to that host:
+
+```bash
+ssh -F none -MNf -o ControlPath=~/.ssh/controlmasters/<name> -o ControlPersist=4h \
+  -o IdentityFile=~/.ssh/id_ed25519_sk_rk_homelab -o IdentitiesOnly=yes nas 'echo ok'  # once
+ssh -F none -o ControlPath=~/.ssh/controlmasters/<name> nas '<command>'                # reuse
+```
+
+For debugging the home router (login, useful OIDs, known bugs), see
+`docs/router-debugging.md`.
+
 ## Common Development Commands
 
 ### Building and Switching
