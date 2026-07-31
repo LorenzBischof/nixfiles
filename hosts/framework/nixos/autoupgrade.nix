@@ -43,15 +43,15 @@
         # first, so OnSuccess= never triggers -- see modules/nixos/autoupgrade.nix).
         # The ExecCondition exit status alone distinguishes the outcomes and
         # encodes the skip reason: 0 = upgraded, 1 = already up to date (silent),
-        # 2/3/4 = a repo/remote mismatch that needs action.
+        # 2/3/4 = a repo/remote mismatch worth a heads-up.
         cond="$(systemctl show nixos-upgrade -p ExecCondition --value)"
         status="''${cond##*status=}"
         status="''${status%%[!0-9]*}"
         case "$status" in
           0) ${pkgs.libnotify}/bin/notify-send "Auto upgrade success" ;;
-          2) ${pkgs.libnotify}/bin/notify-send --urgency=critical "Auto upgrade skipped" "Commit is ahead of the default branch. Did you merge your PR?" ;;
-          3) ${pkgs.libnotify}/bin/notify-send --urgency=critical "Auto upgrade skipped" "Commit does not exist on the remote. Did you push your changes?" ;;
-          4) ${pkgs.libnotify}/bin/notify-send --urgency=critical "Auto upgrade skipped" "Could not reach GitHub. Maybe you are rate-limited?" ;;
+          2) ${pkgs.libnotify}/bin/notify-send "Auto upgrade skipped" "Commit is ahead of the default branch. Did you merge your PR?" ;;
+          3) ${pkgs.libnotify}/bin/notify-send "Auto upgrade skipped" "Commit does not exist on the remote. Did you push your changes?" ;;
+          4) ${pkgs.libnotify}/bin/notify-send "Auto upgrade skipped" "Could not reach GitHub. Maybe you are rate-limited?" ;;
         esac
       '';
     };
