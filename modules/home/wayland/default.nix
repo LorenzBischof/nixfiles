@@ -22,7 +22,7 @@ in
 {
   imports = [
     ./foot.nix
-    ./waybar.nix
+    ./quickshell
   ];
 
   home.packages = with pkgs; [

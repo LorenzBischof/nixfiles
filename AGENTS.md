@@ -25,7 +25,7 @@ There are two relevant AGENTS.md sources in this repo setup:
     - Common settings, autoupgrade, nginx config, monitoring
     - Custom services: `detect-reboot-required`, `detect-syncthing-conflicts`, `nixpkgs-age-monitor`
   - `modules/home/`: User-level modules for home-manager
-    - `wayland/`: Sway window manager, waybar, foot terminal, keybindings
+    - `wayland/`: Sway window manager, quickshell bar, foot terminal, keybindings
     - `shell/`: Shell configuration
     - `git/`: Git configuration
     - `ai/`: AI tools configuration
