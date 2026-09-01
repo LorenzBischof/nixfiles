@@ -631,11 +631,11 @@
     },
     "nixos-agent-test-vm": {
       "locked": {
-        "lastModified": 1779483643,
-        "narHash": "sha256-gKeZSAhtwZ3oY3FBv0O4ABhpDgBZFvGUf1uPhO8ZrWk=",
+        "lastModified": 1788249999,
+        "narHash": "sha256-HgEwEmlfc/0GGrZpL7Ia2mGSu4s1AIXjOE/wtuUunDA=",
         "owner": "lorenzbischof",
         "repo": "nixos-agent-test-vm",
-        "rev": "497aaa244010de907777d99722ee18920fb20e26",
+        "rev": "0ab23db7a94f1866986e9afd5d13bca64ff171fd",
         "type": "github"
       },
       "original": {

@@ -2,7 +2,7 @@
 
 Read this only if `nix run .#<host>-agent-vm` doesn't already exist for the NixOS config you want to test. Otherwise stick with `SKILL.md`.
 
-The harness is provided by the [`nixos-agent-test-vm`](https://github.com/lorenzbischof/nixos-agent-test-vm) flake, which exposes a single top-level function: `mkAgentVm`. Internally it wraps `pkgs.testers.runNixOSTest` and bakes in the agent driver (a Python REPL bound to a Unix socket under `$XDG_RUNTIME_DIR`). Per-host wiring is one `apps.<system>.<host>-agent-vm = nixos-agent-test-vm.mkAgentVm { ... }` attribute in the consuming flake.
+The harness is provided by the [`nixos-agent-test-vm`](https://github.com/lorenzbischof/nixos-agent-test-vm) flake, which exposes a single top-level function: `mkAgentVm`. Internally it wraps `pkgs.testers.runNixOSTest` and bakes in the agent driver (a persistent native NixOS test-Python executor bound to a Unix socket under `$XDG_RUNTIME_DIR`). Per-host wiring is one `apps.<system>.<host>-agent-vm = nixos-agent-test-vm.mkAgentVm { ... }` attribute in the consuming flake.
 
 ## 1. Add the flake input
 
@@ -48,21 +48,42 @@ outputs = { self, nixpkgs, nixos-agent-test-vm, ... }:
   };
 ```
 
-The helper already bakes in the universals: `console.keyMap = "us"`, 4 GiB / 4 cores, virtio-gpu, and the agent driver script.
+The helper already bakes in the universals: `console.keyMap = "us"`, 4 GiB / 4 cores, virtio-gpu, a mounted host Nix store, a switchable system, and the agent driver script.
 
 ## What the function does
 
-`mkAgentVm` takes the existing `nixosConfiguration` and re-evaluates it as a `runNixOSTest` node, preserving the host's `specialArgs` and full module list. It layers a `virtualisation { ... }` block on top and uses the bundled `agent-vm-driver.py` as the `testScript`. The driver opens a Unix socket at `$XDG_RUNTIME_DIR/<host>-agent-vm.sock` and accepts one Python line per request, replying with one JSON line per response.
+`mkAgentVm` takes the existing `nixosConfiguration` and re-evaluates it as a `runNixOSTest` node, preserving the host's `specialArgs` and full module list. It layers a `virtualisation { ... }` block on top and uses the bundled `agent-vm-driver.py` as the `testScript`. The driver opens a Unix socket inside the session-specific runtime directory. Each connection carries one complete Python program and receives one JSON response; the Python namespace persists between connections.
 
-The returned attribute is a standard flake `apps.<system>.<name>` value: `{ type = "app"; program = "${vm.driver}/bin/nixos-test-driver"; }`.
+The returned attribute is a standard flake app with a small lifecycle wrapper. It supports `start`, `apply`, `status`, `socket`, `stop`, and `run`. The wrapper uses `AGENT_VM_SESSION`, `CODEX_THREAD_ID`, or a supported agent-specific session variable to isolate the socket, QEMU state, log, PID, and GC root. `start` is idempotent within one session; `apply` builds the current VM toplevel and activates it in that session's VM with `switch-to-configuration test`.
 
 ## Verifying
 
 ```bash
-nix run .#<host>-agent-vm -L > /tmp/vm-log 2>&1 &
-while ! test -S "$XDG_RUNTIME_DIR/<host>-agent-vm.sock" 2>/dev/null; do sleep 1; done
-echo 'machine.wait_for_unit("default.target")' \
-  | socat -t 240 - UNIX-CONNECT:$XDG_RUNTIME_DIR/<host>-agent-vm.sock
+export AGENT_VM_SESSION=manual-check
+nix run .#<host>-agent-vm -- start
+socket="$(nix run .#<host>-agent-vm -- socket)"
+socat -t 240 - UNIX-CONNECT:"$socket" <<'PY'
+machine.wait_for_unit("default.target")
+PY
 ```
 
-If the launch dies fast, rerun in the foreground (`nix run .#<host>-agent-vm -L`) to see the build/boot error.
+`start` prints the session-specific socket and log paths. Use `nix run .#<host>-agent-vm -- run` for a foreground launch when debugging startup.
+
+After editing the NixOS configuration, prefer the fast in-place update:
+
+```bash
+nix run .#<host>-agent-vm -- apply
+```
+
+Restart instead when testing kernel, initrd, bootloader, filesystems, QEMU settings, or clean-boot behavior:
+
+```bash
+nix run .#<host>-agent-vm -- stop
+nix run .#<host>-agent-vm -- start
+```
+
+Always stop the VM before ending the agent or manual test session. This also removes the session's QEMU state, log, and GC root:
+
+```bash
+nix run .#<host>-agent-vm -- stop
+```
