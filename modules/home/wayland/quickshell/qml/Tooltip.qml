@@ -9,25 +9,17 @@ PopupWindow {
     property string text: ""
     property bool active: false
 
-    readonly property int horizontalPadding: 10
-    readonly property int verticalPadding: 6
-
-    anchor.item: target
+    anchor.item: root.target
     anchor.edges: Edges.Bottom
     anchor.gravity: Edges.Bottom
-    anchor.margins.top: 4
 
     color: "transparent"
-    implicitWidth: label.implicitWidth + root.horizontalPadding * 2
-    implicitHeight: label.implicitHeight + root.verticalPadding * 2
+    implicitWidth: label.implicitWidth + Config.tooltipPadding * 2 + Config.popupOutline * 2
+    implicitHeight: label.implicitHeight + Config.verticalPadding * 2 + Config.popupOutline * 2
     visible: root.active && root.text !== ""
 
-    Rectangle {
+    PopupSurface {
         anchors.fill: parent
-        color: Config.background
-        radius: 5
-        border.width: 1
-        border.color: Config.accent
 
         BarText {
             id: label
@@ -35,7 +27,7 @@ PopupWindow {
             anchors.centerIn: parent
             horizontalAlignment: Text.AlignHCenter
             text: root.text
-            color: Config.accentForeground
+            color: Config.popupText
         }
     }
 }

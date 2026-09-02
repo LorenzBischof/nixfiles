@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Io
 import Quickshell.Services.Pipewire
 
 BarModule {
@@ -13,21 +12,16 @@ BarModule {
     readonly property int volume: audio ? Math.round(audio.volume * 100) : 0
 
     visible: root.audio !== null
-    buttons: Qt.LeftButton
+    buttons: Qt.MiddleButton
 
-    text: {
-        if (root.muted)
-            return "󰝟";
-        if (root.volume === 0)
-            return "󰝞";
-        const icons = Config.volumeIcons;
-        return icons[Math.min(icons.length - 1, Math.floor(root.volume / 34))];
-    }
-
+    text: Config.volumeIcon(root.audio?.volume ?? 0, root.muted)
     textColor: root.muted ? Config.alert : Config.foreground
     tooltipText: root.muted ? "Muted" : `${root.volume}%`
 
-    onClicked: pavucontrol.running = true
+    onClicked: button => {
+        if (button === Qt.MiddleButton && root.audio)
+            root.audio.muted = !root.audio.muted;
+    }
 
     // Inverted, matching the natural scrolling configured for the pointers.
     onScrolled: delta => {
@@ -36,13 +30,11 @@ BarModule {
         root.audio.volume = Math.max(0, Math.min(1, root.audio.volume - (delta > 0 ? 0.05 : -0.05)));
     }
 
-    PwObjectTracker {
-        objects: root.sink ? [root.sink] : []
+    dropdown: VolumeMenu {
+        onCloseRequested: root.closeDropdown()
     }
 
-    Process {
-        id: pavucontrol
-
-        command: [Config.pavucontrol]
+    PwObjectTracker {
+        objects: root.sink ? [root.sink] : []
     }
 }

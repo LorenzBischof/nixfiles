@@ -50,7 +50,10 @@ Row {
             MouseArea {
                 anchors.fill: parent
 
-                onClicked: button.modelData.activate()
+                onClicked: {
+                    Dropdowns.close();
+                    button.modelData.activate();
+                }
                 onWheel: wheel => root.step(wheel.angleDelta.y > 0 ? -1 : 1)
             }
         }

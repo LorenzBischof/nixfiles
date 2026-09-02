@@ -68,6 +68,51 @@ let
     '';
   };
 
+  # quickshell probes for NetworkManager's bus name exactly once, when its
+  # Networking singleton is first touched, and never retries: qml.cpp deletes
+  # the backend outright unless `proxy->isValid()`. If the name is not there
+  # yet it logs "Could not find an available backend" and leaves the device
+  # list empty for the life of the process, so NetworkStatus is stuck on the
+  # red disconnected icon. Losing that race is easy during a `just switch`,
+  # which restarts NetworkManager and the user units without ordering between
+  # them. A user unit cannot order itself after a system unit, so wait for the
+  # bus name instead.
+  #
+  # This only covers quickshell starting *before* NetworkManager. NetworkManager
+  # restarting afterwards is a separate bug, fixed by the patch below.
+  waitForNetworkManager = pkgs.writeShellApplication {
+    name = "wait-for-networkmanager";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+    ];
+    text = ''
+      # Ask the bus daemon, not NetworkManager: this stays cheap and cannot be
+      # tripped up by NetworkManager's own dbus policy or by it still starting.
+      for _ in $(seq 300); do
+        if busctl --system call org.freedesktop.DBus /org/freedesktop/DBus \
+          org.freedesktop.DBus NameHasOwner s org.freedesktop.NetworkManager \
+          2>/dev/null | grep -q 'b true'; then
+          exit 0
+        fi
+        sleep 0.1
+      done
+      echo "NetworkManager did not appear on the system bus within 30s; the bar's network module will be dead" >&2
+    '';
+  };
+
+  # NetworkManager restarting under a running quickshell tears its devices down
+  # and nothing ever re-registers them, so the bar latches to the red
+  # disconnected icon until quickshell itself is restarted. Reproducible with a
+  # plain `systemctl restart NetworkManager`, which is exactly what `just
+  # switch` does. Upstream fixed it by watching the bus name, but the commit is
+  # in no release yet: neither 0.3.0 nor 0.3.1 (current nixpkgs-unstable)
+  # contains it. Drop this once a release does.
+  # https://git.outfoxxed.me/quickshell/quickshell/commit/0f9939ca4fac3a1db3653c51a3c23ca9812e2946
+  quickshell = pkgs.quickshell.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [ ./nm-service-watcher.patch ];
+  });
+
   # Everything the QML needs from Nix: the stylix theme, and absolute paths to
   # the helpers the bar shells out to.
   configQml = pkgs.writeText "Config.qml" ''
@@ -88,15 +133,78 @@ let
         readonly property int edgeMargin: 10
         readonly property int barHeight: Math.ceil(metrics.height) + root.verticalPadding * 2
 
+        // Panels hung under a bar module. Square, and bordered along the edge
+        // that meets the bar at the same 5px sway gives a window, so a module
+        // and its panel read as two tiled windows rather than a floating card.
+        // The other edges stay a hairline: a 5px ring reads as a slab at this
+        // size. Text sits a step brighter than in the bar, since it is read
+        // rather than glanced at.
+        readonly property int popupOutline: 1
+        readonly property int popupBorder: 5
+        readonly property int tooltipPadding: 10
+        readonly property int menuWidth: Math.ceil(metrics.averageCharacterWidth) * 26
+        readonly property int menuPadding: 12
+        readonly property int menuSpacing: 6
+        readonly property int menuRowHeight: Math.ceil(metrics.height) + 8
+        readonly property int menuIconWidth: Math.ceil(metrics.averageCharacterWidth) * 2
+        readonly property int menuValueWidth: Math.ceil(metrics.averageCharacterWidth) * 4
+        readonly property int menuGrooveHeight: 4
+        readonly property int menuHandleWidth: 8
+        readonly property int menuHandleHeight: 18
+
         readonly property color background: ${builtins.toJSON colors.base00}
+        readonly property color surface: ${builtins.toJSON colors.base01}
+        readonly property color overlay: ${builtins.toJSON colors.base02}
+        readonly property color subtle: ${builtins.toJSON colors.base03}
+        // sway's unfocused window border, carried by a panel's top edge except
+        // under the module it belongs to, which is marked in the accent.
+        readonly property color unfocused: ${builtins.toJSON colors.base03}
         readonly property color foreground: ${builtins.toJSON colors.base04}
         readonly property color accent: ${builtins.toJSON colors.base0D}
         readonly property color accentForeground: ${builtins.toJSON colors.base05}
         readonly property color alert: ${builtins.toJSON colors.base08}
         readonly property color ok: ${builtins.toJSON colors.base0B}
 
+        // Popup text, brighter than the bar so a panel stays readable at rest.
+        // One step up the ramp from the bar's own three tones, so even the dim
+        // role -- icons, headings, slider values -- clears the bar's foreground.
+        readonly property color popupText: ${builtins.toJSON colors.base06}
+        readonly property color popupTextDim: ${builtins.toJSON colors.base05}
+        readonly property color popupTextStrong: ${builtins.toJSON colors.base07}
+
+        // Signal strength, as an empty ring plus four filled steps. The locked
+        // ramp is the same glyph family with a padlock, so a secured network
+        // reads as secured without spending a second column on it.
+        readonly property var wifiIcons: ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"]
+        readonly property var wifiLockedIcons: ["󰤬", "󰤡", "󰤤", "󰤧", "󰤪"]
+
         readonly property var batteryIcons: ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
         readonly property var volumeIcons: ["󰕿", "󰖀", "󰕾"]
+
+        // Shared by the bar module and the volume dropdown so a level always
+        // draws the same icon in both places.
+        function volumeIcon(volume: real, muted: bool): string {
+            if (muted)
+                return "󰝟";
+            if (volume <= 0)
+                return "󰝞";
+            const icons = root.volumeIcons;
+            return icons[Math.min(icons.length - 1, Math.floor(volume * icons.length))];
+        }
+
+        // Signal strength as a 0-4 bar count. The wifi menu orders rows on this
+        // rather than the raw strength, so a network only changes place when its
+        // icon changes too -- otherwise rows shuffle under the pointer as the
+        // strength jitters between scans.
+        function wifiBars(strength: real): int {
+            return Math.max(0, Math.min(4, Math.ceil(strength * 4)));
+        }
+
+        // Shared by the bar module and the wifi dropdown so a level always draws
+        // the same icon in both places.
+        function wifiIcon(strength: real, locked: bool): string {
+            return (locked ? root.wifiLockedIcons : root.wifiIcons)[root.wifiBars(strength)];
+        }
 
         readonly property string voxtype: ${builtins.toJSON (lib.getExe pkgs.voxtype-vulkan)}
         readonly property string pavucontrol: ${builtins.toJSON (lib.getExe pkgs.pavucontrol)}
@@ -119,22 +227,29 @@ let
   '';
 in
 {
-  home.packages = [ pkgs.quickshell ];
-
-  xdg.configFile."quickshell/bar".source = shellConfig;
+  programs.quickshell = {
+    enable = true;
+    package = quickshell;
+    configs.bar = shellConfig;
+    activeConfig = "bar";
+    systemd.enable = true;
+  };
 
   systemd.user.services.quickshell = {
     Unit = {
-      Description = "Quickshell status bar";
-      Documentation = "https://quickshell.org";
+      # The generated unit runs the config by name, so a rebuild that only
+      # touches QML leaves it byte-identical and nothing restarts the bar: it
+      # keeps serving the shell it loaded at startup. quickshell's own live
+      # reload does not cover this either, because it watches the config
+      # through a symlink to an immutable store path.
+      X-Restart-Triggers = [ shellConfig ];
+
+      # Stop the bar with the session rather than leaving it behind, and do not
+      # start it at all when there is no session to draw on.
       PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
       Requisite = [ "graphical-session.target" ];
     };
-    Service = {
-      ExecStart = "${lib.getExe pkgs.quickshell} --config bar";
-      Restart = "on-failure";
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
+
+    Service.ExecStartPre = lib.getExe waitForNetworkManager;
   };
 }
