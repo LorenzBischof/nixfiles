@@ -108,6 +108,9 @@ let
           fi
         }
 
+        # nix-ld loader; NIX_LD/NIX_LD_LIBRARY_PATH are session vars and pass through already.
+        ro_bind_existing "/lib64"
+
         ro_bind_existing "$HOME/.nix-profile"
         ro_bind_existing "$HOME/.local/state/nix/profiles"
 
