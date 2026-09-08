@@ -1,6 +1,5 @@
 {
   config,
-  pkgs,
   lib,
   secrets,
   ...
@@ -27,14 +26,12 @@ in
   # has this address bound (tailscale/tailscale#11504), which makes nginx's
   # `-t` bind-test fail during `nixos-rebuild switch`. Wait for the address
   # before nginx runs its config test.
+  #
+  # `tailscale wait` needs AF_NETLINK to verify that the address is present on
+  # the interface, which nginx.service does not otherwise allow.
+  systemd.services.nginx.serviceConfig.RestrictAddressFamilies = [ "AF_NETLINK" ];
+
   services.nginx.preStart = ''
-    for i in $(seq 1 30); do
-      if ${pkgs.iproute2}/bin/ip -4 addr show dev tailscale0 2>/dev/null | grep -q "inet ${tailscaleIp}/"; then
-        exit 0
-      fi
-      sleep 1
-    done
-    echo "timed out waiting for tailscale0 to have ${tailscaleIp}" >&2
-    exit 1
+    ${lib.getExe config.services.tailscale.package} wait --timeout=30s
   '';
 }
