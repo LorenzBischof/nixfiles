@@ -113,6 +113,34 @@ let
     patches = (old.patches or [ ]) ++ [ ./nm-service-watcher.patch ];
   });
 
+  # sway's only handle on the Fn key overlay. A keybinding can only exec a
+  # process, so the Right-Ctrl binding goes through quickshell's IPC socket to
+  # reach the already-running shell. The config name has to match the one the
+  # unit launches, hence -c bar.
+  fnOverlay = pkgs.writeShellApplication {
+    name = "fn-overlay";
+    runtimeInputs = [ quickshell ];
+    text = ''
+      # The IPC functions are open/close rather than show/hide: `qs ipc call`
+      # takes the function name as a positional, and a positional matching a
+      # sibling subcommand -- show, call, wait, listen, prop -- is parsed as
+      # that subcommand instead, so `ipc call fnOverlay show` prints the
+      # target's function list and exits 0 without calling anything. The
+      # readable verbs stay on this side of the translation.
+      case "''${1-}" in
+      show) fn=open ;;
+      hide) fn=close ;;
+      toggle) fn=toggle ;;
+      *)
+        echo "usage: fn-overlay show|hide|toggle" >&2
+        exit 2
+        ;;
+      esac
+
+      exec qs -c bar ipc call fnOverlay "$fn"
+    '';
+  };
+
   # Everything the QML needs from Nix: the stylix theme, and absolute paths to
   # the helpers the bar shells out to.
   configQml = pkgs.writeText "Config.qml" ''
@@ -151,6 +179,40 @@ let
         readonly property int menuGrooveHeight: 4
         readonly property int menuHandleWidth: 8
         readonly property int menuHandleHeight: 18
+
+        // The Fn legend is a 1:1 picture of the physical function row: each
+        // glyph sits directly above the key it describes. Geometry is therefore
+        // in millimetres, and FnOverlay.qml scales it by the panel's own width
+        // -- which keeps a key where it is whether kanshi has the display at
+        // scale 2 (docked) or sway's default 1 (undocked). The built-in display
+        // is 13.5" at 3:2, so 285.3 mm across.
+        //
+        // Framework publishes no key dimensions, and no photo of theirs is
+        // square-on enough to measure off, so the four below are estimates.
+        // Measure the real keyboard and correct them:
+        //
+        //   fnRowWidthMm   left edge of Esc to right edge of Delete
+        //   fnKeySpanMm    left edge of F1 to right edge of F12
+        //   fnKeyWidthMm   one F key's cap, across
+        //   fnKeyHeightMm  one F key's cap, top to bottom -- they are flat
+        //                  rather than square, and only set the glyph size
+        //
+        // Everything else follows from those: the F row pitch is
+        // (span - width) / 11, and Esc and Delete, which are wider than an F
+        // key, centre in whatever is left at each end.
+        readonly property real builtinPanelWidthMm: 285.3
+        readonly property real fnRowWidthMm: 276.0
+        readonly property real fnKeySpanMm: 227.2
+        readonly property real fnKeyWidthMm: 15.3
+        readonly property real fnKeyHeightMm: 8.0
+
+        // Keycap corner, and the glyphs sitting on them -- also millimetres.
+        // Both glyph sizes are set against the 8 mm cap height rather than the
+        // width, since that is what they have to fit inside.
+        readonly property real fnKeyRadiusMm: 1.0
+        readonly property real fnIconMm: 5.5
+        readonly property real fnCapTextMm: 3.2
+        readonly property real fnBottomMarginMm: 4.0
 
         readonly property color background: ${builtins.toJSON colors.base00}
         readonly property color surface: ${builtins.toJSON colors.base01}
@@ -252,4 +314,6 @@ in
 
     Service.ExecStartPre = lib.getExe waitForNetworkManager;
   };
+
+  home.packages = [ fnOverlay ];
 }

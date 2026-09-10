@@ -170,6 +170,14 @@ in
           "${mod}+x" = "exec warpd --hint";
           "ssharp" = "exec voxtype record start";
           "--release ssharp" = "exec voxtype record stop";
+
+          # Tap Right-Ctrl to put the F-row legend up for a few seconds on a
+          # blank keyboard; tap again to dismiss it early. Fn would be the
+          # obvious key, but Framework's EC swallows it and only ever forwards
+          # the already-translated F-row scancode, so no evdev device on the
+          # machine advertises KEY_FN and nothing in userspace can see it. See
+          # quickshell/qml/FnOverlayState.qml.
+          "--no-repeat Control_R" = "exec fn-overlay toggle";
           "XF86AudioRaiseVolume" =
             "exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+ && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
           "XF86AudioLowerVolume" =
