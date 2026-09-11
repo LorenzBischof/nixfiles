@@ -1,5 +1,14 @@
 blueprint:
   name: NFC Media
+  description: >-
+    Play a media file while an NFC tag sits on the tagreader.
+
+    Driven by the reader's tag-scanned/tag-removed events instead of the
+    per-tag binary_sensor, whose state edges get swallowed when one tag is
+    swapped for another between two polls.
+
+    Placing a tag whose episode was put down less than an hour ago picks it up
+    where it stopped; anything older starts from the beginning again.
   domain: automation
   input:
     file:
@@ -7,28 +16,42 @@ blueprint:
       description: ''
       selector:
         media: {}
-    tag:
-      name: NFC Tag
+    tag_id:
+      name: NFC Tag ID
+      description: >-
+        UID of the tag as reported by the reader, e.g. 04-EF-BF-09-10-02-89.
       selector:
-        entity:
-          filter:
-            - domain: binary_sensor
+        text: {}
 
 mode: restart
 triggers:
-- entity_id:
-    - !input tag
-  to: 'off'
-  id: tag-off
-  trigger: state
-- entity_id:
-    - !input tag
-  to: 'on'
+- trigger: tag
+  tag_id: !input tag_id
   id: tag-on
-  trigger: state
+# The reader reports removal without naming the tag, but it only ever holds
+# one: an empty reader means whatever was playing should pause.
+- trigger: event
+  event_type: esphome.tag_removed
+  id: tag-off
 conditions: []
 variables:
   file: !input file
+  player: "{{ file.entity_id }}"
+  # The player reports the resolved (signed) URL rather than the media-source
+  # id, so the file name is all the two have in common.
+  wanted: "{{ (file.media_content_id | default('', true)).split('/')[-1] }}"
+  loaded: "{{ (state_attr(player, 'media_content_id') | default('', true)).split('?')[0].split('/')[-1] }}"
+  # Resume is decided by the position, not by the state name: Home Assistant
+  # reports a paused Sonos as `idle` whenever the track carries no ID3 title
+  # (sonos/media_player.py, `media.title is None`), and a finished episode
+  # sits at position 0 or at the very end, where starting over is right.
+  position: "{{ state_attr(player, 'media_position') | float(0) }}"
+  duration: "{{ state_attr(player, 'media_duration') | float(0) }}"
+  # Sonos leaves `media_position_updated_at` at the moment playback stopped (a
+  # standing position never "jumps", so polls don't touch it), which makes it
+  # a good stand-in for how long ago the episode was put down. Missing
+  # attribute reads as long ago, i.e. start over.
+  stopped_for: "{{ as_timestamp(now()) - as_timestamp(state_attr(player, 'media_position_updated_at'), 0) }}"
 actions:
 - choose:
   - conditions:
@@ -36,15 +59,39 @@ actions:
       id:
       - tag-on
     sequence:
+    - choose:
+      # Same episode, stopped part-way, and put down within the last hour:
+      # pick it up there. Older than that and a fresh start is less confusing.
+      - conditions:
+        - condition: template
+          value_template: >-
+            {{ wanted != '' and loaded == wanted
+               and states(player) in ['paused', 'idle']
+               and position > 1 and (duration == 0 or position < duration - 5)
+               and stopped_for < 3600 }}
+        sequence:
+        - action: media_player.media_play
+          target:
+            entity_id: "{{ player }}"
+      default:
       - action: media_player.play_media
         target:
-          entity_id: "{{ file.entity_id }}"
+          entity_id: "{{ player }}"
         data: !input file
   - conditions:
     - condition: trigger
       id:
       - tag-off
     sequence:
-      - target:
-          entity_id: "{{ file.entity_id }}"
-        action: media_player.media_pause
+    # Every tag's automation sees this nameless event, so each one checks
+    # whether the episode playing right now is its own; only that one pauses.
+    # Read live here rather than using `loaded`, which was rendered when the
+    # automation triggered: by the time a swapped-in tag has started playing,
+    # the previous tag's pause must see the new episode and stand down.
+    - condition: template
+      value_template: >-
+        {{ is_state(player, 'playing')
+           and (state_attr(player, 'media_content_id') | default('', true)).split('?')[0].split('/')[-1] == wanted }}
+    - action: media_player.media_pause
+      target:
+        entity_id: "{{ player }}"
