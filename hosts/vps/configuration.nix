@@ -11,6 +11,7 @@
     ./disk-config.nix
     ./attic.nix
     ./n8n.nix
+    ./cooklang.nix
     ../../modules/nixos
   ];
   nixpkgs.config.allowUnfree = true;

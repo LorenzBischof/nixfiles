@@ -1,0 +1,26 @@
+Take a recipe path that already names its extension as given.
+
+`PUT /api/recipes/*path` resolves the path by trying it as written, then with
+`.cook` appended, then `.menu`, and falls back to appending `.cook` for a file
+that does not exist yet. That last step ignores the extension the caller already
+wrote: creating `Week 39.menu` produces `Week 39.menu.cook`, and the response
+still reports `"status": "success"`. A new meal plan is therefore impossible to
+create over the API, and a new recipe written as `Risotto.cook` lands in
+`Risotto.cook.cook`.
+
+`recipe_raw` and `recipe_delete` share the same resolution but are left alone:
+there, falling through to a 404 for a file that does not exist is right.
+
+--- a/src/server/handlers/recipes.rs
++++ b/src/server/handlers/recipes.rs
+@@ -188,7 +188,9 @@
+     let recipe_path = state.base_path.join(&path);
+
+     // Determine actual file path (with extension)
+-    let file_path = if recipe_path.exists() {
++    let file_path = if recipe_path.exists()
++        || matches!(recipe_path.extension(), Some("cook" | "menu"))
++    {
+         recipe_path
+     } else {
+         let cook_path = Utf8PathBuf::from(format!("{}.cook", recipe_path));

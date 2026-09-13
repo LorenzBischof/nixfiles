@@ -329,9 +329,13 @@
         rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
       };
       formatter.${system} = treefmtEval.config.build.wrapper;
-      # Exposed for CI: the auto-fix job hands this store path to
-      # claude-code-action instead of letting it run its own install.
-      packages.${system}.claude-code = inputs.llm-agents.packages.${system}.claude-code;
+      packages.${system} = {
+        # Exposed for CI: the auto-fix job hands this store path to
+        # claude-code-action instead of letting it run its own install.
+        claude-code = inputs.llm-agents.packages.${system}.claude-code;
+        cooklang-mcp = pkgs.callPackage ./packages/cooklang-mcp { };
+        cook-cli-server = pkgs.callPackage ./packages/cook-cli-server.nix { };
+      };
       apps.${system}.framework-agent-vm = nixos-agent-test-vm.mkAgentVm {
         inherit pkgs;
         host = "framework";

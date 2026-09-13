@@ -1,0 +1,1012 @@
+/*
+ * A neutral, flat theme for the cookcli web UI.
+ *
+ * This file replaces upstream's `static/css/custom-styles.css`, which the
+ * templates already load *after* `output.css` (see `templates/base.html`).
+ * Nothing is lost by replacing it: every rule it carried is also emitted into
+ * `output.css` from `static/css/input.css`'s `@layer components`.
+ *
+ * Two facts make a pure-CSS reskin possible:
+ *
+ *  1. Tailwind v4 puts everything it generates inside cascade layers
+ *     (`theme, base, components, properties, utilities`) and compiles colour
+ *     utilities down to `var(--color-*)`. Redefining those variables in an
+ *     unlayered `:root` retints every utility in the templates at once, with
+ *     no template patching.
+ *  2. Unlayered CSS outranks all layered CSS regardless of specificity, so the
+ *     rules below beat the utility classes without a specificity war.
+ *
+ * `!important` is used deliberately and throughout. `templates/base.html`
+ * carries ~480 lines of inline `<style>` dark-mode patches (`.dark .bg-white`,
+ * `.dark .bg-gradient-to-r.from-orange-50.to-yellow-50`, ...) that are both
+ * unlayered and later in source order. Rather than duplicate every rule at a
+ * higher specificity, the theme is written once against its own tokens and
+ * forced; the only thing that differs between light and dark is the token
+ * block.
+ */
+
+/* ------------------------------------------------------------------ *
+ * 1. Tokens
+ * ------------------------------------------------------------------ */
+
+:root {
+    --ck-bg: #fafafa;
+    --ck-surface: #ffffff;
+    --ck-surface-2: #f4f4f5;
+    --ck-surface-3: #e9e9ec;
+    --ck-border: #e4e4e7;
+    --ck-border-strong: #d4d4d8;
+    --ck-text: #18181b;
+    --ck-text-muted: #52525b;
+    --ck-text-subtle: #a1a1aa;
+    --ck-accent: #18181b;
+    --ck-accent-fg: #ffffff;
+    --ck-link: #2563eb;
+    --ck-danger: #dc2626;
+    --ck-danger-bg: #fef2f2;
+    --ck-ok: #16a34a;
+
+    --ck-radius: 8px;
+    --ck-radius-sm: 6px;
+
+    /* The three hues that survive the neutral collapse below. Inside a step,
+       hue is what separates "a thing you measure" from "a thing you reach for"
+       from "a thing you wait on", at a glance, from across the kitchen — that
+       is worth colour in a way that decorative gradients are not. */
+    --ck-ingredient-bg: #fffdf5;
+    --ck-ingredient-fg: #6b5e45;
+    --ck-ingredient-border: #eee8d7;
+
+    --ck-cookware-bg: #f7fcf9;
+    --ck-cookware-fg: #52645a;
+    --ck-cookware-border: #dfe9e2;
+
+    --ck-timer-bg: #f7faff;
+    --ck-timer-fg: #526173;
+    --ck-timer-border: #dfe6ed;
+
+    /* Remap Tailwind's gray ramp from its blue-tinted default to a true
+       neutral. Every `text-gray-*` / `border-gray-*` / `bg-gray-*` in the
+       templates follows. */
+    --color-gray-50: #fafafa;
+    --color-gray-100: #f4f4f5;
+    --color-gray-200: #e4e4e7;
+    --color-gray-300: #d4d4d8;
+    --color-gray-400: #a1a1aa;
+    --color-gray-500: #71717a;
+    --color-gray-600: #52525b;
+    --color-gray-700: #3f3f46;
+    --color-gray-800: #27272a;
+    --color-gray-900: #18181b;
+
+    /* Collapse the decorative hues onto that same neutral ramp. These are
+       used purely as decoration in the templates; red and green are left
+       alone below because they carry meaning (errors, pantry stock). */
+    --color-orange-50: #fafafa;   --color-orange-100: #f4f4f5;
+    --color-orange-200: #e4e4e7;  --color-orange-300: #d4d4d8;
+    --color-orange-400: #a1a1aa;  --color-orange-500: #71717a;
+    --color-orange-600: #3f3f46;  --color-orange-700: #3f3f46;
+    --color-orange-800: #27272a;  --color-orange-950: #18181b;
+
+    --color-amber-100: #f4f4f5;   --color-amber-400: #a1a1aa;
+
+    --color-yellow-50: #fafafa;   --color-yellow-100: #f4f4f5;
+    --color-yellow-200: #e4e4e7;  --color-yellow-300: #d4d4d8;
+    --color-yellow-400: #a1a1aa;  --color-yellow-500: #71717a;
+    --color-yellow-600: #3f3f46;
+
+    --color-purple-50: #fafafa;   --color-purple-100: #f4f4f5;
+    --color-purple-200: #e4e4e7;  --color-purple-300: #d4d4d8;
+    --color-purple-400: #a1a1aa;  --color-purple-500: #71717a;
+    --color-purple-600: #3f3f46;  --color-purple-700: #3f3f46;
+    --color-purple-800: #27272a;  --color-purple-900: #18181b;
+
+    --color-pink-50: #fafafa;     --color-pink-100: #f4f4f5;
+    --color-pink-300: #d4d4d8;    --color-pink-400: #a1a1aa;
+    --color-pink-500: #71717a;    --color-pink-600: #3f3f46;
+
+    --color-indigo-200: #e4e4e7;  --color-indigo-300: #d4d4d8;
+    --color-indigo-600: #3f3f46;
+
+    --color-cyan-500: #71717a;    --color-cyan-600: #3f3f46;
+
+    --color-emerald-500: #71717a; --color-emerald-600: #3f3f46;
+
+    --color-lime-300: #d4d4d8;    --color-lime-600: #3f3f46;
+
+    /* Blue keeps a role: it is the link colour. */
+    --color-blue-50: #eff6ff;   --color-blue-100: #dbeafe;
+    --color-blue-200: #e4e4e7;  --color-blue-300: #d4d4d8;
+    --color-blue-400: #a1a1aa;  --color-blue-500: #2563eb;
+    --color-blue-600: #2563eb;  --color-blue-700: #1d4ed8;
+    --color-blue-800: #1e40af;
+}
+
+html.dark {
+    --ck-bg: #09090b;
+    --ck-surface: #131316;
+    --ck-surface-2: #1c1c20;
+    --ck-surface-3: #26262b;
+    --ck-border: #27272a;
+    --ck-border-strong: #3f3f46;
+    --ck-text: #f4f4f5;
+    --ck-text-muted: #a1a1aa;
+    --ck-text-subtle: #71717a;
+    --ck-accent: #f4f4f5;
+    --ck-accent-fg: #09090b;
+    --ck-link: #8ab4f8;
+    --ck-danger: #f87171;
+    --ck-danger-bg: #2a1214;
+    --ck-ok: #4ade80;
+
+    --ck-ingredient-bg: #1d1b16;
+    --ck-ingredient-fg: #d6d0c4;
+    --ck-ingredient-border: #343027;
+
+    --ck-cookware-bg: #171d19;
+    --ck-cookware-fg: #c8d5cd;
+    --ck-cookware-border: #29352d;
+
+    --ck-timer-bg: #171b20;
+    --ck-timer-fg: #c7d0da;
+    --ck-timer-border: #29313b;
+
+    --color-gray-50: #18181b;
+    --color-gray-100: #1c1c20;
+    --color-gray-200: #27272a;
+    --color-gray-300: #3f3f46;
+    --color-gray-400: #71717a;
+    --color-gray-500: #a1a1aa;
+    --color-gray-600: #a1a1aa;
+    --color-gray-700: #d4d4d8;
+    --color-gray-800: #e4e4e7;
+    --color-gray-900: #f4f4f5;
+}
+
+/* ------------------------------------------------------------------ *
+ * 2. Page ground
+ * ------------------------------------------------------------------ */
+
+/* Every size in the templates is a Tailwind `rem` utility, so the root size is
+   the one knob that scales the whole UI together. 17px is the smallest step
+   that makes a step comfortable to read at arm's length — a recipe is read
+   standing up, from further away than a normal page. */
+html {
+    font-size: 106.25%;
+}
+
+body {
+    background-color: var(--ck-bg) !important;
+    color: var(--ck-text) !important;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+}
+
+/* `!important` here and below is not decoration: base.html's inline block
+   declares `.viewport` too, at equal specificity and later in source order. */
+.viewport {
+    max-width: 60rem !important;
+    margin: 1.5rem auto 4rem !important;
+}
+
+/* The default 1rem viewport gutter plus a 1.5rem panel pad plus per-row
+   padding left very little room for text on a phone. The panels are dissolved
+   in section 7; this trims the outer gutter to match. */
+@media (max-width: 767px) {
+    .viewport {
+        padding: 0 0.875rem !important;
+        margin-top: 0.75rem !important;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * 3. Flat: no gradients, no elevation, no hover lift
+ * ------------------------------------------------------------------ */
+
+[class*="bg-gradient-to-"] {
+    background-image: none !important;
+}
+
+/* In dark mode base.html also draws a 1px box around each tinted row
+   (`.dark .bg-gradient-to-r.from-gray-50.to-orange-50 { border: 1px solid }`
+   and friends). With the tint gone the box encloses nothing, so every
+   ingredient and step would render as an outlined rectangle. Later sections
+   re-add the borders that are actually wanted. */
+html.dark [class*="bg-gradient-to-"] {
+    border-width: 0 !important;
+}
+
+.shadow-xs, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl,
+.hover\:shadow-md:hover, .hover\:shadow-lg:hover, .hover\:shadow-xl:hover {
+    box-shadow: none !important;
+}
+
+/* Tailwind v4 compiles `scale-105` to the `scale` property rather than to a
+   `transform`, so dropping `transform` alone leaves the card zoom in place. */
+.hover\:-translate-y-0\.5:hover,
+.hover\:scale-105:hover,
+.hover\:scale-110:hover {
+    transform: none !important;
+    scale: none !important;
+}
+
+/* Gradient-filled headings (`bg-clip-text text-transparent`) become solid. */
+.bg-clip-text.text-transparent {
+    -webkit-background-clip: border-box !important;
+    background-clip: border-box !important;
+    -webkit-text-fill-color: var(--ck-text) !important;
+    color: var(--ck-text) !important;
+}
+
+h1 {
+    letter-spacing: -0.02em;
+}
+
+/* ------------------------------------------------------------------ *
+ * 4. Navigation bar
+ * ------------------------------------------------------------------ */
+
+nav.bg-white {
+    background-color: var(--ck-surface) !important;
+    border: 1px solid var(--ck-border);
+    border-radius: var(--ck-radius) !important;
+    margin-bottom: 2rem !important;
+}
+
+@media (max-width: 767px) {
+    /* Full-bleed header strip on a phone rather than a floating rounded box. */
+    nav.bg-white {
+        margin: -0.75rem -0.875rem 1.5rem !important;
+        border-width: 0 0 1px 0;
+        border-radius: 0 !important;
+    }
+
+    /* Upstream gives the action cluster `w-full`, so on a phone it wraps onto a
+       second row of its own and doubles the height of the bar. It fits beside
+       the search field. */
+    nav .order-3 {
+        width: auto !important;
+    }
+}
+
+#search-input {
+    background-color: var(--ck-surface-2) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    color: var(--ck-text) !important;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
+#search-input::placeholder {
+    color: var(--ck-text-subtle) !important;
+}
+
+#search-input:focus {
+    background-color: var(--ck-surface) !important;
+    border-color: var(--ck-border-strong) !important;
+    box-shadow: none !important;
+    outline: 2px solid var(--ck-text-subtle);
+    outline-offset: -1px;
+}
+
+#search-container svg {
+    color: var(--ck-text-subtle) !important;
+}
+
+#search-results {
+    background-color: var(--ck-surface) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius) !important;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.08) !important;
+}
+
+#search-results a:hover,
+#search-results a.search-selected {
+    background-color: var(--ck-surface-2) !important;
+}
+
+#more-dropdown {
+    background-color: var(--ck-surface) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius) !important;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.08) !important;
+}
+
+.nav-pill {
+    border-radius: var(--ck-radius-sm) !important;
+    padding: 0.375rem 0.75rem !important;
+    font-weight: 500 !important;
+    color: var(--ck-text-muted) !important;
+    background: none !important;
+    transition: background-color 0.12s ease, color 0.12s ease !important;
+}
+
+.nav-pill:hover {
+    background-color: var(--ck-surface-2) !important;
+    color: var(--ck-text) !important;
+}
+
+.nav-pill.active {
+    background-color: var(--ck-surface-3) !important;
+    color: var(--ck-text) !important;
+    font-weight: 600 !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 5. Buttons
+ * ------------------------------------------------------------------ */
+
+a[class*="bg-gradient-to-r"][class*="text-white"],
+button[class*="bg-gradient-to-r"][class*="text-white"],
+.btn-primary {
+    background-color: var(--ck-surface) !important;
+    color: var(--ck-text) !important;
+    border: 1px solid var(--ck-border-strong) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    font-weight: 500 !important;
+}
+
+a[class*="bg-gradient-to-r"][class*="text-white"]:hover,
+button[class*="bg-gradient-to-r"][class*="text-white"]:hover,
+.btn-primary:hover {
+    background-color: var(--ck-surface-2) !important;
+}
+
+/* One filled action per page carries the accent: "New recipe". */
+a.from-orange-500.to-red-500 {
+    background-color: var(--ck-accent) !important;
+    color: var(--ck-accent-fg) !important;
+    border-color: var(--ck-accent) !important;
+}
+
+a.from-orange-500.to-red-500:hover {
+    opacity: 0.88;
+    background-color: var(--ck-accent) !important;
+}
+
+/* Icon-only chrome buttons in the nav. */
+.bg-gray-200 {
+    background-color: var(--ck-surface-2) !important;
+    border-radius: var(--ck-radius-sm) !important;
+}
+
+.hover\:bg-gray-300:hover {
+    background-color: var(--ck-surface-3) !important;
+}
+
+/* The recipe-reference and pantry checkboxes ship Tailwind's blue; here blue
+   is the link colour and nothing else. */
+input[type="checkbox"] {
+    accent-color: var(--ck-text-muted);
+}
+
+input[type="number"],
+select {
+    background-color: var(--ck-surface) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    color: var(--ck-text) !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 6. Recipe index cards
+ * ------------------------------------------------------------------ */
+
+#recipes-grid > a {
+    background-color: var(--ck-surface) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius) !important;
+    transition: border-color 0.12s ease, background-color 0.12s ease !important;
+}
+
+#recipes-grid > a:hover {
+    border-color: var(--ck-border-strong) !important;
+    background-color: var(--ck-surface-2) !important;
+}
+
+/* `Meal Plan.menu` is the one persistent, undated current plan. CookCLI only
+   gives its special homepage banner to a menu containing today's date, so pin
+   the ordinary card instead. CookCLI omits the file extension from the link;
+   match both the literal and URL-encoded forms of that rendered path. */
+#recipes-grid > a:is(
+    [href$="/Meal Plan"],
+    [href$="/Meal%20Plan"]
+) {
+    order: -1;
+    grid-column: 1 / -1;
+    background-color: var(--ck-surface-2) !important;
+    border-color: var(--ck-border-strong) !important;
+}
+
+#recipes-grid > a:is(
+    [href$="/Meal Plan"],
+    [href$="/Meal%20Plan"]
+) h3::before {
+    content: "Current meal plan";
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--ck-text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+/* The three-colour bar across the top of each card. */
+.recipe-card::before {
+    display: none !important;
+}
+
+#recipes-grid > a > div {
+    padding: 1rem 1.125rem !important;
+}
+
+/* The big emoji medallion. */
+#recipes-grid .rounded-full.w-16,
+#recipes-grid .w-16.h-16 {
+    width: 2rem !important;
+    height: 2rem !important;
+    background-color: transparent !important;
+    margin-bottom: 0.5rem !important;
+    justify-content: flex-start !important;
+}
+
+#recipes-grid .w-16.h-16 span {
+    font-size: 1.25rem !important;
+}
+
+#recipes-grid h3 {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em;
+}
+
+/* ------------------------------------------------------------------ *
+ * 7. Recipe page - dissolve the nested panels
+ *
+ * `templates/recipe.html` wraps the ingredients column and the steps column in
+ * `bg-white rounded-2xl shadow-lg p-6`, and then wraps every ingredient row and
+ * every step in a second tinted, rounded, padded box. On a phone that is three
+ * levels of horizontal chrome eating the text column. Both levels are removed
+ * here: the columns become plain page content under a header, and the rows
+ * become a hairline-separated list that runs the full content width.
+ *
+ * `.grid.md\:grid-cols-3` is unique to the recipe page, so this is scoped.
+ * ------------------------------------------------------------------ */
+
+.grid.md\:grid-cols-3 {
+    gap: 2.75rem !important;
+}
+
+/* Three equal thirds leave the ingredient column too narrow once the amount
+   has a column of its own — names like "San Marzano tomato sauce" then wrap on
+   every row. The children are `md:col-span-1` and `md:col-span-2`, so the
+   split has to stay three tracks; widening the first one moves the boundary
+   from 1:2 to roughly 2:3. Scoped to the same breakpoint the template's own
+   `md:` prefix uses, or this would break the stacked phone layout. */
+@media (min-width: 768px) {
+    .grid.md\:grid-cols-3 {
+        grid-template-columns: 1.2fr 0.9fr 0.9fr !important;
+    }
+}
+
+/* `html main` outranks section 10's catch-all `.bg-white` surface rule, which
+   is otherwise both more specific and later in the file. */
+html main .grid.md\:grid-cols-3 > div > .bg-white {
+    background-color: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+}
+
+/* Section headers, in place of the panel chrome. */
+.grid.md\:grid-cols-3 h2 {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ck-text-subtle) !important;
+    border-bottom: 1px solid var(--ck-border);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.875rem !important;
+}
+
+/* The ingredient and cookware emoji are bare text nodes rather than separate
+   elements. Both are the first typographic character of their respective h2,
+   so collapse only that character and leave inline ingredient/cookware badges
+   elsewhere on the page untouched. */
+.grid.md\:grid-cols-3 h2::first-letter {
+    font-size: 0;
+}
+
+.grid.md\:grid-cols-3 h3 {
+    font-size: 0.9375rem !important;
+    font-weight: 600 !important;
+    color: var(--ck-text) !important;
+    border: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 1.5rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Ingredient and cookware rows: a hairline list, full width, no inner box. */
+.grid.md\:grid-cols-3 ul > li {
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    padding: 0.5rem 0 !important;
+    border-bottom: 1px solid var(--ck-border);
+}
+
+.grid.md\:grid-cols-3 ul > li:last-child {
+    border-bottom: 0;
+}
+
+.grid.md\:grid-cols-3 ul {
+    margin-bottom: 0 !important;
+}
+
+.grid.md\:grid-cols-3 ul > li + li {
+    margin-top: 0 !important;
+}
+
+/* Amount first: "400 ml coconut milk", the order you say it in and the order
+   you work in. The template emits the name (`div.flex-1`) before the amount
+   (`span:last-child`) inside a `justify-between` row, so `order` swaps the two
+   without touching the markup. The cookware list below is a plain `li > span`
+   and has to keep its natural flow, hence the `.justify-between` scope. */
+.grid.md\:grid-cols-3 ul > li.justify-between {
+    justify-content: flex-start !important;
+    align-items: baseline !important;
+    gap: 0.875rem;
+}
+
+.grid.md\:grid-cols-3 ul > li.justify-between > span:last-child {
+    order: -1;
+    flex: 0 0 auto;
+    min-width: 5rem;
+    text-align: right;
+    margin-left: 0 !important;
+    color: var(--ck-ingredient-fg) !important;
+    font-weight: 600 !important;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The name and its preparation note are two flex children of a shrinkable
+   box, so in a narrow column both get squeezed and the name breaks mid-word
+   beside a half-empty note. Letting them wrap as a pair keeps the name whole
+   and drops the note onto its own line instead. */
+.grid.md\:grid-cols-3 ul > li.justify-between > div {
+    flex-wrap: wrap !important;
+    align-items: baseline !important;
+    column-gap: 0.25rem;
+}
+
+/* Step rows. With the tinted boxes gone, whitespace is the only thing left to
+   separate one step from the next, so it has to be generous. */
+.grid.md\:grid-cols-3 ol > li {
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin-bottom: 2.25rem !important;
+}
+
+.grid.md\:grid-cols-3 ol > li:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* Notes keep a rule to set them off, instead of a tinted card. */
+.grid.md\:grid-cols-3 ol > li.border-l-4 {
+    border-left: 2px solid var(--ck-border-strong) !important;
+    padding: 0.125rem 0 0.125rem 0.875rem !important;
+}
+
+.step-number {
+    width: 1.625rem !important;
+    height: 1.625rem !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    background: var(--ck-surface-2) !important;
+    color: var(--ck-text-muted) !important;
+    border: 1px solid var(--ck-border);
+}
+
+.grid.md\:grid-cols-3 ol .leading-8 {
+    color: var(--ck-text) !important;
+    line-height: 1.75 !important;
+}
+
+/* Per-step ingredient recap. */
+.grid.md\:grid-cols-3 ol .border-l-2 {
+    border-left-color: var(--ck-border) !important;
+    color: var(--ck-text-subtle) !important;
+}
+
+/* Recipe description. */
+.bg-gradient-to-r.from-orange-50.to-yellow-50:not(li) {
+    background-color: transparent !important;
+    border: 0 !important;
+    border-left: 2px solid var(--ck-border-strong) !important;
+    border-radius: 0 !important;
+    padding: 0.125rem 0 0.125rem 0.875rem !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 8. Inline badges and pills
+ * ------------------------------------------------------------------ */
+
+/* `font-size: inherit` drops upstream's `text-sm`: a badge set smaller than
+   the sentence it sits in makes the line of text jitter as you read it. */
+.ingredient-badge,
+.cookware-badge,
+.timer-badge {
+    font-weight: 500 !important;
+    font-size: inherit !important;
+    border-width: 1px !important;
+    border-style: solid !important;
+    border-radius: var(--ck-radius-sm) !important;
+    padding: 0.0625rem 0.375rem !important;
+}
+
+.ingredient-badge {
+    background: var(--ck-ingredient-bg) !important;
+    border-color: var(--ck-ingredient-border) !important;
+    color: var(--ck-ingredient-fg) !important;
+}
+
+.cookware-badge {
+    background: var(--ck-cookware-bg) !important;
+    border-color: var(--ck-cookware-border) !important;
+    color: var(--ck-cookware-fg) !important;
+}
+
+.timer-badge {
+    background: var(--ck-timer-bg) !important;
+    border-color: var(--ck-timer-border) !important;
+    color: var(--ck-timer-fg) !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.metadata-pill {
+    /* A long `source_url` is a single nowrap pill upstream; on a phone that one
+       element is what makes the whole page scroll sideways. */
+    white-space: normal !important;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    background: transparent !important;
+    border: 1px solid var(--ck-border) !important;
+    color: var(--ck-text-muted) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    padding: 0.1875rem 0.5rem !important;
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+}
+
+.tag {
+    background: transparent !important;
+    border: 1px solid var(--ck-border) !important;
+    color: var(--ck-text-muted) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    font-weight: 500 !important;
+    padding: 0.125rem 0.5rem !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 9. Links and semantic colour
+ * ------------------------------------------------------------------ */
+
+.grid.md\:grid-cols-3 a.text-blue-600,
+a.text-blue-600 {
+    color: var(--ck-link) !important;
+}
+
+.breadcrumb a:hover,
+.text-gray-600 a:hover {
+    color: var(--ck-text) !important;
+}
+
+/* Red stays red: errors and out-of-stock pantry items. */
+#recipe-error-banner,
+.pantry-item.out-of-stock {
+    background-color: var(--ck-danger-bg) !important;
+    border-color: var(--ck-danger) !important;
+    border-radius: var(--ck-radius) !important;
+}
+
+.item-status-dot.in-stock {
+    background-color: var(--ck-ok) !important;
+}
+
+.item-status-dot.out-of-stock {
+    background-color: var(--ck-danger) !important;
+}
+
+.pantry-item {
+    background-color: var(--ck-surface) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius-sm) !important;
+}
+
+.pantry-item:hover {
+    background-color: var(--ck-surface-2) !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 10. Remaining surfaces (shopping list, pantry, editor, preferences)
+ * ------------------------------------------------------------------ */
+
+/* Deliberately kept at low specificity: the nav, the search dropdown and the
+   recipe page's dissolved columns all need to beat this, and an id inside a
+   `:not()` would hand this rule an id's worth of specificity. `main` already
+   excludes the nav and its dropdowns. */
+main .bg-white {
+    background-color: var(--ck-surface) !important;
+    /* With the shadow gone a panel needs a hairline or it is an unbounded
+       rectangle floating on the page ground. The recipe columns opt out in
+       section 7. */
+    border: 1px solid var(--ck-border);
+}
+
+/* Two panels take their colour from a gradient and their legibility from
+   `text-white`: the menu page's day headers and the recipe index's "today's
+   menu" banner. Section 3 removes the gradient, so without a ground of their
+   own they render as white text on white. The `:not()` keeps this off the menu
+   title, which uses the same gradient classes to fill its glyphs. */
+.menu-section-header,
+main .bg-gradient-to-r.from-purple-600.to-pink-600:not(.bg-clip-text) {
+    background-color: var(--ck-surface-2) !important;
+    color: var(--ck-text) !important;
+}
+
+.menu-section-header {
+    border-bottom: 1px solid var(--ck-border);
+}
+
+main .rounded-2xl {
+    border-radius: var(--ck-radius) !important;
+}
+
+main .rounded-xl {
+    border-radius: var(--ck-radius-sm) !important;
+}
+
+.cm-editor {
+    background-color: var(--ck-surface) !important;
+    color: var(--ck-text) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    border: 1px solid var(--ck-border) !important;
+}
+
+/* CookCLI's CodeMirror dark rules use the Tailwind gray ramp in the usual
+   direction (`gray-900` for the editor and `gray-800` for its gutters). This
+   theme reverses that ramp in dark mode so ordinary gray utilities retain
+   their semantic contrast, which would otherwise make the editor nearly
+   white while its inherited text stays white. Keep CodeMirror on the theme's
+   semantic surface tokens instead. */
+.cm-editor .cm-gutters {
+    background-color: var(--ck-surface-2) !important;
+    color: var(--ck-text-subtle) !important;
+    border-right-color: var(--ck-border) !important;
+}
+
+.cm-editor .cm-activeLine,
+.cm-editor .cm-activeLineGutter {
+    background-color: var(--ck-surface-2) !important;
+}
+
+.cm-editor .cm-content {
+    caret-color: var(--ck-text) !important;
+}
+
+.cm-editor .cm-cursor {
+    border-left-color: var(--ck-text) !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 11. Dark-mode leftovers
+ *
+ * The token remap in section 1 only reaches colours that Tailwind resolves
+ * through `var(--color-*)`. base.html's inline dark patches hardcode hex
+ * instead (`.dark .text-orange-700 { color: #fb923c }`), so in dark mode the
+ * decorative orange and purple come back on tags, counts and badges. These
+ * rules put them back on the neutral ramp; red keeps its meaning and is left
+ * alone.
+ * ------------------------------------------------------------------ */
+
+html.dark .text-orange-600,
+html.dark .text-orange-700,
+html.dark .text-purple-600,
+html.dark .text-purple-700,
+html.dark .text-green-600,
+html.dark .hover\:text-orange-700:hover,
+html.dark .hover\:text-purple-700:hover {
+    color: var(--ck-text-muted) !important;
+}
+
+html.dark .border-orange-200,
+html.dark .border-purple-200,
+html.dark .border-green-200,
+html.dark .border-indigo-200,
+html.dark .border-blue-400 {
+    border-color: var(--ck-border) !important;
+}
+
+html.dark .recipe-card {
+    background-color: var(--ck-surface) !important;
+}
+
+html.dark .hover\:bg-gradient-to-r:hover,
+html.dark a.hover\:bg-gradient-to-r:hover,
+html.dark .hover\:from-purple-100:hover,
+html.dark .hover\:to-pink-100:hover,
+html.dark .hover\:from-orange-100:hover,
+html.dark .hover\:to-amber-100:hover {
+    background: var(--ck-surface-2) !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 12. Cooking mode
+ *
+ * The full-screen step carousel is the one part of the UI that never goes
+ * through Tailwind: `static/css/cooking-mode.css` hardcodes a navy ground
+ * (#1a1a2e), orange/yellow gradients and white-alpha surfaces, and
+ * `recipe.html` loads it *after* this file. So every rule here is forced, and
+ * the overlay is rebuilt on the same tokens as the rest of the site — it
+ * follows the light/dark toggle instead of always being dark.
+ * ------------------------------------------------------------------ */
+
+.cooking-overlay {
+    background: var(--ck-bg) !important;
+    color: var(--ck-text) !important;
+}
+
+.cooking-header {
+    background: var(--ck-surface) !important;
+    border-bottom: 1px solid var(--ck-border) !important;
+}
+
+.cooking-header-title {
+    color: var(--ck-text) !important;
+    font-size: 0.9375rem !important;
+}
+
+.cooking-section-pill {
+    background: transparent !important;
+    border: 1px solid var(--ck-border) !important;
+    color: var(--ck-text-muted) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    font-size: 0.8125rem !important;
+}
+
+.cooking-section-pill:hover {
+    background: var(--ck-surface-2) !important;
+    color: var(--ck-text) !important;
+}
+
+.cooking-section-pill.active {
+    background: var(--ck-accent) !important;
+    border-color: var(--ck-accent) !important;
+    color: var(--ck-accent-fg) !important;
+}
+
+.cooking-close-btn {
+    background: var(--ck-surface-2) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    color: var(--ck-text) !important;
+}
+
+.cooking-close-btn:hover {
+    background: var(--ck-surface-3) !important;
+}
+
+/* All three card kinds (mise en place, step, done) are the same surface. */
+.cooking-card,
+.cooking-card-section,
+.cooking-card-step,
+.cooking-card-done {
+    background: var(--ck-surface) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius) !important;
+    scrollbar-color: var(--ck-border-strong) transparent !important;
+}
+
+.cooking-card::-webkit-scrollbar-thumb {
+    background: var(--ck-border-strong) !important;
+}
+
+/* The neighbouring cards peek in at 0.25 opacity, which on a light ground is
+   very nearly invisible. */
+.cooking-card.prev,
+.cooking-card.next {
+    opacity: 0.4 !important;
+}
+
+.cooking-card-section h2,
+.cooking-card-done h2 {
+    background: none !important;
+    -webkit-background-clip: border-box !important;
+    background-clip: border-box !important;
+    -webkit-text-fill-color: var(--ck-text) !important;
+    color: var(--ck-text) !important;
+    letter-spacing: -0.02em;
+}
+
+.cooking-card-done p {
+    color: var(--ck-text-muted) !important;
+}
+
+.cooking-mise-item {
+    background: var(--ck-surface-2) !important;
+    border: 1px solid var(--ck-border) !important;
+    border-radius: var(--ck-radius-sm) !important;
+}
+
+.cooking-mise-name {
+    color: var(--ck-text) !important;
+}
+
+.cooking-mise-note {
+    color: var(--ck-text-subtle) !important;
+}
+
+/* The same amount colour as the ingredient column on the recipe page. */
+.cooking-mise-qty {
+    color: var(--ck-ingredient-fg) !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.cooking-step-number {
+    background: var(--ck-surface-2) !important;
+    border: 1px solid var(--ck-border) !important;
+    color: var(--ck-text-muted) !important;
+    font-weight: 600 !important;
+}
+
+.cooking-step-text {
+    color: var(--ck-text) !important;
+}
+
+.cooking-step-image {
+    border-radius: var(--ck-radius) !important;
+}
+
+.cooking-step-ingredients {
+    border-top: 1px solid var(--ck-border) !important;
+    color: var(--ck-text-muted) !important;
+}
+
+.cooking-progress {
+    background: var(--ck-surface-3) !important;
+}
+
+.cooking-progress-bar {
+    background: var(--ck-accent) !important;
+}
+
+.cooking-done-close-btn {
+    background: var(--ck-accent) !important;
+    color: var(--ck-accent-fg) !important;
+    border-radius: var(--ck-radius-sm) !important;
+    font-size: 1rem !important;
+}
+
+/* ------------------------------------------------------------------ *
+ * 13. Print
+ * ------------------------------------------------------------------ */
+
+@media print {
+    /* The larger root size is for reading across a kitchen; on paper it only
+       costs pages. */
+    html {
+        font-size: 100%;
+    }
+
+    .viewport {
+        max-width: 100%;
+    }
+
+    .grid.md\:grid-cols-3 ul > li,
+    .grid.md\:grid-cols-3 h2 {
+        border-color: #ddd;
+    }
+}
