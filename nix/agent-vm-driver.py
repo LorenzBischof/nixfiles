@@ -27,12 +27,14 @@ start_all()
 
 NS = globals()  # shared REPL namespace; `machine`, `nodes`, ... live here
 
+
 def _evaluate(src):
     try:
         return eval(compile(src, "<agent>", "eval"), NS)
     except SyntaxError:
         exec(compile(src, "<agent>", "exec"), NS)
         return None
+
 
 runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
 sock_path = Path(runtime_dir) / SOCKET_NAME
@@ -51,14 +53,22 @@ try:
                     continue
                 try:
                     value = _evaluate(line)
-                    resp = {"ok": True, "result": None if value is None else repr(value)}
+                    resp = {
+                        "ok": True,
+                        "result": None if value is None else repr(value),
+                    }
                 except SystemExit:
                     raise
                 except BaseException as e:
                     # format_exception_only drops the call stack and our internal
                     # eval/exec frames, leaving just the exception type + message
                     # (and for SyntaxError, the source location + caret).
-                    resp = {"ok": False, "error": "".join(traceback.format_exception_only(type(e), e)).rstrip()}
+                    resp = {
+                        "ok": False,
+                        "error": "".join(
+                            traceback.format_exception_only(type(e), e)
+                        ).rstrip(),
+                    }
                 conn.sendall((json.dumps(resp) + "\n").encode())
 finally:
     srv.close()
