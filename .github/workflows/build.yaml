@@ -38,10 +38,8 @@ jobs:
           github_access_token: ${{ secrets.GH_TOKEN }}
           extra_nix_config: |
             fallback = true
-            http-connections = 16
-            max-substitution-jobs = 16
-            max-jobs = 1
-            cores = 2
+            http-connections = 128
+            max-substitution-jobs = 128
             extra-platforms = aarch64-linux i686-linux
             substituters = https://cache.lorenzbischof.com/system?priority=42 https://cache.nixos.org/
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= system:DAJL6xmsmoUmZOeGL8XxrEWF5pdtFGMW2+cOGyYaqgU=
@@ -109,10 +107,8 @@ jobs:
           github_access_token: ${{ secrets.GH_TOKEN }}
           extra_nix_config: |
             fallback = true
-            http-connections = 16
-            max-substitution-jobs = 16
-            max-jobs = 1
-            cores = 2
+            http-connections = 128
+            max-substitution-jobs = 128
             substituters = https://cache.nixos.org/
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
       - uses: actions/download-artifact@v4
