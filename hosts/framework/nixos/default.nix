@@ -20,6 +20,7 @@
     ./disko.nix
     ./low-battery-power-button-led.nix
     ./lid-closed-led.nix
+    ./vm-autosleep.nix
   ];
 
   my.services = {
@@ -58,6 +59,16 @@
   boot = {
     consoleLogLevel = 3;
     kernelParams = [ "quiet" ];
+
+    # KVM halt-polling busy-spins an idle vCPU before actually halting it: a
+    # latency-for-power trade that costs ~2.5% of a host core per idle vCPU.
+    # The local VM guests are its worst case: vCPUs that are permanently idle
+    # but never quiet, because their workload heartbeats forever. Measured as
+    # an alternating A/B (200000/0/200000/0, 45s phases):
+    # 0.800 cores with polling on vs 0.694 with it off, 13% off for free.
+    # Nothing in the guests cares about interrupt latency, so buy the battery.
+    extraModprobeConfig = "options kvm halt_poll_ns=0";
+
     plymouth = {
       enable = true;
     };
@@ -108,12 +119,18 @@
     networkmanager.enable = true;
   };
 
-  # Resolve *.talos to the Talos cluster ingress VIP via NM's dnsmasq plugin.
-  # Don't switch this to systemd-resolved with a global DNS/Domains override:
-  # that hijacks the global resolver and breaks Tailscale MagicDNS.
+  # The Talos cluster ingress VIP. vm-autosleep.nix needs the same address to keep
+  # it wakeable while the guests are paused, and a VIP resolving to one address
+  # while only another is wakeable is silent -- *.talos simply stops working -- so
+  # both read this one binding.
+  _module.args.talosIngressVip = "10.69.0.200";
+
+  # Resolve *.talos to that VIP via NM's dnsmasq plugin. Don't switch this to
+  # systemd-resolved with a global DNS/Domains override: that hijacks the global
+  # resolver and breaks Tailscale MagicDNS.
   networking.networkmanager.dns = "dnsmasq";
   environment.etc."NetworkManager/dnsmasq.d/talos.conf".text = ''
-    address=/talos/10.69.0.200
+    address=/talos/${config._module.args.talosIngressVip}
   '';
 
   # Temporary fix for Swaylock issue TODO: what issue?
