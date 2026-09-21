@@ -254,12 +254,23 @@ in
 
     programs.voxtype = {
       enable = true;
-      package = pkgs.voxtype-vulkan;
+      # nixpkgs' voxtype builds the ONNX engines without `cohere`, so take the
+      # package from the flake input instead. No Vulkan here: Cohere and every
+      # other ONNX engine but Parakeet run on CPU regardless, and upstream
+      # ships no cohere-migraphx (MIGraphX 7.2 rejects the q4 zero_points
+      # layout), so the 860M has nothing to offer this engine anyway.
+      package = inputs.voxtype.packages.${system}.onnx;
       service.enable = true;
       settings = {
         hotkey.enabled = false;
         status.icon_theme = "material";
-        whisper.model = "medium.en";
+        # Set via `settings` rather than `programs.voxtype.engine`: the
+        # module's enum still predates the cohere engine.
+        engine = "cohere";
+        # Encoder-decoder, so no 30s mel padding — unlike whisper it costs
+        # what you actually spoke. Model lives in ~/.local/share/voxtype/models
+        # and is fetched imperatively with `voxtype setup model`.
+        cohere.model = "cohere-transcribe-q4f16";
       };
     };
 

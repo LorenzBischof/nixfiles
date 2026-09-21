@@ -268,7 +268,7 @@ let
             return (locked ? root.wifiLockedIcons : root.wifiIcons)[root.wifiBars(strength)];
         }
 
-        readonly property string voxtype: ${builtins.toJSON (lib.getExe pkgs.voxtype-vulkan)}
+        readonly property string voxtype: ${builtins.toJSON (lib.getExe config.programs.voxtype.package)}
         readonly property string pavucontrol: ${builtins.toJSON (lib.getExe pkgs.pavucontrol)}
         readonly property string idleInhibitStatus: ${builtins.toJSON (lib.getExe idleInhibitStatus)}
         readonly property string idleInhibitToggle: ${builtins.toJSON (lib.getExe idleInhibitToggle)}
