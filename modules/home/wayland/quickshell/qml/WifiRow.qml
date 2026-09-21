@@ -50,10 +50,6 @@ Column {
     // that are passively disconnecting in the background.
     property bool isTarget: false
 
-    // Panel contents line up with the row's label rather than its icon, so the
-    // whole thing reads as hanging off the network it belongs to.
-    readonly property int indent: Config.menuPadding + Config.menuIconWidth + Config.menuSpacing
-
     function failureText(reason): string {
         switch (reason) {
         case ConnectionFailReason.NoSecrets:
@@ -153,14 +149,14 @@ Column {
         onRightClicked: root.expandRequested(!root.expanded)
     }
 
-    Column {
+    MenuPanel {
         width: parent.width
         visible: root.expanded
-        spacing: 0
 
         BarText {
-            x: root.indent
-            width: parent.width - root.indent - Config.menuPadding
+            leftPadding: Config.menuPadding
+            rightPadding: Config.menuPadding
+            width: parent.width
             topPadding: Config.menuSpacing
             bottomPadding: Config.menuSpacing
             text: root.error
@@ -171,8 +167,9 @@ Column {
         }
 
         BarText {
-            x: root.indent
-            width: parent.width - root.indent - Config.menuPadding
+            leftPadding: Config.menuPadding
+            rightPadding: Config.menuPadding
+            width: parent.width
             topPadding: Config.menuSpacing
             bottomPadding: Config.menuSpacing
             text: "Needs a profile from NetworkManager."
@@ -201,7 +198,7 @@ Column {
 
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.leftMargin: root.indent
+                anchors.leftMargin: Config.menuPadding
                 anchors.rightMargin: Config.menuPadding
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -217,8 +214,9 @@ Column {
 
                 onAccepted: root.submit()
 
-                // Square and recessed, like every other surface here: the panel
-                // is the raised thing, a field cut into it is not.
+                // Square, and carried by its border rather than by a ground of
+                // its own: the group it sits in is already cut into the panel,
+                // so a second step down would have nothing to step down from.
                 background: Rectangle {
                     color: Config.background
                     border.width: Config.popupOutline

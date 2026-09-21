@@ -268,6 +268,48 @@ let
             return (locked ? root.wifiLockedIcons : root.wifiIcons)[root.wifiBars(strength)];
         }
 
+        // Shared by the bar module and the battery dropdown so a level always
+        // draws the same icon in both places.
+        function batteryIcon(percentage: int, charging: bool, full: bool): string {
+            if (full)
+                return "󱈑";
+            if (charging)
+                return "󰂄";
+            const icons = root.batteryIcons;
+            return icons[Math.min(icons.length - 1, Math.floor(percentage / 10))];
+        }
+
+        // A time to full or empty, spelled the same way in the battery tooltip
+        // and its dropdown. An hour of zero is dropped rather than printed:
+        // under the hour the minutes are the whole of the answer.
+        function durationText(seconds: real): string {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor(seconds % 3600 / 60);
+            return hours > 0 ? `''${hours} h ''${minutes} min` : `''${minutes} min`;
+        }
+
+        // Device-type glyphs for the bluetooth menu, keyed by the freedesktop
+        // icon name BlueZ reports. The list is deliberately short: anything
+        // unnamed -- common before a device is paired -- and anything rarer
+        // than these falls back to the plain bluetooth mark.
+        readonly property var bluetoothIcons: ({
+            "audio-card": "󰓃",
+            "audio-headphones": "󰋋",
+            "audio-headset": "󰋎",
+            "computer": "󰌢",
+            "input-gaming": "󰊖",
+            "input-keyboard": "󰌌",
+            "input-mouse": "󰍽",
+            "multimedia-player": "󰓃",
+            "phone": "󰄜",
+            "printer": "󰐪",
+            "video-display": "󰍹"
+        })
+
+        function bluetoothIcon(icon: string): string {
+            return root.bluetoothIcons[icon] ?? "󰂯";
+        }
+
         readonly property string voxtype: ${builtins.toJSON (lib.getExe config.programs.voxtype.package)}
         readonly property string pavucontrol: ${builtins.toJSON (lib.getExe pkgs.pavucontrol)}
         readonly property string idleInhibitStatus: ${builtins.toJSON (lib.getExe idleInhibitStatus)}

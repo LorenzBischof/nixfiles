@@ -13,14 +13,7 @@ BarModule {
 
     visible: root.present
 
-    text: {
-        if (root.full)
-            return "󱈑";
-        if (root.charging)
-            return "󰂄";
-        const icons = Config.batteryIcons;
-        return icons[Math.min(icons.length - 1, Math.floor(root.percentage / 10))];
-    }
+    text: Config.batteryIcon(root.percentage, root.charging, root.full)
 
     textColor: root.charging ? Config.ok : root.critical ? Config.alert : Config.foreground
 
@@ -30,9 +23,14 @@ BarModule {
         const seconds = root.charging ? root.battery.timeToFull : root.battery.timeToEmpty;
         if (seconds <= 0)
             return `${root.percentage}%`;
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor(seconds % 3600 / 60);
-        return `${root.percentage}%, ${hours} h ${minutes} min to ${root.charging ? "full" : "empty"}`;
+        return `${root.percentage}%, ${Config.durationText(seconds)} to ${root.charging ? "full" : "empty"}`;
+    }
+
+    dropdown: BatteryMenu {
+        device: root.battery
+        percentage: root.percentage
+        charging: root.charging
+        full: root.full
     }
 
     // A critical battery blinks until it is plugged in.
