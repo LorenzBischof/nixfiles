@@ -7,10 +7,9 @@ on:
   pull_request:
     branches:
       - main
+# Jobs that write declare their own permissions block, which replaces this one.
 permissions:
   contents: read
-  pull-requests: write
-  models: read
 concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: true
@@ -58,11 +57,11 @@ jobs:
             nix flake check -L 2>&1 | tee build.log
             exit_code=${PIPESTATUS[0]}
           else
-            nix run nixpkgs#attic-client login cache https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
+            nix run --inputs-from . nixpkgs#attic-client login cache https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
             nix build -L .#nixosConfigurations.${{ matrix.target }}.config.system.build.toplevel 2>&1 | tee build.log
             exit_code=${PIPESTATUS[0]}
             if [ $exit_code -eq 0 ]; then
-              nix run nixpkgs#attic-client push system result
+              nix run --inputs-from . nixpkgs#attic-client push system result
             fi
           fi
           exit $exit_code
@@ -115,6 +114,39 @@ jobs:
         with:
           pattern: build-log-*
           path: build-logs
+      # Which applications the bump actually moved. flake.lock is the only file
+      # Dependabot touches, so re-evaluating this tree with the base commit's
+      # lock isolates the bump; `app-inventory.nix` reads versions straight off
+      # the evaluated config, so nothing is built and nothing is downloaded.
+      # Per-host so one broken config still leaves the others diffable — this
+      # job runs precisely when a build is broken.
+      - name: Application version diff
+        # pipefail matters here: without it a failed `nix eval` is masked by the
+        # `jq` at the end of the pipe and the host looks like it lost every app.
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "base commit $BASE_SHA not in this checkout, skipping" >&2
+            exit 0
+          fi
+          mkdir -p /tmp/base
+          git archive HEAD | tar -x -C /tmp/base
+          git show "$BASE_SHA:flake.lock" > /tmp/base/flake.lock
+          # Passed as an expression rather than `import`ed: reading an absolute
+          # path is forbidden in pure evaluation mode.
+          apply=$(cat "$GITHUB_WORKSPACE/.github/app-inventory.nix")
+          inventory() {
+            nix eval --json "$1#nixosConfigurations.$2.config" --apply "$apply" | jq -r '.[]'
+          }
+          for target in framework nas vps; do
+            inventory path:/tmp/base "$target" > "/tmp/$target.before" || continue
+            inventory . "$target" > "/tmp/$target.after" || continue
+            diff -U0 --label "$target (before)" --label "$target (after)" \
+              "/tmp/$target.before" "/tmp/$target.after" >> pkgdiff.txt || true
+          done
+          cat pkgdiff.txt || true
       # Build the Claude Code we pin in flake.lock and hand it to the action
       # below, so it skips its own native install (which runs out of disk on the
       # nothing-but-nix runner, where root keeps only a ~2GB reserve).
@@ -154,22 +186,10 @@ jobs:
           # as a backstop, and domain-lock WebFetch since it's off by default.
           claude_args: '--permission-mode auto --add-dir "/nix/store" --allowedTools "Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr comment:*),WebFetch(domain:github.com),WebFetch(domain:raw.githubusercontent.com),WebFetch(domain:nixos.org)" --disallowedTools "Bash(curl:*),Bash(wget:*),Bash(nc:*)"'
 
-  cleanup-analysis-comments:
-    needs: [build]
-    if: ${{ github.event_name == 'pull_request' && needs.build.result == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - uses: marocchino/sticky-pull-request-comment@v3
-        with:
-          hide: true
-          hide_classify: "OUTDATED"
-
   automerge-dependabot:
     # Wait for analyze-claude too, so any deprecation/build fix it pushes lands
     # before auto-merge is enabled. If that job fails, automerge is skipped.
-    needs: [build, cleanup-analysis-comments, analyze-claude]
+    needs: [build, analyze-claude]
     if: ${{ github.event_name == 'pull_request' && needs.build.result == 'success' && github.event.pull_request.user.login == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
@@ -190,7 +210,7 @@ jobs:
 
   failure-alert:
     runs-on: ubuntu-latest
-    needs: [build, cleanup-analysis-comments, automerge-dependabot]
+    needs: [build, automerge-dependabot]
     if: ${{ cancelled() || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'failure') }}
     steps:
       - name: Conditionally Fail Required Check

@@ -334,10 +334,14 @@
           ];
         };
       };
-      images = {
-        rpi2 = self.nixosConfigurations.rpi2.config.system.build.sdImage;
-        rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
-      };
+      # Commented out with the rpi2/rpi3 configurations above, to bring back when
+      # those do. `images` is not a flake output nix knows, so leaving it in place
+      # put a standing `warning: unknown flake output` in every flake-check log —
+      # expose the sdImages under `packages.<system>` instead when reviving this.
+      #images = {
+      #  rpi2 = self.nixosConfigurations.rpi2.config.system.build.sdImage;
+      #  rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
+      #};
       formatter.${system} = treefmtEval.config.build.wrapper;
       packages.${system} = {
         # Exposed for CI: the auto-fix job hands this store path to
@@ -346,41 +350,44 @@
         cooklang-mcp = pkgs.callPackage ./packages/cooklang-mcp { };
         cook-cli-server = pkgs.callPackage ./packages/cook-cli-server.nix { };
       };
-      apps.${system}.framework-agent-vm = nixos-agent-test-vm.mkAgentVm {
-        inherit pkgs;
-        host = "framework";
-        nixosConfig = self.nixosConfigurations.framework;
-        extraConfig =
-          { lib, pkgs, ... }:
-          {
-            # framework sets consoleLogLevel=3; runNixOSTest sets it to 7 — pick one.
-            boot.consoleLogLevel = lib.mkForce 3;
-            boot.lanzaboote.enable = lib.mkForce false;
-            home-manager.users.lbischof.wayland.windowManager.sway.config.input."*".xkb_layout =
-              lib.mkForce "us";
-            services.greetd = {
-              restart = lib.mkForce false;
-              settings.initial_session = {
-                command = "${pkgs.bash}/bin/bash -lc 'export WLR_RENDERER_ALLOW_SOFTWARE=1; exec ${pkgs.sway}/bin/sway'";
-                user = "lbischof";
+      apps.${system}.framework-agent-vm =
+        (nixos-agent-test-vm.mkAgentVm {
+          inherit pkgs;
+          host = "framework";
+          nixosConfig = self.nixosConfigurations.framework;
+          extraConfig =
+            { lib, pkgs, ... }:
+            {
+              # framework sets consoleLogLevel=3; runNixOSTest sets it to 7 — pick one.
+              boot.consoleLogLevel = lib.mkForce 3;
+              boot.lanzaboote.enable = lib.mkForce false;
+              home-manager.users.lbischof.wayland.windowManager.sway.config.input."*".xkb_layout =
+                lib.mkForce "us";
+              services.greetd = {
+                restart = lib.mkForce false;
+                settings.initial_session = {
+                  command = "${pkgs.bash}/bin/bash -lc 'export WLR_RENDERER_ALLOW_SOFTWARE=1; exec ${pkgs.sway}/bin/sway'";
+                  user = "lbischof";
+                };
               };
+              services.tailscale.enable = lib.mkForce false;
+              services.syncthing.enable = lib.mkForce false;
+              virtualisation.docker.enable = lib.mkForce false;
+              virtualisation.libvirtd.enable = lib.mkForce false;
+              my.system.autoUpgrade.enable = lib.mkForce false;
+              home-manager.users.lbischof.programs.voxtype.service.enable = lib.mkForce false;
             };
-            services.tailscale.enable = lib.mkForce false;
-            services.syncthing.enable = lib.mkForce false;
-            virtualisation.docker.enable = lib.mkForce false;
-            virtualisation.libvirtd.enable = lib.mkForce false;
-            my.system.autoUpgrade.enable = lib.mkForce false;
-            home-manager.users.lbischof.programs.voxtype.service.enable = lib.mkForce false;
-          };
-      };
-      nixosTests.${system} = {
+        })
+        // {
+          # Without it, flake-check logs carry a standing `lacks attribute 'meta'`
+          # warning for this app.
+          meta.description = "Boot the framework configuration in a throwaway VM for agent-driven testing";
+        };
+      checks.${system} = {
         attic = mkTest {
           name = "attic";
           module = import ./tests/attic.nix { inherit inputs self; };
         };
-      };
-      checks.${system} = {
-        inherit (self.nixosTests.${system}) attic;
       };
     };
 }

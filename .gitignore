@@ -10,3 +10,4 @@ nas-efi-vars.fd
 .nixos-test-history
 data-alloy
 .claude/settings.local.json
+pkgdiff.txt
