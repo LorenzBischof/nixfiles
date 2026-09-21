@@ -91,7 +91,15 @@
     };
   };
 
-  services.tailscale.enable = true;
+  services.tailscale = {
+    enable = true;
+    # Accept inbound WireGuard so peers can establish a direct path instead of
+    # falling back to a DERP relay, which throttles cache pulls to ~1 MB/s.
+    # This exposes no service: the port only answers a valid handshake from a
+    # key already in the tailnet and silently drops anything else.
+    # The Oracle VCN security list has to allow UDP 41641 too.
+    openFirewall = true;
+  };
 
   # Disable autologin.
   services.getty.autologinUser = null;
