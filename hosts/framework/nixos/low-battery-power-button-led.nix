@@ -17,16 +17,26 @@
         trap '${ectool} led power auto' EXIT
 
         while true; do
-          capacity="$(cat /sys/class/power_supply/BAT1/capacity)"
-          status="$(cat /sys/class/power_supply/BAT1/status)"
+          # Read with the builtin rather than cat: this loop runs up to ten
+          # times a second on a nearly empty battery.
+          read -r capacity < /sys/class/power_supply/BAT1/capacity
+          read -r status < /sys/class/power_supply/BAT1/status
           if [ "$status" != "Discharging" ] || [ "$capacity" -gt 9 ]; then
             exit 0
           fi
 
+          # Blink faster the emptier the battery gets: 0.8s per phase at 9%
+          # down to 0.1s at 2% and below.
+          half_period="$((capacity - 1))"
+          if [ "$half_period" -lt 1 ]; then
+            half_period=1
+          fi
+          half_period="$((half_period / 10)).$((half_period % 10))"
+
           ${ectool} led power off
-          sleep 1
+          sleep "$half_period"
           ${ectool} led power auto
-          sleep 1
+          sleep "$half_period"
         done
       '';
   };
