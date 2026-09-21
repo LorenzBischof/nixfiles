@@ -52,10 +52,32 @@ BarModule {
         onTriggered: query.running = true
     }
 
-    Timer {
-        interval: 5000
+    // logind announces every inhibitor taken or dropped, so this replaces the
+    // poll that used to run the query every five seconds for the life of the
+    // bar. Any line is a reason to re-read: the signals that are not about
+    // inhibitors at all -- a session opening, a suspend about to happen -- are
+    // rare enough that filtering them would cost more than the query does.
+    Process {
+        id: watch
+
         running: true
-        repeat: true
-        onTriggered: query.running = true
+        command: [Config.idleInhibitWatch]
+
+        stdout: SplitParser {
+            onRead: query.running = true
+        }
+
+        // The subscription is the only thing keeping this module current, so
+        // losing it would latch the icon silently. Restarting also re-queries:
+        // gdbus greets a fresh subscription with a line of its own, which is
+        // the read above.
+        onExited: watchRestart.restart()
+    }
+
+    Timer {
+        id: watchRestart
+
+        interval: 5000
+        onTriggered: watch.running = true
     }
 }

@@ -1,9 +1,13 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Quickshell
 import Quickshell.I3
 
 // One button per sway workspace on this screen, in numeric order. Clicking
-// switches to a workspace; scrolling steps through them.
+// switches to a workspace. There is deliberately nothing bound to the wheel:
+// a touchpad reports one gesture as a stream of events, so scrolling here
+// walked several workspaces away from the one being aimed at.
 Row {
     id: root
 
@@ -11,17 +15,14 @@ Row {
 
     readonly property var workspaces: I3.workspaces.values.filter(ws => ws.monitor && ws.monitor.name === root.screenName).sort((a, b) => a.num - b.num)
 
-    function step(offset: int): void {
-        const current = root.workspaces.findIndex(ws => ws.focused);
-        if (current === -1)
-            return;
-        const next = root.workspaces[current + offset];
-        if (next)
-            next.activate();
-    }
-
     Repeater {
-        model: root.workspaces
+        // The filter and sort build a fresh array on every sway event, and a
+        // Repeater handed one rebuilds every delegate. ScriptModel diffs it
+        // against the last instead, so a workspace button survives anything
+        // that did not happen to it -- as the wifi and bluetooth lists do.
+        model: ScriptModel {
+            values: root.workspaces
+        }
 
         Rectangle {
             id: button
@@ -54,7 +55,6 @@ Row {
                     Dropdowns.close();
                     button.modelData.activate();
                 }
-                onWheel: wheel => root.step(wheel.angleDelta.y > 0 ? -1 : 1)
             }
         }
     }

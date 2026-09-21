@@ -26,7 +26,6 @@ in
   ];
 
   home.packages = with pkgs; [
-    wob
     #autotiling-rs
     grim
     sway-contrib.grimshot
@@ -40,8 +39,6 @@ in
     sway-terminal
     export-display-config
   ];
-
-  services.dunst.enable = true;
 
   # https://github.com/nix-community/home-manager/pull/7817
   # mkForce overrides stylix, which now sets gtk4.theme explicitly (stylix#2330)
@@ -111,10 +108,6 @@ in
     enable = true;
     # https://github.com/nix-community/home-manager/issues/5311
     checkConfig = false;
-    extraConfigEarly = ''
-      set $WOBSOCK $XDG_RUNTIME_DIR/wob.sock
-      exec mkfifo $WOBSOCK && tail -f $WOBSOCK | wob
-    '';
     config = rec {
       modifier = "Mod4";
       terminal = "foot";
@@ -178,15 +171,28 @@ in
           # machine advertises KEY_FN and nothing in userspace can see it. See
           # quickshell/qml/FnOverlayState.qml.
           "--no-repeat Control_R" = "exec fn-overlay toggle";
-          "XF86AudioRaiseVolume" =
-            "exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+ && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
-          "XF86AudioLowerVolume" =
-            "exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
-          "XF86AudioMute" =
-            "exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && (wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo 0 > $WOBSOCK) || wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $WOBSOCK";
+          # `osd` draws the level in the bar's own shell; see
+          # quickshell/qml/OsdState.qml. It reads the value back itself, so the
+          # bindings only have to say which of the two changed.
+          "XF86AudioRaiseVolume" = "exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+ && osd volume";
+          "XF86AudioLowerVolume" = "exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && osd volume";
+          "XF86AudioMute" = "exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && osd volume";
 
-          "XF86MonBrightnessUp" = "exec brillo -equ 200000 -A 10 && brillo -G | cut -d'.' -f1 > $WOBSOCK";
-          "XF86MonBrightnessDown" = "exec brillo -equ 200000 -U 10 && brillo -G | cut -d'.' -f1 > $WOBSOCK";
+          # -q steps a constant ratio, max^(step/100), so 3 is 1.39x here and
+          # eight presses cover the range above the min cap at the bottom of
+          # this file.
+          #
+          # The step ratio has to exceed the widest band in the panel's output,
+          # or two presses land in one band and one of them does nothing. The
+          # widest measured is 1.34 (raw 5269-7067): 3 clears it, 2 (1.25x) does
+          # not.
+          #
+          # The steps are not even in light: measured 2.11x on the first press
+          # off full, down to 1.21x by the sixth. A table of raw values solved
+          # off the curve holds 1.26-1.36x over thirteen presses instead of
+          # eight; tried on the panel, not kept.
+          "XF86MonBrightnessUp" = "exec brillo -equ 200000 -A 3 && osd brightness";
+          "XF86MonBrightnessDown" = "exec brillo -equ 200000 -U 3 && osd brightness";
         };
       input = {
         "*" = {
@@ -245,4 +251,28 @@ in
       buttons: p w m
     '';
   };
+
+  # Dimmest raw value this panel responds to; brillo clamps every write to it,
+  # so it bounds the keys, the swayidle dim above, and the `osd` readout.
+  #
+  # Measured with amdgpu's `actual_brightness`, which is a hardware readback
+  # rather than an echo of `brightness`, with ABM off:
+  #
+  #   raw 65535 -> 62579   raw 13475 -> 4369   raw 9100 -> 3598
+  #   raw 42738 -> 23901   raw 11853 -> 4112   raw 7050 -> 1799
+  #   raw 25587 ->  9766   raw  9990 -> 3855   raw 5250 ->    0
+  #
+  # sysfs reports `scale = non-linear` for this controller; d(ln light)/d(ln
+  # raw) is 2.3 at the top and 0.45 at the bottom. Light is quantised in steps
+  # of 257, and below 257*14 the only levels are 257*7 and 0 -- stepping every
+  # raw value across both transitions found nothing between them, so the last
+  # two presses are a 2x drop and then this cap. panel_power_savings=2 scales
+  # the whole curve by a constant (1.93 everywhere, 1.89 at full), so the cap
+  # holds on battery and on AC.
+  #
+  # brillo writes this file itself on `brillo -rc -S`; declared here instead. It
+  # is only ever read, so a store symlink is fine. The controller name is part
+  # of the filename -- if it stops matching `brillo -L` the file is not found
+  # and the floor goes back to raw 1.
+  xdg.cacheFile."brillo/backlight.amdgpu_bl1.mincap".text = "5250";
 }

@@ -28,8 +28,18 @@ trap 'rm -rf "$work"' EXIT
 cp -r "$bar"/. "$work"/
 chmod -R u+w "$work"
 # qmllint resolves a pragma Singleton only through a qmldir; quickshell finds
-# it by directory alone, so the repo has none to copy.
-printf 'module bar\nsingleton Config 1.0 Config.qml\n' >"$work/qmldir"
+# it by directory alone, so the repo has none to copy. Every singleton has to
+# be listed, generated Config.qml included -- one left out is reported against
+# its own file as "not declared as singleton in qmldir", which reads like a
+# finding in the file rather than a gap in this script.
+{
+  echo "module bar"
+  for f in "$work"/*.qml; do
+    if grep -q '^pragma Singleton' "$f"; then
+      echo "singleton $(basename "$f" .qml) 1.0 $(basename "$f")"
+    fi
+  done
+} >"$work/qmldir"
 
 if [ "$#" -gt 0 ]; then
   targets=()

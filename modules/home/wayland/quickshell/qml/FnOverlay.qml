@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
@@ -206,6 +208,9 @@ PanelWindow {
                 anchors.centerIn: parent
                 font.family: Config.fontFamily
                 font.pixelSize: (key.modelData.isText ? Config.fnCapTextMm : Config.fnIconMm) * root.pxPerMm
+                // Plain text for the same reason BarText pins it: no label in
+                // this tree renders markup, whatever its string turns out to be.
+                textFormat: Text.PlainText
                 renderType: Text.NativeRendering
                 color: Config.popupTextStrong
                 text: key.modelData.glyph

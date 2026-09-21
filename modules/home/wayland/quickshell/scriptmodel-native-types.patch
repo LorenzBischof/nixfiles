@@ -1,0 +1,30 @@
+From c6a516096d Mon Sep 17 00:00:00 2001
+From: outfoxxed <outfoxxed@outfoxxed.me>
+Date: Mon, 15 Sep 2026 00:00:00 -0700
+Subject: [PATCH] core/scriptmodel: avoid comparing native types as equal by
+ fields
+
+---
+ src/core/scriptmodel.cpp | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/core/scriptmodel.cpp b/src/core/scriptmodel.cpp
+index f14a212..94fb788 100644
+--- a/src/core/scriptmodel.cpp
++++ b/src/core/scriptmodel.cpp
+@@ -27,7 +27,14 @@ bool qjsValueStructuralEq(
+     const RecursionPair* activePair = nullptr
+ ) {
+ 	if (a.strictlyEquals(b)) return true;
+-	if (!a.isObject() || !b.isObject() || a.isArray() != b.isArray()) return false;
++
++	const auto jsValueType = QMetaType::fromType<QJSValue>();
++	const auto aIsNative = a.toVariant(QJSValue::RetainJSObjects).metaType() != jsValueType;
++	const auto bIsNative = b.toVariant(QJSValue::RetainJSObjects).metaType() != jsValueType;
++	if (aIsNative || bIsNative) return false;
++
++	if (!a.isObject() || !b.isObject() || a.isCallable() || b.isCallable()) return false;
++	if (a.isArray() != b.isArray()) return false;
+ 
+ 	for (const auto* pair = activePair; pair != nullptr; pair = pair->previous) {
+ 		if (a.strictlyEquals(*pair->a) || b.strictlyEquals(*pair->b)) return false;

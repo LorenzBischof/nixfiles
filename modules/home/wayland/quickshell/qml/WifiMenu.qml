@@ -17,22 +17,42 @@ Column {
     readonly property var wifiDevice: Networking.devices.values.find(dev => dev.type === DeviceType.Wifi) ?? null
     readonly property var wiredDevice: Networking.devices.values.find(dev => dev.type === DeviceType.Wired) ?? null
 
-    property string pinnedNetworkName: ""
+    // The order the rows are drawn in, by name. Sorting live is what made the
+    // list feel loose: joining a network re-rates it -- the backend swaps the
+    // scan's estimate for the link's own signal, and often hands back a fresh
+    // object for the SSID as it does -- so the network just clicked would walk
+    // off to the bottom of the list at the moment it succeeded. The order is
+    // therefore decided once per opening, strongest first with whatever is
+    // connected on top, and then held: a network a later scan finds is appended
+    // and one that goes out of range leaves, and nothing else moves for as long
+    // as the dropdown is up. By name rather than by object, so a row keeps its
+    // place across a swap.
+    property var order: []
 
-    // Ordered by the bar count the row actually draws rather than the raw
-    // signal, so a network only changes place when its icon changes too --
-    // otherwise rows shuffle out from under the pointer as strengths jitter.
-    // The initially connected network is pinned to the top.
+    function reorder(): void {
+        const values = root.wifiDevice ? root.wifiDevice.networks.values : [];
+        const ranked = values.slice().sort((a, b) => {
+            if (a.connected !== b.connected)
+                return a.connected ? -1 : 1;
+            // By the bar count the row actually draws rather than the raw
+            // signal: a network only outranks another when its icon says so.
+            return Config.wifiBars(b.signalStrength) - Config.wifiBars(a.signalStrength) || a.name.localeCompare(b.name);
+        }).map(n => n.name);
+        const kept = root.order.filter(name => ranked.includes(name));
+        root.order = kept.concat(ranked.filter((name, i) => !kept.includes(name) && ranked.indexOf(name) === i));
+    }
+
     readonly property var networks: {
         if (!root.wifiDevice)
             return [];
-        return root.wifiDevice.networks.values.slice().sort((a, b) => {
-            const aPinned = a.name === root.pinnedNetworkName;
-            const bPinned = b.name === root.pinnedNetworkName;
-            if (aPinned !== bPinned)
-                return aPinned ? -1 : 1;
-            return Config.wifiBars(b.signalStrength) - Config.wifiBars(a.signalStrength) || a.name.localeCompare(b.name);
-        });
+        const order = root.order;
+        // A network reorder() has not placed yet sorts to the end, which is
+        // where it is about to be placed anyway.
+        const place = name => {
+            const i = order.indexOf(name);
+            return i < 0 ? order.length : i;
+        };
+        return root.wifiDevice.networks.values.slice().sort((a, b) => place(a.name) - place(b.name));
     }
 
     // Only one network's panel is open at a time.
@@ -50,10 +70,22 @@ Column {
 
     onActiveChanged: {
         if (root.active) {
-            const conn = root.wifiDevice ? root.wifiDevice.networks.values.find(n => n.connected) : null;
-            root.pinnedNetworkName = conn ? conn.name : "";
+            // A fresh opening is the one moment a reshuffle is free, so it is
+            // the only one that gets to sort what is already listed.
+            root.order = [];
+            root.reorder();
         } else {
             root.expandedNetwork = null;
+        }
+    }
+
+    // Membership only: a scan republishing signal strengths leaves the list
+    // alone, and the rows read the new strength for themselves.
+    Connections {
+        target: root.wifiDevice ? root.wifiDevice.networks : null
+
+        function onValuesChanged() {
+            root.reorder();
         }
     }
 

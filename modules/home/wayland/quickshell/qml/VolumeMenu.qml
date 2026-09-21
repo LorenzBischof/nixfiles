@@ -1,4 +1,7 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 
@@ -52,7 +55,9 @@ Column {
 
     // A single device is not worth a picker; the level above already says which.
     Repeater {
-        model: root.sinks.length > 1 ? root.sinks : []
+        model: ScriptModel {
+            values: root.sinks.length > 1 ? root.sinks : []
+        }
 
         MenuRow {
             required property var modelData
@@ -97,7 +102,9 @@ Column {
     }
 
     Repeater {
-        model: root.sources.length > 1 ? root.sources : []
+        model: ScriptModel {
+            values: root.sources.length > 1 ? root.sources : []
+        }
 
         MenuRow {
             required property var modelData

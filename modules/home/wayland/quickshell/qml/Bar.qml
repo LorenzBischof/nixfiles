@@ -47,7 +47,19 @@ PanelWindow {
             anchors.horizontalCenter: parent.horizontalCenter
         }
 
+        // Hung off the status icons rather than placed among them: it is only
+        // on screen while voxtype is recording, and a module in the row would
+        // have shoved every icon to its left along the bar each time it
+        // appeared.
+        VoxtypeWave {
+            anchors.right: status.left
+            anchors.rightMargin: Config.moduleSpacing
+            anchors.verticalCenter: parent.verticalCenter
+        }
+
         Row {
+            id: status
+
             anchors.right: parent.right
             spacing: Config.moduleSpacing
 

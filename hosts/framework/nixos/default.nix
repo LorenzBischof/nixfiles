@@ -196,6 +196,11 @@
     extraGroups = [
       "wheel"
       "video"
+      # Writing a wifi profile needs polkit's settings.modify.system, which
+      # only this group gets: no polkit agent runs in the sway session to ask
+      # for a password. Without it the bar's wifi menu silently cannot join or
+      # forget a network.
+      "networkmanager"
       "i2c"
       "scanner"
       "libvirtd"

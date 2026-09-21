@@ -1,0 +1,23 @@
+From 052059fb7c Mon Sep 17 00:00:00 2001
+From: outfoxxed <outfoxxed@outfoxxed.me>
+Date: Tue, 25 Aug 2026 23:14:48 -0700
+Subject: [PATCH] networking: handle omitted mode setting in NM
+
+---
+ src/network/nm/wireless.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/network/nm/wireless.cpp b/src/network/nm/wireless.cpp
+index 7d794a0..7764cfb 100644
+--- a/src/network/nm/wireless.cpp
++++ b/src/network/nm/wireless.cpp
+@@ -124,7 +124,8 @@ void NMWirelessDevice::onSettingsLoaded(NMSettings* settings) {
+ 	const auto ssid = map["802-11-wireless"]["ssid"].toString();
+ 	const auto mode = map["802-11-wireless"]["mode"].toString();
+ 
+-	if (mode == "infrastructure") {
++	// Omitted mode is assumed to be "infrastructure".
++	if (mode.isEmpty() || mode == "infrastructure") {
+ 		auto* net = this->mNetworks.value(ssid);
+ 		if (!net) net = this->registerNetwork(ssid);
+ 		net->addSettings(settings);

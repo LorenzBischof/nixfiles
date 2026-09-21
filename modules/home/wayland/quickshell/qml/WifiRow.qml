@@ -44,7 +44,11 @@ Column {
     // instead of only offering to forget.
     property bool asking: false
     property string error: ""
-    
+    // Whether a password typed here is in flight. The panel is gone by the time
+    // the answer comes back, so the field can no longer say whether a NoSecrets
+    // failure is a wrong password or a first request for one.
+    property bool triedSecret: false
+
     // Tracks if this row is the active target of a connect/disconnect operation
     // initiated by the user, so we don't show confusing spinners on networks
     // that are passively disconnecting in the background.
@@ -71,6 +75,7 @@ Column {
     // profile is worth asking about up front.
     function attempt(): void {
         root.error = "";
+        root.triedSecret = false;
         root.isTarget = true;
         if (root.network.known || !root.pskCapable) {
             root.network.connect();
@@ -80,12 +85,20 @@ Column {
         root.expandRequested(true);
     }
 
+    // Enter is the end of the prompt. The row's own spinner carries the attempt
+    // from here, so the panel closes on submit rather than sitting open with a
+    // spent field in it -- and, once the profile exists, a "Forget network" row
+    // nobody asked for. A failure brings it back with the reason.
     function submit(): void {
-        if (psk.text === "")
+        const secret = psk.text;
+        if (secret === "")
             return;
         root.error = "";
         root.isTarget = true;
-        root.network.connectWithPsk(psk.text);
+        root.expandRequested(false);
+        // After the collapse, which clears the panel and this flag with it.
+        root.triedSecret = true;
+        root.network.connectWithPsk(secret);
     }
 
     spacing: 0
@@ -97,6 +110,7 @@ Column {
             psk.text = "";
             root.asking = false;
             root.error = "";
+            root.triedSecret = false;
         }
     }
 
@@ -111,9 +125,9 @@ Column {
         function onConnectionFailed(reason) {
             root.isTarget = false;
             root.asking = true;
-            // NoSecrets on a network nothing has been typed into yet is just a
-            // request for a password, not a wrong one.
-            root.error = reason === ConnectionFailReason.NoSecrets && psk.text === "" ? "" : root.failureText(reason);
+            // NoSecrets before a password has been sent from here is a request
+            // for one, not a rejection of one.
+            root.error = reason === ConnectionFailReason.NoSecrets && !root.triedSecret ? "" : root.failureText(reason);
             psk.text = "";
             root.expandRequested(true);
         }
@@ -179,11 +193,14 @@ Column {
             visible: root.asking && !root.pskCapable
         }
 
+        // The field carries the whole prompt, so it sits in a band of its own
+        // padding rather than being centred in a row's worth of height, where
+        // it came out welded to whatever is above it.
         Item {
             id: pskRow
 
             width: parent.width
-            implicitHeight: Config.menuRowHeight + Config.menuSpacing
+            implicitHeight: psk.implicitHeight + Config.menuSpacing * 2
             visible: root.asking && root.pskCapable && !root.network.connected
 
             // The panel opens because a password is wanted, so the caret starts
@@ -210,6 +227,7 @@ Column {
                 font.pointSize: Config.fontPointSize
                 renderType: Text.NativeRendering
                 padding: Config.menuSpacing
+                rightPadding: Config.menuSpacing * 2 + submitHint.width
                 selectByMouse: true
 
                 onAccepted: root.submit()
@@ -222,16 +240,33 @@ Column {
                     border.width: Config.popupOutline
                     border.color: psk.activeFocus ? Config.accent : Config.overlay
                 }
+
+                // Submitting is Enter, so the return glyph inside the field
+                // both says so and takes a click for the times it is not. A
+                // full row for a button the caret is already aimed at is a
+                // line the panel does not have to spend.
+                BarText {
+                    id: submitHint
+
+                    anchors.right: parent.right
+                    anchors.rightMargin: Config.menuSpacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Config.menuIconWidth
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "󰌑"
+                    color: psk.text === "" ? Config.subtle : (hintMouse.containsMouse ? Config.popupTextStrong : Config.accent)
+
+                    MouseArea {
+                        id: hintMouse
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+
+                        onClicked: root.submit()
+                    }
+                }
             }
-        }
-
-        MenuRow {
-            width: parent.width
-            icon: "󰌘"
-            text: "Connect"
-            visible: root.asking && root.pskCapable && !root.network.connected
-
-            onClicked: root.submit()
         }
 
         MenuRow {

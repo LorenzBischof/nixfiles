@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Quickshell.Services.Pipewire
 
@@ -23,11 +25,18 @@ BarModule {
             root.audio.muted = !root.audio.muted;
     }
 
-    // Inverted, matching the natural scrolling configured for the pointers.
-    onScrolled: delta => {
+    // Inverted, matching the natural scrolling configured for the pointers. One
+    // notch is 5%, the step the volume keys take, and the result is snapped to
+    // that grid so a scroll always lands on a round percentage however the
+    // volume was set before.
+    onScrolled: steps => {
         if (!root.audio)
             return;
-        root.audio.volume = Math.max(0, Math.min(1, root.audio.volume - (delta > 0 ? 0.05 : -0.05)));
+        root.audio.volume = Math.max(0, Math.min(1, Math.round(root.audio.volume * 20 - steps) / 20));
+        // Same readout the volume keys put up: while adjusting from the bar the
+        // pointer is on the icon, which is the one thing covering the module's
+        // own tooltip.
+        OsdState.showVolume();
     }
 
     dropdown: VolumeMenu {

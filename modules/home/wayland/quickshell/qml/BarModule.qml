@@ -17,7 +17,15 @@ Item {
     readonly property bool dropdownOpen: Dropdowns.owner === root
 
     signal clicked(int button)
-    signal scrolled(int delta)
+    // Whole wheel notches, positive for scrolling up; see onWheel below.
+    signal scrolled(int steps)
+
+    // A mouse wheel sends one notch -- 120 eighths of a degree -- per click,
+    // but a touchpad reports the same gesture as a stream of much smaller
+    // deltas, so acting on every event makes anything bound to the wheel race
+    // away under a finger. Accumulate the angle here and emit whole notches
+    // only, which puts both pointers on the same scale.
+    property int wheelAngle: 0
 
     function closeDropdown(): void {
         Dropdowns.close();
@@ -72,7 +80,24 @@ Item {
             Dropdowns.close();
             root.clicked(event.button);
         }
-        onWheel: wheel => root.scrolled(wheel.angleDelta.y)
+        onWheel: wheel => {
+            // One scroll arrives as several frames, and the ones that only
+            // name the axis or mark the end of the gesture carry no angle.
+            // Leaving early keeps those from reading as a reversal below and
+            // throwing away what has been accumulated so far.
+            if (wheel.angleDelta.y === 0)
+                return;
+            // A reversal starts from zero rather than spending what is left
+            // over from the other direction first.
+            if ((wheel.angleDelta.y > 0) !== (root.wheelAngle > 0))
+                root.wheelAngle = 0;
+            root.wheelAngle += wheel.angleDelta.y;
+            const steps = Math.trunc(root.wheelAngle / 120);
+            if (steps === 0)
+                return;
+            root.wheelAngle -= steps * 120;
+            root.scrolled(steps);
+        }
         // No tooltips while a panel is open, for any module and not just the
         // one the panel hangs from: the bar keeps receiving hover now that
         // panels let it through, and a tooltip over an open panel reads as
