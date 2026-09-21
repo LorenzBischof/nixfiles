@@ -214,6 +214,10 @@ in
       };
       output = {
         "*" = {
+          # Not cosmetic: on the laptop panel this is worth 0.6 W on battery
+          # (5.0 W with it on, 5.6 W off, idle desktop). With VRR the panel
+          # sits at its minimum refresh whenever the screen is static, which
+          # is also why capping eDP-1 to 60 Hz on battery saves nothing.
           adaptive_sync = "on";
         };
         "eDP-1" = {

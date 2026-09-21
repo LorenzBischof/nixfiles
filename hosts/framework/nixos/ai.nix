@@ -1,4 +1,43 @@
-{ lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+let
+  xrtSmi = "${config.environment.sessionVariables.XILINX_XRT}/bin/xrt-smi";
+  # The NPU power mode is a device-global XRT setting, not a per-process one,
+  # and flm's own --pmode flag is a silent no-op for a normal user: it needs
+  # DRM_IOCTL_AMDXDNA_SET_STATE, which returns EACCES even for @video members
+  # with rw on /dev/accel/accel0, and flm neither logs nor reports the failure.
+  # So set it from root here instead, following AC state. Measured on
+  # Qwen3.6-35B-A3B: powersaver is 7.5 tok/s at ~0.15 J/token, performance is
+  # 14.1 tok/s at ~0.30 J/token -- the clocks drop faster than the throughput,
+  # so powersaver genuinely saves energy rather than just stretching the work.
+  # `turbo` is deliberately unused: it needs AC and silently falls back to
+  # performance on battery.
+  npuPmode = pkgs.writeShellScript "npu-pmode" ''
+    set -eu
+    dev=$(${xrtSmi} examine 2>/dev/null \
+      | grep -oE '[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-9]' | head -1)
+    # No NPU enumerated (driver not up yet, or no device): nothing to do.
+    [ -n "$dev" ] || exit 0
+    if [ "$(cat /sys/class/power_supply/ACAD/online 2>/dev/null || echo 0)" = 1 ]; then
+      mode=performance
+    else
+      mode=powersaver
+    fi
+    # Only ever issue SET_STATE when the mode actually has to change. Plugging
+    # in emits several ACAD uevents, and each redundant ioctl is another chance
+    # to hit the amdxdna mailbox teardown path, which NULL-derefs if its
+    # workqueue allocation fails. Cheap read, and it collapses an event storm
+    # into a single write.
+    current=$(${xrtSmi} examine -r platform -d "$dev" 2>/dev/null \
+      | sed -n 's/.*Power Mode[[:space:]]*:[[:space:]]*\([a-z]*\).*/\1/p' | head -1)
+    [ "$current" != "$mode" ] || exit 0
+    exec ${xrtSmi} configure -d "$dev" --pmode "$mode"
+  '';
+in
 
 {
   services.open-webui.enable = false;
@@ -120,4 +159,29 @@
     enableVulkan = false;
     enableImageGen = false;
   };
+
+  # Follow AC state: powersaver on battery, performance on mains. Re-run on
+  # every mains plug/unplug, and when the NPU itself shows up at boot (the
+  # oneshot can otherwise race amdxdna and find no device to configure).
+  systemd.services.npu-pmode = {
+    description = "Set Ryzen AI NPU power mode from AC state";
+    wantedBy = [ "multi-user.target" ];
+    # xrt-smi sources a setup.sh that shells out to awk; without it the unit
+    # still works but logs "awk: command not found" on every run.
+    path = [ pkgs.gawk ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = npuPmode;
+    };
+  };
+
+  # `start`, never `restart`: restart stops any in-flight run first, and a
+  # SIGTERM delivered while xrt-smi sits inside the amdxdna SET_STATE ioctl
+  # made kthread_create return -EINTR, which the driver did not check --
+  # NULL deref, kernel oops, frozen machine (2026-09-20). `start` queues
+  # instead of killing.
+  services.udev.extraRules = ''
+    SUBSYSTEM=="power_supply", ATTR{type}=="Mains", ACTION=="change", RUN+="${pkgs.systemd}/bin/systemctl --no-block start npu-pmode.service"
+    SUBSYSTEM=="accel", ACTION=="add", RUN+="${pkgs.systemd}/bin/systemctl --no-block start npu-pmode.service"
+  '';
 }

@@ -21,6 +21,7 @@
     ./low-battery-power-button-led.nix
     ./lid-closed-led.nix
     ./vm-autosleep.nix
+    ./power.nix
   ];
 
   my.services = {
