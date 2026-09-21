@@ -84,6 +84,14 @@
       url = "github:peteonrails/voxtype";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Ryzen AI NPU stack (XRT + xdna plugin + FastFlowLM). Upstream asks
+    # consumers not to follow their nixpkgs, but that warning is only about
+    # hitting their Cachix, which we don't use: CI builds the framework closure
+    # and pushes it to our own attic, so these land there like everything else.
+    nix-amd-ai = {
+      url = "github:noamsto/nix-amd-ai";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nixos-agent-test-vm.url = "github:lorenzbischof/nixos-agent-test-vm";
   };
 
@@ -109,6 +117,7 @@
       lanzaboote,
       alias-watch,
       voxtype,
+      nix-amd-ai,
       nixos-agent-test-vm,
       ...
     }@inputs:
@@ -204,6 +213,7 @@
           modules = [
             disko.nixosModules.disko
             nixos-hardware.nixosModules.framework-amd-ai-300-series
+            nix-amd-ai.nixosModules.default
             ./modules/nixos
             ./hosts/framework/nixos
             stylix.nixosModules.stylix

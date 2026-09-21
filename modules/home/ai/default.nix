@@ -319,6 +319,13 @@ in
             };
             models = [
               {
+                id = "qwen3.6";
+                input = [
+                  "text"
+                  "image"
+                ];
+              }
+              {
                 id = "qwen3-coder";
               }
               {
@@ -329,6 +336,23 @@ in
                 ];
               }
             ];
+          };
+          flm = {
+            baseUrl = "http://127.0.0.1:52625/v1";
+            api = "openai-completions";
+            apiKey = "none";
+            compat = {
+              supportsDeveloperRole = false;
+              supportsReasoningEffort = false;
+            };
+            # The server loads the requested model on demand.
+            models = map (id: {
+              inherit id;
+              input = [
+                "text"
+                "image"
+              ];
+            }) (import ./flm-models.nix).models;
           };
         };
       };

@@ -1,6 +1,7 @@
 {
   self,
   config,
+  osConfig,
   pkgs,
   pkgs-citrix-workspace,
   lib,
@@ -9,6 +10,8 @@
   ...
 }:
 let
+  flmModels = import ../../../modules/home/ai/flm-models.nix;
+
   # logseq's build freezes on current nixpkgs (NixOS/nixpkgs#535206), and it isn't
   # cached upstream because its electron_39 is EOL. Pin to the revision right
   # before electron_39 was marked EOL: there logseq still builds and is cached on
@@ -188,6 +191,55 @@ in
   systemd.user.tmpfiles.rules = [
     "d %h/.ssh/controlmasters 0700 - - -"
   ];
+
+  # FastFlowLM serves one model at a time and switches on request; the
+  # agents reach it through the `flm` provider in modules/home/ai. It is a user
+  # service because FLM keeps its models under $HOME/.config/flm/models, and
+  # ExecStartPre fetches the models there on first start. `flm list` shows which
+  # ids the installed version knows.
+  systemd.user.services.flm = {
+    Unit = {
+      Description = "FastFlowLM NPU inference server";
+      After = [ "network-online.target" ];
+    };
+    Service = {
+      ExecStartPre = map (model: "${lib.getExe' pkgs.fastflowlm "flm"} pull ${model}") flmModels.models;
+      ExecStart = "${lib.getExe' pkgs.fastflowlm "flm"} serve ${flmModels.default} --port 52625";
+      # Initial downloads and NPU compilation can exceed systemd's default.
+      TimeoutStartSec = "infinity";
+      # flm links libxrt_coreutil from the plain `xrt` package, which carries no
+      # xdna driver plugin, so XRT enumerates zero devices and flm dies with
+      # "No such device with index '0'" even though xrt-smi sees the NPU. The
+      # plugin only exists in the module's combined tree, which is what it
+      # points XILINX_XRT at — putting that on the library path is what lets
+      # flm find the device. Drop this if nix-amd-ai links the combined tree.
+      Environment = "LD_LIBRARY_PATH=${osConfig.environment.sessionVariables.XILINX_XRT}/lib";
+      # NPU buffers are pinned; @video gets unlimited memlock from the
+      # hardware.amd-npu PAM limits, this raises the unit's own soft limit to it.
+      LimitMEMLOCK = "infinity";
+      Restart = "on-failure";
+      RestartSec = 10;
+    };
+    Install.WantedBy = [ "default.target" ];
+  };
+
+  # Pi keeps UI preferences in this mutable file. Merge only our defaults.
+  home.activation.piNpuDefaults = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    settings=${lib.escapeShellArg "${config.home.homeDirectory}/.pi/agent/settings.json"}
+    run mkdir -p "$(dirname "$settings")"
+    if [ -z "''${DRY_RUN_CMD:-}" ]; then
+      source=/dev/null
+      [ ! -f "$settings" ] || source="$settings"
+      tmp=$(mktemp "$(dirname "$settings")/.settings.XXXXXX")
+      if ${lib.getExe pkgs.jq} -s --arg model ${lib.escapeShellArg flmModels.default} \
+        '(.[0] // {}) + {defaultProvider: "flm", defaultModel: $model}' "$source" > "$tmp"; then
+        mv "$tmp" "$settings"
+      else
+        rm -f "$tmp"
+        exit 1
+      fi
+    fi
+  '';
 
   fonts.fontconfig.enable = true;
   programs = {
