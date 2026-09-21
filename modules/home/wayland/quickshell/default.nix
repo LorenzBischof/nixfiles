@@ -464,8 +464,7 @@ let
         //
         // One line of the bar's own text height, and faded down: it is
         // confirmation that the microphone is live, caught out of the corner of
-        // the eye while reading something else -- the voxtype module's icon is
-        // where the state is actually read.
+        // the eye while reading something else.
         readonly property int waveformBars: 24
         readonly property int waveformFramesPerBar: 5
         readonly property int waveformBarWidth: 2

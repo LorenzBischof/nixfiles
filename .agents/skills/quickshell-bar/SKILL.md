@@ -21,7 +21,7 @@ animation, gated on being on screen.
 Find the announcement before reaching for an interval. Most of it is already
 done for you: `UPower`, `Pipewire`, `Networking`, `Bluetooth` and `I3` are
 quickshell services that push. Below those, a helper that follows is a
-`Process` whose stdout is a `SplitParser` — `Voxtype` runs `voxtype status
+`Process` whose stdout is a `SplitParser` — `VoxtypeState` runs `voxtype status
 --follow`, `IdleInhibit` subscribes to logind over `gdbus monitor` — and a
 `Process` with `StdioCollector` re-run on each of those lines is how a follower
 that only signals *that* something changed gets turned into the answer.
@@ -30,9 +30,9 @@ Two things that come with a subscription and not with a poll:
 
 - **It can die, and then the module latches silently.** Give every follower
   `onExited: <timer>.restart()` and a `Timer` that sets `running` back to true,
-  as `Voxtype` and `IdleInhibit` both do. A restart re-reads on its own if the
-  tool greets a fresh subscription with a line, which is what makes dropping
-  the backstop poll safe.
+  as `VoxtypeState` and `IdleInhibit` both do. A restart re-reads on its own
+  if the tool greets a fresh subscription with a line, which is what makes
+  dropping the backstop poll safe.
 - **Check what the signal actually covers before trusting it.** logind looked
   like it could only announce the *union* of inhibited operations, missing a
   second app inhibiting idle; it turns out to send a count in the same message,

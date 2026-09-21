@@ -1,0 +1,59 @@
+--- a/src/daemon.rs
++++ b/src/daemon.rs
+@@ -1392,13 +1392,17 @@
+                     ..
+                 }
+             );
+-            if file_output {
+-                tracing::info!("Stopping streaming session (file output); closing capture");
++            // Local Parakeet must deliver its buffered tail through flush()
++            // before Ended tears down the typing session (upstream #804).
++            let drain =
++                file_output || self.config.engine == crate::config::TranscriptionEngine::Parakeet;
++            if drain {
++                tracing::info!("Stopping streaming session; closing capture and draining output");
+             } else {
+                 tracing::info!("Stopping streaming session; closing capture and disowning session");
+             }
+             self.stop_streaming_capture(audio_capture).await;
+-            if !file_output {
++            if !drain {
+                 // Drop the typing surface synchronously so any
+                 // Final/Partial events the backend emits while
+                 // draining its internal buffer reach the event-pump
+@@ -3491,14 +3495,13 @@
+                         (HotkeyEvent::Released, ActivationMode::PushToTalk) => {
+                             tracing::debug!("Received HotkeyEvent::Released (push-to-talk), state.is_recording() = {}", state.is_recording());
+                             if state.is_streaming() {
+-                                tracing::debug!("Streaming push-to-talk released; closing audio capture and disowning session");
+-                                self.stop_streaming_capture(&mut audio_capture).await;
+-                                // Drop session/chain so the backend's
+-                                // post-stop flush emission is dropped at
+-                                // the event pump instead of typed.
+-                                // Matches the SIGUSR2 stop path.
+-                                streaming_session = None;
+-                                streaming_chain = None;
++                                self.stop_active_recording(
++                                    &mut state,
++                                    &mut audio_capture,
++                                    &mut streaming_session,
++                                    &mut streaming_chain,
++                                    &mut eager_transcriber,
++                                ).await;
+                             } else if let State::Recording { model_override, .. } = &state {
+                                 let model_override = model_override.clone();
+ 
+--- a/src/transcribe/parakeet_streaming.rs
++++ b/src/transcribe/parakeet_streaming.rs
+@@ -259,10 +259,10 @@
+ 
+             // Drain any buffered audio with flush() on close.
+             let final_text = match unified.flush() {
+-                Ok(t) => t.trim().to_string(),
++                Ok(t) => t.trim_end().to_string(),
+                 Err(e) => {
+                     tracing::warn!("ParakeetUnified::flush failed: {}", e);
+-                    last_text.trim().to_string()
++                    last_text.trim_end().to_string()
+                 }
+             };

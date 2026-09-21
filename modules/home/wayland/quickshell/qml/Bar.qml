@@ -69,8 +69,6 @@ PanelWindow {
 
             NetworkStatus {}
 
-            Voxtype {}
-
             Volume {}
 
             Battery {}

@@ -177,6 +177,18 @@
   services.pipewire = {
     enable = true;
     pulse.enable = true;
+    # The ALC285 emits ~1s of clipped audio when it resumes from D3, so
+    # dictation loses its first word. WirePlumber suspends the mic after 5s by
+    # default; a 10 minute grace keeps a dictation session warm and still
+    # suspends an idle mic, unlike pinning the codec in D0 permanently.
+    wireplumber.extraConfig."51-mic-suspend-grace" = {
+      "monitor.alsa.rules" = [
+        {
+          matches = [ { "node.name" = "alsa_input.pci-0000_c1_00.6.analog-stereo"; } ];
+          actions.update-props."session.suspend-timeout-seconds" = 600;
+        }
+      ];
+    };
   };
   # Set a higher priority, so that the headset port activates automatically
   #environment.etc."alsa-card-profile/mixer/paths/analog-input-headset-mic.conf".source =

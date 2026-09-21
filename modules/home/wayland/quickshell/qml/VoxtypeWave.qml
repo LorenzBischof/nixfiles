@@ -7,14 +7,13 @@ import QtQuick
 //
 // It sits in the bar, in the empty stretch left of the status icons, and is
 // placed by anchor rather than laid out with them -- so it costs the modules
-// no width and none of them move when a recording starts. That was the whole
-// problem with drawing it inside the voxtype module itself: a strip that comes
-// and goes there has to take its width from the bar, and every icon to its
-// left slid along each time.
+// no width and none of them move when a recording starts. A strip laid out
+// among the icons has to take its width from the bar, and every icon to its
+// left slid along each time it appeared.
 //
-// No chrome and no icon of its own: this is confirmation that the microphone
-// is live, caught out of the corner of the eye while reading something else.
-// The module's icon a few positions along is where the state is actually read.
+// No chrome and no icon of its own: this is the whole of the bar's voxtype
+// indication, confirmation that the microphone is live, caught out of the
+// corner of the eye while reading something else.
 Item {
     id: root
 

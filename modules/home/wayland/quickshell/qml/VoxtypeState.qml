@@ -9,8 +9,7 @@ import Quickshell.Io
 // bar, and the audio-level sidecar, which only runs while there is a recording
 // to draw.
 //
-// A singleton rather than state inside the bar module, because two things read
-// it -- the module's icon and the waveform panel -- and because the module is
+// A singleton rather than state inside the waveform, because the waveform is
 // per-screen: state here means one `voxtype status --follow` for the session
 // rather than one per monitor.
 Singleton {
@@ -28,8 +27,6 @@ Singleton {
     property real windowPeak: 0
     property int windowFrames: 0
 
-    readonly property string statusText: root.status?.text ?? ""
-    readonly property string tooltip: root.status?.tooltip ?? ""
     readonly property string statusClass: root.status?.class ?? ""
 
     // The two states that carry audio. Everything else -- transcribing, idle,
@@ -41,29 +38,8 @@ Singleton {
     // or so afterwards in which the last of it is still scrolling off.
     readonly property bool active: root.capturing || drain.running
 
-    // One colour for the state, so the bar icon and the panel's waveform never
-    // disagree about what is going on.
-    readonly property color statusColor: {
-        switch (root.statusClass) {
-        // Streaming is the recording state for engines that transcribe as you
-        // speak; it carries audio exactly like "recording" does, so it draws
-        // the same and the waveform treats both alike.
-        case "recording":
-        case "streaming":
-            return Config.alert;
-        case "transcribing":
-            return Config.accent;
-        default:
-            return Config.foreground;
-        }
-    }
-
     function silence(): var {
         return new Array(Config.waveformBars).fill(0);
-    }
-
-    function toggle(): void {
-        toggleProcess.running = true;
     }
 
     function pushFrame(line: string): void {
@@ -157,12 +133,6 @@ Singleton {
 
         interval: 5000
         onTriggered: follow.running = true
-    }
-
-    Process {
-        id: toggleProcess
-
-        command: [Config.voxtype, "record", "toggle"]
     }
 
     // The sidecar reads the daemon's audio socket and prints one NDJSON frame
