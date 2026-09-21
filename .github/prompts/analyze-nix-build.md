@@ -12,6 +12,13 @@ Build/eval logs for every matrix target are in
   lines — these are the deprecations to look for (renamed/removed options, modules
   scheduled for removal, `lib.warn`/`trace` notices from the bumped inputs).
 
+## Working style
+
+This is a one-shot CI job: it ends the moment you stop, so anything still running
+is killed and its output is lost. Never start a subagent in the background, and
+never finish your turn with one still outstanding — if you delegate, wait for the
+result. Read the logs, push any fix, and leave the comment before you finish.
+
 ## Progress comment
 
 Keep a single sticky PR comment current as you work, using
