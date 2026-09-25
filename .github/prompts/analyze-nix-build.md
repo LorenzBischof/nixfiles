@@ -12,9 +12,11 @@ Build/eval logs for every matrix target are in
 - Logs that built cleanly may still contain `warning:` / `evaluation warning:`
   lines — these are the deprecations to look for (renamed/removed options, modules
   scheduled for removal, `lib.warn`/`trace` notices from the bumped inputs).
-- One warning is long-standing rather than new: `stdenv.isDarwin is deprecated`
-  comes from inside an input and is not actionable here. Don't re-litigate it
-  every run; note it only if it starts failing something.
+- Only warnings that are actionable here matter: ones where something in this repo
+  has to change, now or before a stated removal. A warning from inside an input,
+  or one nothing here can act on, is noise — leave it out of the comment entirely
+  rather than explaining why it's harmless. `stdenv.isDarwin is deprecated` is the
+  standing example; note it only if it starts failing something.
 
 ## Working style
 
@@ -23,6 +25,10 @@ is killed and its output is lost. Never start a subagent in the background, and
 never finish your turn with one still outstanding — if you delegate, wait for the
 result. Read the logs, push any fix, and leave the comment before you finish.
 
+Every claim in the comment about where something comes from — which input, which
+file, which package — rests on a path you actually read. Where you couldn't
+establish it, say that instead of offering a guess as a finding.
+
 ## Progress comment
 
 Keep a single sticky PR comment current as you work, using
@@ -30,16 +36,20 @@ Keep a single sticky PR comment current as you work, using
 when nothing is wrong — the comment is the only evidence this job ran at all, so
 its absence has to mean the job is broken rather than that the bump was clean.
 
-When there is nothing to report, keep it to a single line, and name what you
-actually checked so the all-clear is evidence rather than an assertion — which
-targets built, that you read their logs for deprecation warnings, and that you
-read the version diff. For example: "All four targets built; no deprecation
-warnings in the logs; version diff is routine (homeassistant 2026.9.1 → 2026.9.2
-on nas)."
+Write it terse: no headings, no preamble, no restating the task or narrating how
+you looked into it — just the findings, in plain sentences. Nothing to report is a
+single line naming what you checked, so the all-clear is evidence rather than an
+assertion: "All four targets built, logs clean, version diff routine (homeassistant
+2026.9.1 → 2026.9.2 on nas)."
 
-Anything worth raising — a build failure, a deprecation, a risky version bump —
-replaces that line with the detail. If a previous run reported an issue that is
-now resolved, say so explicitly instead of quietly dropping it.
+Something worth raising — a build failure, an actionable deprecation, a risky
+version bump — replaces that line with a line or two each: what breaks and what it
+needs. Leave out anything that needs no action from us. If a previous run reported
+an issue that is now resolved, say so in a clause.
+
+Don't name internal files, paths or job steps in the comment — the reader only sees
+the PR. Call the application diff "the version diff", and refer to logs by target
+name rather than by path.
 
 ## Build failures
 
@@ -51,9 +61,10 @@ flake input's repo — the fix or an explanation often lives there.
 
 ## Deprecations
 
-For each deprecation warning, identify what triggers it (which option/module in
-this repo, or whether it's purely upstream and not actionable here) and what the
-replacement is. Search upstream as above when the message isn't self-explanatory.
+For each deprecation warning, identify what triggers it and what the replacement
+is. Search upstream as above when the message isn't self-explanatory. If it turns
+out to be purely upstream, or otherwise needs nothing from this repo, drop it —
+don't spend a line of the comment on it.
 
 Tip: to locate an `evaluation warning:`, turn it into a traceable abort with
 `nix eval --option abort-on-warn true --show-trace
@@ -61,14 +72,39 @@ Tip: to locate an `evaluation warning:`, turn it into a traceable abort with
 on the source line that caused it, usually inside a flake input. It stops at the
 first warning.
 
+### Never guess which input a warning comes from
+
+Naming the wrong input is worse than naming none — it sends the reader to fix a
+repo that has nothing to do with it. A module path like `modules/rofi/hm.nix`
+identifies nothing on its own: many inputs have a `modules/` tree, and plain text
+search is treacherous (grepping `rofi` matches every `profile`). So an input is
+only ever named on the strength of a store path.
+
+Get the store path from the warning itself or from the abort-on-warn trace above,
+then map it to the input that owns it:
+
+```
+nix eval --impure --json --expr \
+  'let f = builtins.getFlake (toString ./.); in builtins.mapAttrs (n: i: i.outPath or null) f.inputs'
+```
+
+The `/nix/store/<hash>-source` prefix in the trace matches exactly one entry;
+that entry is the owning input, whatever the file inside it happens to be called.
+Confirm by reading the file at that path and seeing the option actually set there.
+
+If no store path is available, say only what you know — which option is renamed,
+that nothing in this repo sets it, and that you could not pin down the input.
+Never fill the gap with a plausible-sounding input name.
+
 ## Application version bumps
 
-`pkgdiff.txt` holds a unified diff, per host, of the applications each config
-names and their versions — enabled services, system packages, and home-manager
-packages. Libraries and other transitive dependencies are deliberately absent,
-as are packages with no version attribute, so every line is something this repo
-actually runs. A bump reads as a `-`/`+` pair on the same name. The file is
-missing or empty when nothing moved, or when the diff could not be computed.
+The repo root holds `pkgdiff.txt` — a unified diff, per host, of the applications
+each config names and their versions: enabled services, system packages, and
+home-manager packages. Libraries and other transitive dependencies are
+deliberately absent, as are packages with no version attribute, so every line is
+something this repo actually runs. A bump reads as a `-`/`+` pair on the same name.
+The file is missing or empty when nothing moved, or when the diff could not be
+computed.
 
 Do not report the whole list — most of it is routine. Pick out the bumps that
 plausibly break something and check them:
