@@ -71,7 +71,8 @@
       url = "github:nix-community/lanzaboote";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    nixpkgs-umap.url = "github:LorenzBischof/nixpkgs/push-toztvqvvsxnk";
+    #nixpkgs-umap.url = "github:LorenzBischof/nixpkgs/push-toztvqvvsxnk";
+    nixpkgs-umap.url = "github:LorenzBischof/nixpkgs/push-ptpxqyykswtl";
     asustor-platform-driver = {
       url = "github:mafredri/asustor-platform-driver";
       inputs.nixpkgs.follows = "nixpkgs";

@@ -809,16 +809,16 @@
     },
     "nixpkgs-umap": {
       "locked": {
-        "lastModified": 1783545387,
-        "narHash": "sha256-43sfhBXl6VdQlQdpGvBiGiO94SRzAMbSBwzzYAERxrM=",
+        "lastModified": 1791923682,
+        "narHash": "sha256-6KeNyOIi7/utc5s3q40zW4hj303L3BD551pXfJZDgPA=",
         "owner": "LorenzBischof",
         "repo": "nixpkgs",
-        "rev": "bd6abf9f99e1f0a78d62ba4dd951df854a0c0422",
+        "rev": "5a72b55d9efdd02a12b715a2dd8a100829a0b773",
         "type": "github"
       },
       "original": {
         "owner": "LorenzBischof",
-        "ref": "push-toztvqvvsxnk",
+        "ref": "push-ptpxqyykswtl",
         "repo": "nixpkgs",
         "type": "github"
       }
