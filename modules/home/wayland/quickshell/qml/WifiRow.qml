@@ -49,11 +49,6 @@ Column {
     // failure is a wrong password or a first request for one.
     property bool triedSecret: false
 
-    // Tracks if this row is the active target of a connect/disconnect operation
-    // initiated by the user, so we don't show confusing spinners on networks
-    // that are passively disconnecting in the background.
-    property bool isTarget: false
-
     function failureText(reason): string {
         switch (reason) {
         case ConnectionFailReason.NoSecrets:
@@ -76,7 +71,6 @@ Column {
     function attempt(): void {
         root.error = "";
         root.triedSecret = false;
-        root.isTarget = true;
         if (root.network.known || !root.pskCapable) {
             root.network.connect();
             return;
@@ -94,7 +88,6 @@ Column {
         if (secret === "")
             return;
         root.error = "";
-        root.isTarget = true;
         root.expandRequested(false);
         // After the collapse, which clears the panel and this flag with it.
         root.triedSecret = true;
@@ -114,16 +107,29 @@ Column {
         }
     }
 
+    // Set while a disconnect we asked for is in flight. Connecting speaks for
+    // itself, but Disconnecting does not: `connected` is bound to the Activated
+    // state, so a network drops its checkmark the moment it starts leaving, and
+    // a handoff would paint the network being left exactly like the one being
+    // joined. Only the side that asked gets the spinner.
+    property bool leaving: false
+
     Connections {
         target: root.network
 
-        function onStateChangingChanged() {
-            if (!root.network.stateChanging)
-                root.isTarget = false;
+        // Emitted by Network.disconnect() itself, so it fires for a disconnect
+        // requested from the shell and never for one NetworkManager does on its
+        // own -- a roam, a handoff, or an AP going out of range.
+        function onRequestDisconnect() {
+            root.leaving = true;
+        }
+
+        function onStateChanged() {
+            if (root.network.state !== ConnectionState.Disconnecting)
+                root.leaving = false;
         }
 
         function onConnectionFailed(reason) {
-            root.isTarget = false;
             root.asking = true;
             // NoSecrets before a password has been sent from here is a request
             // for one, not a rejection of one.
@@ -144,10 +150,14 @@ Column {
         icon: Config.wifiIcon(root.network.signalStrength, root.secured)
         text: root.network.name
         checked: root.network.connected
-        spinning: root.isTarget || root.network.state === ConnectionState.Connecting
-        detail: {
-            return root.network.connected && !root.network.stateChanging ? "󰄬" : "";
-        }
+        // Read off the backend rather than off what the user clicked, so the
+        // row cannot spin over a password prompt where nothing is in flight
+        // yet. `leaving` only ever qualifies a state the backend is already
+        // reporting, so a disconnect request that goes nowhere cannot leave the
+        // row spinning. MenuRow hides the detail glyph while this is on.
+        spinning: root.network.state === ConnectionState.Connecting
+            || (root.leaving && root.network.state === ConnectionState.Disconnecting)
+        detail: root.network.connected ? "󰄬" : ""
 
         // Left click does the obvious thing; right click opens the panel on any
         // network, which is the only way to forget one that is not connected.
@@ -276,7 +286,6 @@ Column {
             visible: root.network.connected
 
             onClicked: {
-                root.isTarget = true;
                 root.network.disconnect();
                 root.expandRequested(false);
             }
