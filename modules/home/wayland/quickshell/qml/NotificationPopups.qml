@@ -16,20 +16,35 @@ import Quickshell.Services.Notifications
 PanelWindow {
     id: root
 
+    property int toastCount: 0
+    // Room below the stack for a toast on its way out. A departing one barely
+    // lifts now (NotificationToast.exitLift), so it overhangs its own
+    // collapsing slot instead of riding up out of it, and the window edge would
+    // cut that overhang square while it is still faintly visible.
+    readonly property int animationPadding: 48
+    readonly property int toastTop: Config.barHeight + Config.edgeMargin
+
     color: "transparent"
-    // Counted off the model rather than measured off the column: a positioner
+    // Counted explicitly rather than measured off the column: a positioner
     // lays out on polish and polish only runs for a window that is rendering,
     // so a `visible` taken from the column's height would never come true --
     // the column stays zero high until the window is up, and the window waits
     // on the column. Dropdown.qml hits the same trap from the other side.
-    visible: server.trackedNotifications.values.length > 0
+    visible: root.toastCount > 0
     implicitWidth: Config.notificationWidth
-    implicitHeight: Math.max(1, column.implicitHeight)
+    // Keep the window tall enough for the moving toasts until they settle.
+    implicitHeight: root.toastTop + root.animationPadding + Math.max(1, column.implicitHeight, column.childrenRect.y + column.childrenRect.height)
 
-    // Over the windows and taking no space from them. Ignoring exclusion zones
-    // also means the compositor will not push this below the bar for us, hence
-    // the top margin: it is the bar's own height, so the first toast's top edge
-    // meets the bar's bottom the way a dropdown's does.
+    // Leave room to paint the vertical transitions, without making that
+    // transparent padding intercept clicks intended for the desktop.
+    mask: Region {
+        y: column.y
+        width: column.width
+        height: Math.max(column.implicitHeight, column.childrenRect.y + column.childrenRect.height)
+    }
+
+    // Start the overlay at the screen edge so departing toasts can pass over
+    // the bar. The column positions resting toasts a small gap below it.
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
@@ -41,7 +56,7 @@ PanelWindow {
     }
 
     margins {
-        top: Config.barHeight
+        top: 0
         right: Config.edgeMargin
     }
 
@@ -71,11 +86,14 @@ PanelWindow {
         // from in here.
         onNotification: notification => {
             notification.tracked = true;
+            toastComponent.createObject(column, { notification });
+            root.toastCount++;
         }
     }
 
     Column {
         id: column
+        y: root.toastTop
 
         // Sized off the same constant the window is rather than off `parent`.
         // A window that is down has a zero-wide content item, so a toast
@@ -84,8 +102,8 @@ PanelWindow {
         // the first toast of a stack is what brings it up. Everything here is
         // one fixed width regardless, so there is nothing to inherit.
         width: Config.notificationWidth
-        // New toasts arrive below the ones already up, which is the model's own
-        // order: an arrival then never moves a toast that is being read.
+        // New toasts arrive below the ones already up: an arrival never moves
+        // a toast that is being read.
         //
         // No gap between them. The window is exactly this column, so a
         // transparent strip between two slabs would be a hole in it that
@@ -93,17 +111,33 @@ PanelWindow {
         // hairlines read as the separator the gap was for.
         spacing: 0
 
-        // The model rather than an array copied out of it: a Repeater over a
-        // fresh array rebuilds every delegate whenever one notification
-        // arrives, which would restart the timers of all the toasts already up.
-        Repeater {
-            model: server.trackedNotifications
+    }
+
+    // Own each visual until its exit finishes, after the server closes it.
+    Component {
+        id: toastComponent
+
+        Item {
+            id: slot
+
+            required property Notification notification
+
+            width: column.width
+            // Share the toast's exit progress instead of starting a second
+            // layout animation: both move the same distance on every frame.
+            implicitHeight: toast.implicitHeight * (1 - toast.exitProgress)
+            // A departing middle toast passes behind the one above it.
+            z: toast.closing ? -1 : 0
 
             NotificationToast {
-                required property var modelData
+                id: toast
 
-                width: column.width
-                notification: modelData
+                notification: slot.notification
+                width: slot.width
+                onExitFinished: {
+                    root.toastCount--;
+                    slot.destroy();
+                }
             }
         }
     }

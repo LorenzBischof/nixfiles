@@ -11,6 +11,77 @@ PopupSurface {
     id: root
 
     required property Notification notification
+    property bool closing: false
+    property real reveal: 0
+    property real verticalOffset: 16
+    property real exitProgress: 0
+    property real fade: 1
+    signal exitFinished()
+
+    // How far a departing toast lifts. It used to travel its own height, riding
+    // the collapsing slot clean out of the window, which read as a slide rather
+    // than as a dismissal -- but the other end of that is a toast that only
+    // blinks out. Only the first third of the fade is actually watched, so this
+    // is the distance covered in roughly 60ms, not in the 180ms the motion
+    // takes: a lift of a line or so, still moving when it goes.
+    readonly property real exitLift: 28
+
+    opacity: reveal * root.fade
+    transform: Translate { y: root.verticalOffset - root.exitLift * root.exitProgress }
+
+    // Retain the content until the exit finishes, for every close reason.
+    RetainableLock {
+        object: root.notification
+        locked: true
+        onDropped: {
+            root.closing = true;
+            enterAnimation.stop();
+            exitAnimation.start();
+        }
+    }
+
+    Component.onCompleted: enterAnimation.start()
+
+    ParallelAnimation {
+        id: enterAnimation
+        NumberAnimation {
+            target: root
+            property: "reveal"
+            to: 1
+            duration: 220
+            easing.type: Easing.OutCubic
+        }
+        NumberAnimation {
+            target: root
+            property: "verticalOffset"
+            to: 0
+            duration: 220
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    // Two clocks rather than one. The collapse is what the toasts below ride up
+    // on, so it keeps its 180ms -- but the opacity has no reason to wait for
+    // them, and going out in half that is what turns a removal from a slide
+    // into the slab simply no longer being there.
+    ParallelAnimation {
+        id: exitAnimation
+        NumberAnimation {
+            target: root
+            property: "fade"
+            to: 0
+            duration: 110
+            easing.type: Easing.OutCubic
+        }
+        NumberAnimation {
+            target: root
+            property: "exitProgress"
+            to: 1
+            duration: 180
+            easing.type: Easing.OutCubic
+        }
+        onFinished: root.exitFinished()
+    }
 
     // Milliseconds before the toast leaves on its own. The sender's own timeout
     // wins; with none, a critical notification stays until it is clicked away,
@@ -139,6 +210,7 @@ PopupSurface {
         id: mouse
 
         anchors.fill: parent
+        enabled: !root.closing
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
@@ -151,7 +223,7 @@ PopupSurface {
     // which is the friendlier of the two and is what a Timer does anyway.
     Timer {
         interval: root.timeoutMs
-        running: root.timeoutMs > 0 && !mouse.containsMouse
+        running: !root.closing && root.timeoutMs > 0 && !mouse.containsMouse
         onTriggered: root.notification.expire()
     }
 }
