@@ -41,6 +41,8 @@ in
   my.homelab.dashboard.Services.UMap.href = "https://${umapDomain}";
 
   services.restic.backups.daily.paths = [
-    config.services.umap.stateDir
+    # Hardcoded in the module (nixos/modules/services/web-apps/umap.nix); no
+    # longer exposed as services.umap.stateDir.
+    "/var/lib/umap"
   ];
 }
