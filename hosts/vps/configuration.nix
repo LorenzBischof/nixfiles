@@ -41,6 +41,12 @@
   services.nginx.defaultListenAddresses = [ "100.91.84.39" ];
 
   boot = {
+    # nginx binds the tailnet address set above, which only exists while
+    # tailscale0 is up. A switch that restarts tailscaled briefly drops it, and
+    # the nginx reload then fails its config test on bind(). Allowing a
+    # non-local bind keeps the reload working regardless.
+    kernel.sysctl."net.ipv4.ip_nonlocal_bind" = 1;
+
     loader = {
       systemd-boot.enable = true;
       efi = {
