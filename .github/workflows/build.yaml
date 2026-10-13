@@ -20,14 +20,25 @@ jobs:
       fail-fast: false
       matrix:
         target: [flake-check, framework, nas, vps]
+    env:
+      S3_CACHE_STORE_URL: s3://${{ secrets.S3_CACHE_BUCKET }}?endpoint=${{ secrets.S3_CACHE_ENDPOINT }}&region=${{ secrets.S3_CACHE_REGION }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 20
       - uses: docker/setup-qemu-action@v3
-      - run: |
-          sudo mkdir -p /etc/nix
-          echo "machine cache.lorenzbischof.com password ${{ secrets.ATTIC_TOKEN }}" | sudo tee /etc/nix/netrc > /dev/null
+      # Substitution runs in the daemon, which never sees a step's environment:
+      # a client-side `nix copy` reads AWS_* from the env, a daemon-side read
+      # only consults root's credentials file (NixOS/nix#5723).
+      - name: Binary cache credentials
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          # Region comes from the store URL, so root needs only the key pair.
+          sudo -i aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+          sudo -i aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
       - uses: wimpysworld/nothing-but-nix@main
         with:
           hatchet-protocol: holster
@@ -40,15 +51,8 @@ jobs:
             http-connections = 128
             max-substitution-jobs = 128
             extra-platforms = aarch64-linux i686-linux
-            substituters = https://cache.lorenzbischof.com/system?priority=42 https://cache.nixos.org/
-            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= system:DAJL6xmsmoUmZOeGL8XxrEWF5pdtFGMW2+cOGyYaqgU=
-      - name: Tailscale
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:cicd
-          use-cache: 'true'
+            substituters = https://cache.nixos.org/ ${{ env.S3_CACHE_STORE_URL }}
+            trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= s3:g+tSfjDOsI+PlY7ZGs981O+IIAYadMSzSz4NMm/kwIk=
       - name: Build
         id: build
         run: |
@@ -57,14 +61,62 @@ jobs:
             nix flake check -L 2>&1 | tee build.log
             exit_code=${PIPESTATUS[0]}
           else
-            nix run --inputs-from . nixpkgs#attic-client login cache https://cache.lorenzbischof.com ${{ secrets.ATTIC_TOKEN }}
             nix build -L .#nixosConfigurations.${{ matrix.target }}.config.system.build.toplevel 2>&1 | tee build.log
             exit_code=${PIPESTATUS[0]}
-            if [ $exit_code -eq 0 ]; then
-              nix run --inputs-from . nixpkgs#attic-client push system result
-            fi
           fi
           exit $exit_code
+      - name: Push to S3 cache
+        if: ${{ success() && matrix.target != 'flake-check' }}
+        env:
+          S3_CACHE_BUCKET: ${{ secrets.S3_CACHE_BUCKET }}
+          AWS_ENDPOINT_URL: https://${{ secrets.S3_CACHE_ENDPOINT }}
+          AWS_REGION: ${{ secrets.S3_CACHE_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_ACCESS_KEY }}
+          NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          out=$(readlink -f result)
+          # printenv, not echo, so the key can't reach the log; umask so it is
+          # never briefly world-readable.
+          umask 077
+          key="$RUNNER_TEMP/nix-cache-signing-key"
+          printenv NIX_CACHE_SIGNING_KEY > "$key"
+          nix store sign --recursive --key-file "$key" "$out"
+          # `nix copy` can't upload the filtered subset directly: a binary-cache
+          # destination rejects paths whose references it doesn't already hold,
+          # and --no-recursive doesn't exempt it (NixOS/nix#12835). So nix writes
+          # the complete closure locally and the filter moves to the upload. An
+          # incomplete bucket only hurts `nix copy` *from* it; hosts substitute
+          # the rest from cache.nixos.org. zstd: this staging copy is discarded.
+          # Both on /nix: the btrfs volume nothing-but-nix mounts there is the
+          # only filesystem with room. $RUNNER_TEMP and the TMPDIR it hands us
+          # (/mnt/tmp.*) are both on /, which the runner image leaves at ~1GB
+          # free — and nix buffers each compressed NAR in TMPDIR before writing
+          # it to the cache, so a multi-GB path overflows that on its own.
+          staging=/nix/.cache-staging
+          export TMPDIR=/nix/.cache-tmp
+          sudo install -d -o "$(id -u)" -g "$(id -g)" "$staging" "$TMPDIR"
+          nix copy --to "file://$staging?compression=zstd" "$out"
+          # Everything cache.nixos.org doesn't serve (locally built paths are
+          # unsigned, so they pass too). One awk, not grep|awk, so an empty
+          # result can't trip `pipefail`.
+          nix path-info --recursive --sigs "$out" \
+            | awk '!/cache\.nixos\.org-1:/ { print $1 }' > "$RUNNER_TEMP/paths"
+          # Each path contributes its .narinfo plus the NAR that narinfo names.
+          includes=(--include nix-cache-info)
+          while read -r path; do
+            hash=${path#/nix/store/}
+            hash=${hash%%-*}
+            includes+=(--include "$hash.narinfo")
+            includes+=(--include "$(awk '/^URL: / { print $2 }' "$staging/$hash.narinfo")")
+          done < "$RUNNER_TEMP/paths"
+          # --size-only: these names are content-addressed, so a key already
+          # there at the same size needs no re-upload — a plain sync compares
+          # mtimes and would re-send everything. No --delete, so this never
+          # prunes.
+          aws s3 sync "$staging" "s3://$S3_CACHE_BUCKET" \
+            --size-only --no-progress --exclude '*' "${includes[@]}"
       - name: Upload build log
         # Upload on success too: a clean build's log still carries the
         # deprecation warnings the analyze job scans for.
@@ -152,7 +204,9 @@ jobs:
       # nothing-but-nix runner, where root keeps only a ~2GB reserve).
       - name: Build Claude Code
         id: claude_bin
-        run: echo "path=$(nix build --no-link --print-out-paths .#claude-code)/bin/claude" >> "$GITHUB_OUTPUT"
+        run: |
+          out=$(nix build --no-link --print-out-paths .#claude-code)
+          echo "path=$out/bin/claude" >> "$GITHUB_OUTPUT"
       - name: Load prompt
         id: prompt
         run: |

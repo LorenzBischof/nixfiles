@@ -3,6 +3,7 @@
   pkgs,
   config,
   inputs,
+  secrets,
   ...
 }:
 {
@@ -51,12 +52,19 @@
         "@wheel"
       ];
       substituters = [
-        "https://cache.lorenzbischof.com/system?priority=42"
+        # Our own binary cache. The URL lives in nix-secrets to keep it out of
+        # this public repo, unencrypted there because nix needs it at eval time;
+        # it carries `priority` because nix reads that from the client, not from
+        # the bucket's nix-cache-info. CI holds the same string.
+        secrets.s3-cache-store-url
       ];
       trusted-public-keys = [
-        "system:DAJL6xmsmoUmZOeGL8XxrEWF5pdtFGMW2+cOGyYaqgU="
+        # `nix key convert-secret-to-public` on the CI signing key, which lives
+        # only in the NIX_CACHE_SIGNING_KEY GitHub secret.
+        "s3:g+tSfjDOsI+PlY7ZGs981O+IIAYadMSzSz4NMm/kwIk="
       ];
-      netrc-file = config.age.secrets.netrc.path;
+      # The cache being unreachable must not stop a rebuild.
+      fallback = true;
     };
     gc = {
       automatic = true;
@@ -69,6 +77,11 @@
   # so that it's lower than system and user slice overall
   # instead of only being lower in system slice
   systemd.services.nix-daemon.serviceConfig.Slice = "-.slice";
+  # The daemon runs every substitution, so the S3 cache's read-only key goes in
+  # its environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), not in a Nix
+  # file.
+  systemd.services.nix-daemon.serviceConfig.EnvironmentFile =
+    config.age.secrets.nix-daemon-env.path;
   # always use the daemon, even executed  with root
   environment.variables.NIX_REMOTE = "daemon";
 }

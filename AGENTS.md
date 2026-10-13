@@ -31,8 +31,6 @@ There are two relevant AGENTS.md sources in this repo setup:
     - `ai/`: AI tools configuration
     - `firefox.nix`: Firefox customizations
 
-- **`tests/`**: NixOS VM tests using `pkgs.testers.runNixOSTest`
-
 - **`packages/`**: Custom package definitions
 
 ### Module Pattern
@@ -117,11 +115,8 @@ home-manager switch --flake .#bischoflo
 ### Testing
 
 ```bash
-# Run all NixOS tests
+# Evaluate the whole flake (all hosts and packages)
 nix flake check
-
-# Run specific test
-nix build .#checks.x86_64-linux.attic --print-build-logs
 ```
 
 ## VM Validation Expectations

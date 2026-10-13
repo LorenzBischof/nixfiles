@@ -88,7 +88,7 @@
     # Ryzen AI NPU stack (XRT + xdna plugin + FastFlowLM). Upstream asks
     # consumers not to follow their nixpkgs, but that warning is only about
     # hitting their Cachix, which we don't use: CI builds the framework closure
-    # and pushes it to our own attic, so these land there like everything else.
+    # and pushes it to our own cache, so these land there like everything else.
     nix-amd-ai = {
       url = "github:noamsto/nix-amd-ai";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -171,42 +171,6 @@
         ];
       };
       treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
-      mkTest =
-        { name, module }:
-        pkgs.testers.runNixOSTest {
-          interactive.sshBackdoor.enable = true;
-          globalTimeout = 500;
-
-          inherit name;
-
-          defaults = {
-            # I could not get this to work another way. If I directly set the options, there is an eval error.
-            # Including the full module means that we need a mocked private key etc.
-            options.age = with lib; {
-              secrets = mkOption {
-                type = types.attrsOf (
-                  types.submodule (
-                    { config, ... }:
-                    {
-                      options = {
-                        file = mkOption {
-                          type = types.path;
-                        };
-                        path = mkOption {
-                          type = types.str;
-                          default = "${config.file}";
-                        };
-                      };
-                    }
-                  )
-                );
-                default = { };
-              };
-            };
-          };
-          imports = [ module ];
-        };
-
     in
     {
       nixosConfigurations = {
@@ -384,11 +348,5 @@
           # warning for this app.
           meta.description = "Boot the framework configuration in a throwaway VM for agent-driven testing";
         };
-      checks.${system} = {
-        attic = mkTest {
-          name = "attic";
-          module = import ./tests/attic.nix { inherit inputs self; };
-        };
-      };
     };
 }

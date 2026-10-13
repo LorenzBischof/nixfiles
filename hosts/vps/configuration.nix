@@ -9,7 +9,6 @@
   imports = [
     ./hardware-configuration.nix
     ./disk-config.nix
-    ./attic.nix
     #./n8n.nix
     ./cooklang.nix
     ../../modules/nixos
