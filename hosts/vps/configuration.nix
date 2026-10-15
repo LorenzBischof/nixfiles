@@ -93,6 +93,10 @@
     settings = {
       PermitRootLogin = "no";
       PasswordAuthentication = false;
+      # PasswordAuthentication alone is not enough: keyboard-interactive goes
+      # through PAM and accepts the Unix password anyway. Matters now that
+      # lbischof has a declared password instead of a locked account.
+      KbdInteractiveAuthentication = false;
     };
   };
 

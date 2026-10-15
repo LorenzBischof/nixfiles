@@ -207,6 +207,12 @@ in
       };
 
       systemd.services.nixos-upgrade = {
+        # Root's store resolves to "auto", i.e. the local store, so nix would
+        # run in-process without the S3 cache credentials the daemon holds in
+        # its EnvironmentFile -- every substitution then fails with HTTP 401
+        # and `fallback = true` silently rebuilds it from source instead.
+        environment.NIX_REMOTE = "daemon";
+
         serviceConfig = {
           CPUSchedulingPolicy = "idle";
           IOSchedulingClass = "idle";

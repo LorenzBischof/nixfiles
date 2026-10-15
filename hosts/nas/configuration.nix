@@ -150,6 +150,11 @@
 
   console.keyMap = "sg";
 
+  # lbischof.hashedPassword comes from nix-secrets; root is deliberately left
+  # locked, since console recovery goes through lbischof + passwordless sudo.
+  # Trade-off: sulogin won't open the emergency shell for a locked root, so a
+  # failed boot needs a rescue USB.
+  users.mutableUsers = false;
   users.users.lbischof = {
     isNormalUser = true;
     description = "lbischof";

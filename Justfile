@@ -32,11 +32,14 @@ switch host="": add
 
     overrides=$(./override-input.sh)
     if [ "{{host}}" = "" ]; then
-        sudo nixos-rebuild switch --flake . $overrides
+        # Build as the user so the credentialed daemon serves the cache;
+        # --elevate only sudoes the activation steps. --ask-elevate-password
+        # prompts up front instead of mid-run, so the build can be left alone.
+        nixos-rebuild switch --flake . --elevate sudo --ask-elevate-password $overrides
     elif [ "{{host}}" = "nas" ]; then
-        nixos-rebuild switch --flake .#nas --target-host nas --sudo $overrides
+        nixos-rebuild switch --flake .#nas --target-host nas --elevate sudo $overrides
     elif [ "{{host}}" = "vps" ]; then
-        nixos-rebuild switch --use-substitutes --flake .#vps --target-host vps --build-host vps --ask-sudo-password
+        nixos-rebuild switch --use-substitutes --flake .#vps --target-host vps --build-host vps --elevate sudo
     else
         echo "Unknown host: {{host}}"
         exit 1
@@ -48,11 +51,11 @@ test host="": add
     set -euo pipefail
     overrides=$(./override-input.sh)
     if [ "{{host}}" = "" ]; then
-        sudo nixos-rebuild test --flake . $overrides
+        nixos-rebuild test --flake . --elevate sudo --ask-elevate-password $overrides
     elif [ "{{host}}" = "nas" ]; then
-        nixos-rebuild test --flake .#nas --target-host nas --sudo $overrides
+        nixos-rebuild test --flake .#nas --target-host nas --elevate sudo $overrides
     elif [ "{{host}}" = "vps" ]; then
-        nixos-rebuild test --flake .#vps --target-host vps --build-host vps --sudo $overrides
+        nixos-rebuild test --flake .#vps --target-host vps --build-host vps --elevate sudo $overrides
     else
         echo "Unknown host: {{host}}"
         exit 1

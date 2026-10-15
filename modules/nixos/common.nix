@@ -63,8 +63,11 @@
         # only in the NIX_CACHE_SIGNING_KEY GitHub secret.
         "s3:g+tSfjDOsI+PlY7ZGs981O+IIAYadMSzSz4NMm/kwIk="
       ];
-      # The cache being unreachable must not stop a rebuild.
-      fallback = true;
+      # No `fallback` override: nix's default of false is what we want. An
+      # unreachable or unauthenticated cache is only a warning and builds from
+      # source either way; fallback would additionally hide a *corrupt or
+      # interrupted* download behind a silent source rebuild, which on vps
+      # costs hours. Better to fail and let the next upgrade run retry.
     };
     gc = {
       automatic = true;
@@ -77,11 +80,12 @@
   # so that it's lower than system and user slice overall
   # instead of only being lower in system slice
   systemd.services.nix-daemon.serviceConfig.Slice = "-.slice";
-  # The daemon runs every substitution, so the S3 cache's read-only key goes in
-  # its environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), not in a Nix
-  # file.
+  # Builds using the daemon get the S3 cache's read-only key from its
+  # environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY).
   systemd.services.nix-daemon.serviceConfig.EnvironmentFile =
     config.age.secrets.nix-daemon-env.path;
-  # always use the daemon, even executed  with root
+  # Prefer the daemon in login sessions. Rebuilds must evaluate and build as
+  # the user (nixos-rebuild --elevate sudo), not under sudo: sudo strips this
+  # and root would then bypass the daemon, losing the cache credentials.
   environment.variables.NIX_REMOTE = "daemon";
 }
