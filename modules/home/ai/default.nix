@@ -254,59 +254,20 @@ in
 
     programs.voxtype = {
       enable = true;
-      # nixpkgs' voxtype builds the ONNX engines without `cohere`, so take the
-      # package from the flake input instead. Still the CPU build: the NPU is
-      # unreachable either way (voxtype's `setup npu` gates on Intel's
-      # intel_vpu driver and routes to OpenVINO, and no ONNX execution
-      # provider here targets AMD's XDNA), and the 860M would need
-      # `onnx-migraphx`, which is untested against this model.
-      # Keep Parakeet's final flush on record stop (upstream issue #804).
-      package = inputs.voxtype.packages.${system}.onnx.overrideAttrs {
-        paths = [
-          (inputs.voxtype.packages.${system}.voxtype-onnx-unwrapped.overrideAttrs (old: {
-            patches = (old.patches or [ ]) ++ [ ./voxtype-parakeet-drain.patch ];
-          }))
-        ];
-      };
+      # Use the upstream ONNX package for Parakeet transcription on the CPU.
+      package = inputs.voxtype.packages.${system}.onnx;
       service.enable = true;
       settings = {
         hotkey.enabled = false;
         status.icon_theme = "material";
-        # Set via `settings` rather than `programs.voxtype.engine`: the
-        # module's enum still predates the cohere engine.
         engine = "parakeet";
-        parakeet = {
-          # Streaming needs a cache-aware model, and this is the only one in
-          # voxtype's registry that qualifies — every int8 Parakeet variant is
-          # flagged streaming_compatible = false, so this runs fp32 weights
-          # (2.6 GB) where cohere ran q4f16 (1.5 GB). English only. Fetched
-          # imperatively into ~/.local/share/voxtype/models with
-          # `voxtype setup model parakeet-unified-en-0.6b`.
-          model = "parakeet-unified-en-0.6b";
-          # Types partial deltas at the cursor while you speak instead of
-          # committing the whole utterance on key release. A transducer, so
-          # each 0.5s chunk costs the same no matter how long you talk; the
-          # tradeoff is that inference runs for the whole hold, pauses
-          # included. The schema calls this "forces toggle activation", but
-          # that only binds voxtype's own hotkey grabber, which is off here —
-          # the press/release ssharp binding in modules/home/wayland still
-          # drives it through `voxtype record start` / `stop`.
-          streaming = true;
-          # parakeet-rs rejects any window that isn't a whole number of
-          # 8-mel-frame blocks, and at a 10 ms hop that means every one of
-          # these has to be a multiple of 0.08s. All three upstream defaults
-          # (0.5 / 1.5 / 0.5 -> 50 / 150 / 50 frames) fail that check, so
-          # `streaming = true` cannot start without overriding them here.
-          # Rounded down to the nearest valid step to keep latency at or under
-          # what the defaults asked for.
-          streaming_chunk_secs = 0.48;
-          streaming_left_context_secs = 1.52;
-          streaming_right_context_secs = 0.48;
-        };
-        # Kept for a one-line revert: encoder-decoder, no 30s mel padding, and
-        # 14 languages against Parakeet's English, but batch-only — nothing
-        # wraps it in the sliding-window streaming transcriber upstream.
-        cohere.model = "cohere-transcribe-q4f16";
+        # A TDT transducer, punctuated, 25 European languages,
+        # fp32 weights (2.6 GB). Also batch-only — this is the v3 the registry
+        # recommends, not the `parakeet-unified-en-0.6b` that the streaming
+        # pipeline needs, which is English-only and was tried and dropped. No
+        # thread knob exists; parakeet-rs sizes its own ONNX session. Fetched
+        # with `voxtype setup --download --model parakeet-tdt-0.6b-v3`.
+        parakeet.model = "parakeet-tdt-0.6b-v3";
         # The floating waveform panel duplicates what the quickshell bar
         # already draws (the level strip and the state icon in
         # modules/home/wayland/quickshell), and it cannot render anyway: this
