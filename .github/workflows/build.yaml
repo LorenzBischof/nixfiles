@@ -139,6 +139,10 @@ jobs:
       contents: write
       id-token: write
       pull-requests: write
+    outputs:
+      # `false` is the only value that lets auto-merge through, so a missing or
+      # empty output holds the PR rather than waving it through unchecked.
+      merge-hold: ${{ steps.verdict.outputs.hold }}
     env:
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
     steps:
@@ -172,7 +176,7 @@ jobs:
       # the evaluated config, so nothing is built and nothing is downloaded.
       # Per-host so one broken config still leaves the others diffable — this
       # job runs precisely when a build is broken.
-      - name: Application version diff
+      - name: Application version and release-note diff
         # pipefail matters here: without it a failed `nix eval` is masked by the
         # `jq` at the end of the pipe and the host looks like it lost every app.
         shell: bash
@@ -199,6 +203,109 @@ jobs:
               "/tmp/$target.before" "/tmp/$target.after" >> pkgdiff.txt || true
           done
           cat pkgdiff.txt || true
+          # What upstream wrote down that no build log can show: a changed option
+          # default, a module dropped from a package's defaults, a migration to
+          # run first. Diffing the release-notes tree between the two nixpkgs
+          # revisions leaves only the entries this bump added — a handful of
+          # lines, so the agent reads the diff rather than a release's worth of
+          # notes. Both revisions are already in the store; the evals above
+          # fetched them. Flake inputs aren't flake outputs, hence getFlake.
+          nixpkgs_of() {
+            nix eval --impure --raw --expr "(builtins.getFlake \"$1\").inputs.nixpkgs.outPath"
+          }
+          before=$(nixpkgs_of path:/tmp/base) || exit 0
+          after=$(nixpkgs_of "path:$GITHUB_WORKSPACE") || exit 0
+          # Equal paths mean this bump left nixpkgs alone; `diff` exits 1 on any
+          # difference, which `set -e` would take for a step failure.
+          if [ "$before" != "$after" ]; then
+            diff -r -U0 "$before/nixos/doc/manual/release-notes" \
+              "$after/nixos/doc/manual/release-notes" > relnotes.txt || true
+          fi
+          cat relnotes.txt || true
+      # A quick look at what the bump pulled in from the inputs that aren't
+      # nixpkgs or home-manager: those two are too big to skim and too closely
+      # watched to be the realistic attack, while a small third-party flake is
+      # neither. Diffing the fetched source trees rather than the upstream git
+      # history shows what will actually be built, so a tarball that doesn't
+      # match its own commits shows up too. Both revisions are already in the
+      # store; the evals above fetched them.
+      - name: Third-party input diff
+        shell: bash
+        run: |
+          if [ ! -f /tmp/base/flake.lock ]; then
+            echo "no base tree, skipping" >&2
+            exit 0
+          fi
+          # Root inputs whose locked revision moved. The exclusion is by
+          # repository name, not input name, so nixpkgs forks and extra nixpkgs
+          # channels drop out too.
+          changed=$(jq -nr --slurpfile a /tmp/base/flake.lock --slurpfile b flake.lock '
+            def srcs: .[0] as $f | $f.nodes as $n
+              | ($f.nodes.root.inputs // {})
+              | with_entries(.value = ($n[.value].locked // {}));
+            ($a | srcs) as $before | ($b | srcs) as $after
+            | $after | to_entries[] | . as $e
+            | ($before[$e.key] // empty) as $old
+            | select((($old.rev // $old.narHash) != null)
+                     and (($old.rev // $old.narHash) != ($e.value.rev // $e.value.narHash)))
+            | select(((($e.value.repo // "") | ascii_downcase) | IN("nixpkgs", "home-manager")) | not)
+            | [ $e.key,
+                (if $e.value.owner then "\($e.value.owner)/\($e.value.repo)"
+                 else ($e.value.url // $e.value.type) end),
+                ($old.rev // $old.narHash),
+                ($e.value.rev // $e.value.narHash),
+                ($e.value.type // "") ] | @tsv')
+          if [ -z "$changed" ]; then
+            echo "no third-party input moved in this bump" > inputdiff.txt
+            cat inputdiff.txt
+            exit 0
+          fi
+          outpath() {
+            nix eval --impure --raw --expr "(builtins.getFlake \"$1\").inputs.\"$2\".outPath"
+          }
+          : > inputdiff.txt
+          # Each input's complete patch, so nothing is only ever seen truncated.
+          # inputdiff.txt stays a bounded overview that points at these.
+          mkdir -p input-diffs
+          while IFS=$'\t' read -r name repo old new type; do
+            if ! before=$(outpath path:/tmp/base "$name") \
+              || ! after=$(outpath "path:$GITHUB_WORKSPACE" "$name"); then
+              {
+                echo "===== $name ($repo) $old -> $new"
+                echo "      could not fetch both sources, diff unavailable"
+              } >> inputdiff.txt
+              continue
+            fi
+            # Written to files rather than piped: `diff` exits 1 on any
+            # difference and a closed `head` pipe exits 141, either of which
+            # `pipefail` takes for a step failure.
+            files=$RUNNER_TEMP/input-files
+            patch=input-diffs/$name.patch
+            diff -r -q --no-dereference "$before" "$after" > "$files" 2>&1 || true
+            diff -r -u --no-dereference "$before" "$after" > "$patch" 2>&1 || true
+            # Store paths carry no meaning for the reader and defeat grep.
+            sed -i -e "s#$before#a#g" -e "s#$after#b#g" "$files" "$patch"
+            lines=$(wc -l < "$patch")
+            {
+              echo "===== $name ($repo) $old -> $new"
+              # Only github inputs have a compare page; for anything else the
+              # patch is all there is.
+              if [ "$type" = github ]; then
+                echo "      https://github.com/$repo/compare/$old...$new"
+              fi
+              echo "      full patch: $patch ($lines lines)"
+              echo "--- files changed"
+              # The file list is the index into the patch, so it is never cut.
+              cat "$files"
+              if [ "$lines" -gt 200 ]; then
+                echo "--- patch, first 200 of $lines lines (rest in $patch)"
+              else
+                echo "--- patch, complete"
+              fi
+              head -n 200 "$patch"
+            } >> inputdiff.txt
+          done <<< "$changed"
+          cat inputdiff.txt
       # Build the Claude Code we pin in flake.lock and hand it to the action
       # below, so it skips its own native install (which runs out of disk on the
       # nothing-but-nix runner, where root keeps only a ~2GB reserve).
@@ -219,9 +326,9 @@ jobs:
         id: claude
         uses: anthropics/claude-code-action@v1
         env:
-          # Claude pushes the fix and edits its status comment, so it needs the
+          # Claude pushes the fix, so it needs the
           # write GITHUB_TOKEN in-shell anyway — no point isolating a read-only
-          # PAT. gh authenticates with this for `gh search` and `gh pr comment`.
+          # PAT. gh authenticates with this for reading PRs and upstream issues.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -236,15 +343,123 @@ jobs:
           show_full_output: true
           # auto mode classifies each tool call (allows safe read/build commands,
           # fails closed in CI on anything risky). We only pre-allow the mutating
-          # tools (edits, the git commit/push, the status comment), deny raw egress
+          # tools (edits and the git commit/push), deny raw egress
           # as a backstop, and domain-lock WebFetch since it's off by default.
-          claude_args: '--permission-mode auto --add-dir "/nix/store" --allowedTools "Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr comment:*),WebFetch(domain:github.com),WebFetch(domain:raw.githubusercontent.com),WebFetch(domain:nixos.org)" --disallowedTools "Bash(curl:*),Bash(wget:*),Bash(nc:*)"'
+          # Task too: the prompt delegates the changelog and release-note reading
+          # to subagents so it stays out of the main thread's context, and that
+          # shouldn't depend on how the classifier reads a spawn.
+          #
+          # --tools cuts the built-in set to the ones an earlier run actually
+          # used (Bash, Read, Edit, Write, WebFetch, ToolSearch) plus Task for
+          # the delegation above. Measured 6.4k tokens off every turn's context:
+          # tool schemas are not all loaded on demand. It also removes the
+          # wait-and-resume tools — Monitor, ScheduleWakeup, Cron*, TaskOutput —
+          # which mean nothing in a one-shot job and which that run reached for
+          # instead of just waiting. ToolSearch stays because WebFetch arrives
+          # deferred and has to be loaded. Unknown names here are ignored
+          # silently, so a typo fails open: check against the init message's
+          # tool list rather than assuming a name exists.
+          claude_args: '--permission-mode auto --add-dir "/nix/store" --tools "Bash,Read,Edit,Write,Task,WebFetch,ToolSearch" --allowedTools "Task,Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git push:*),WebFetch(domain:github.com),WebFetch(domain:raw.githubusercontent.com),WebFetch(domain:nixos.org)" --disallowedTools "Bash(curl:*),Bash(wget:*),Bash(nc:*)"'
+          # Two things keep this one-shot job from ending mid-work, since
+          # anything still running dies with the session. Background tasks are
+          # off, so a build that outlives the 2-minute foreground timeout runs
+          # to completion instead of being backgrounded and waited on
+          # asynchronously — which is what sank an earlier run: three verification
+          # builds were backgrounded, a dozen turns went to polling their output
+          # files, and the turn ended waiting on them, so the finished fixes were
+          # never pushed. Subagents are unaffected: several spawned in one
+          # message still run concurrently and block the turn until they report.
+          # And
+          # the comment body is what this job exists to produce, so a Stop hook
+          # refuses the end of turn while the file is missing: exit 2 hands the
+          # stderr back to Claude, making writing it the only way out of the
+          # session. Claude Code caps consecutive blocks at 8, so an unwritable
+          # file can't wedge the job.
+          settings: |
+            {
+              "env": {
+                "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"
+              },
+              "hooks": {
+                "Stop": [{
+                  "hooks": [{
+                    "type": "command",
+                    "command": "test -s /tmp/claude-analysis.md || { echo 'The analysis comment body is missing. Write the final comment to /tmp/claude-analysis.md, as the prompt requires, before finishing the turn.' >&2; exit 2; }"
+                  }]
+                }]
+              }
+            }
+      # A file Claude writes to stop this bump from auto-merging, so a
+      # third-party input that looks off, or an upgrade upstream itself cautions
+      # about, waits for a human instead of deploying. Only for what a green
+      # build doesn't catch, and the prompt keeps the bar high: routine
+      # migrations are covered by the daily backups and merge as usual. Read
+      # before the comment is published, so a failure to post still leaves the
+      # hold in place.
+      - name: Auto-merge verdict
+        id: verdict
+        if: ${{ !cancelled() }}
+        run: |
+          hold=/tmp/claude-merge-hold
+          if [ -s "$hold" ]; then
+            echo "hold=true" >> "$GITHUB_OUTPUT"
+            # One line: a newline would end the workflow command early.
+            echo "::warning::auto-merge held: $(head -c 400 "$hold" | tr '\n\r' '  ')"
+          else
+            echo "hold=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish analysis and collapse previous comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          body=$(cat /tmp/claude-analysis.md)
+          test -n "$body"
+          marker='<!-- claude-build-analysis -->'
+          # What the analysis cost, taken from the SDK's own session total: the
+          # last element of the execution log is its `result` message, and that
+          # total covers the subagents too. It is costed at list API prices
+          # whatever the auth mode, so on the subscription token this job uses
+          # it reads as the API equivalent rather than a bill. Appended here
+          # rather than written by Claude, which can't know its final cost
+          # while it is still running. Anything missing or unparsable leaves
+          # the footer off: the findings are what the comment is for.
+          cost=
+          # No file argument would make jq read the step's stdin and wait there.
+          if [ -s "${EXECUTION_FILE:-}" ]; then
+            cost=$(jq -r 'if type == "array" then .[-1] else . end
+              | if .type == "result" and (.total_cost_usd | type) == "number"
+                then .total_cost_usd else empty end' "$EXECUTION_FILE" || true)
+          fi
+          footer=
+          if [ -n "$cost" ]; then
+            footer=$(printf '\n<sub>Analysis cost: $%.2f</sub>' "$cost")
+          fi
+          previous=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- claude-build-analysis -->"))) | .node_id')
+          # Publish first so a failed post leaves the previous findings visible.
+          printf '%s\n%s\n%s\n' "$marker" "$body" "$footer" | gh pr comment "$PR_NUMBER" --body-file -
+          while IFS= read -r id; do
+            test -n "$id" || continue
+            # $id is a GraphQL variable, not a shell expansion.
+            # shellcheck disable=SC2016
+            gh api graphql -f id="$id" -f query='
+              mutation($id: ID!) {
+                minimizeComment(input: {subjectId: $id, classifier: OUTDATED}) {
+                  minimizedComment { isMinimized }
+                }
+              }'
+          done <<< "$previous"
 
   automerge-dependabot:
     # Wait for analyze-claude too, so any deprecation/build fix it pushes lands
     # before auto-merge is enabled. If that job fails, automerge is skipped.
+    # `merge-hold == 'false'` rather than `!= 'true'`: the analysis has to
+    # affirmatively clear the bump, so a skipped or broken verdict step leaves
+    # the PR for a human instead of merging it.
     needs: [build, analyze-claude]
-    if: ${{ github.event_name == 'pull_request' && needs.build.result == 'success' && github.event.pull_request.user.login == 'dependabot[bot]' }}
+    if: ${{ github.event_name == 'pull_request' && needs.build.result == 'success' && needs.analyze-claude.outputs.merge-hold == 'false' && github.event.pull_request.user.login == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

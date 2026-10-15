@@ -1,70 +1,41 @@
 # AGENTS.md
 
-This is a personal NixOS configuration repository using Nix Flakes. It manages multiple systems with shared modules for both NixOS system configuration and home-manager user configuration.
+A personal NixOS configuration using flakes, managing several hosts with shared
+modules for both system and home-manager config.
 
-## AGENTS.md Layers
+## Layout and module pattern
 
-There are two relevant AGENTS.md sources in this repo setup:
+`hosts/<host>/` holds per-host config, split into `nixos/` and `home/`.
+`modules/nixos/` and `modules/home/` hold what is shared across hosts, and
+`packages/` the custom packages.
 
-- **Project-local AGENTS.md (this file)**: `AGENTS.md`
-  - Repository-specific guidance for working in `nixfiles`.
-- **Global AGENTS.md sources**:
-  - Host/default: `modules/home/ai/AGENTS.md`
+Modules define options under a `my.*` namespace and host configs enable them:
+`my.system.*`, `my.services.*`, `my.programs.*`, `my.profiles.*` — for example
+`my.system.autoUpgrade`, `my.programs.firefox`, `my.profiles.ai`.
 
-## Repository Architecture
+## Nix + Bash interpolation
 
-### Directory Layout
-
-- **`hosts/`**: Per-host configurations
-  - Each host has a subdirectory (e.g., `framework/`, `nas/`, `vps/`, `wsl/`)
-  - Within each host: `nixos/` contains system config, `home/` contains home-manager config
-  - Host-specific files and specialized modules
-
-- **`modules/`**: Reusable modules shared across systems
-  - `modules/nixos/`: System-level modules imported into all NixOS hosts
-    - Common settings, autoupgrade, nginx config, monitoring
-    - Custom services: `detect-reboot-required`, `detect-syncthing-conflicts`, `nixpkgs-age-monitor`
-  - `modules/home/`: User-level modules for home-manager
-    - `wayland/`: Sway window manager, quickshell bar, foot terminal, keybindings
-    - `shell/`: Shell configuration
-    - `git/`: Git configuration
-    - `ai/`: AI tools configuration
-    - `firefox.nix`: Firefox customizations
-
-- **`packages/`**: Custom package definitions
-
-### Module Pattern
-
-This repository uses a custom options pattern with `my.*` namespace:
-- System options: `my.system.*` (e.g., `my.system.autoUpgrade`)
-- Service options: `my.services.*` (e.g., `my.services.detect-reboot-required`)
-- Program options: `my.programs.*` (e.g., `my.programs.firefox`, `my.programs.git`)
-- Profile options: `my.profiles.*` (e.g., `my.profiles.ai`)
-
-Modules define options and are imported into host configurations, which then enable/configure them.
-
-## Nix + Bash Interpolation Note
-
-When writing shell scripts inside Nix strings (for example `writeShellScript` or `writeShellApplication`), Nix interpolates `${...}` before Bash sees the script.
+When writing shell scripts inside Nix strings (for example `writeShellScript` or
+`writeShellApplication`), Nix interpolates `${...}` before Bash sees the script.
 
 - Use `''${var}` when you need a literal Bash `${var}` expansion at runtime.
-- `pkgs.writers.writePython3Bin` here is `name attrs text` (use `{ }` for `attrs` when unused).
+- `pkgs.writers.writePython3Bin` here is `name attrs text` (use `{ }` for
+  `attrs` when unused).
 
-## ntfy Notification Lifecycle
+## ntfy notification lifecycle
 
-When sending ntfy notifications from recurring checks/services, keep one updatable notification per host/service instead of creating a new message each run.
-For details, see the ntfy publish docs: https://docs.ntfy.sh/publish/#updating-deleting-notifications
+When sending ntfy notifications from recurring checks/services, keep one
+updatable notification per host/service rather than a new message each run — see
+https://docs.ntfy.sh/publish/#updating-deleting-notifications
 
-- Use a stable notification ID in the publish URL, for example:
-  - `https://ntfy.sh/<topic>/<sequence-id>`
-  - where `<sequence-id>` is derived from hostname + check name.
-- Publish updates to that same URL so clients update the existing notification.
-- Clear/dismiss resolved states by calling:
-  - `PUT https://ntfy.sh/<topic>/<sequence-id>/clear`
+- Publish to a stable ID: `https://ntfy.sh/<topic>/<sequence-id>`, where
+  `<sequence-id>` derives from hostname + check name. Updates go to that same URL.
+- Clear a resolved state with `PUT https://ntfy.sh/<topic>/<sequence-id>/clear`.
 
-## SSH Access to Hosts
+## SSH access to hosts
 
-Run SSH commands with the sandbox disabled. Open one `ControlMaster` per session and reuse it for all further commands to that host:
+Run SSH with the sandbox disabled. Open one `ControlMaster` per session and reuse
+it for all further commands to that host:
 
 ```bash
 ssh -F none -MNf -o ControlPath=~/.ssh/controlmasters/<name> -o ControlPersist=4h \
@@ -75,60 +46,21 @@ ssh -F none -o ControlPath=~/.ssh/controlmasters/<name> nas '<command>'         
 For debugging the home router (login, useful OIDs, known bugs), see
 `docs/router-debugging.md`.
 
-## Common Development Commands
-
-### Building and Switching
+## Commands
 
 ```bash
-# Activate configuration for current host (framework)
-just switch
-
-# Activate configuration for remote host
-just switch nas
-just switch vps
-
-# Test configuration without persisting
-just test
-just test nas
-just test vps
+just switch            # activate for this host; `just switch nas` for a remote one
+just test              # same, without persisting
+nix flake check        # evaluate every host and package
+nix build .#nixosConfigurations.<host>.config.system.build.toplevel   # build only
+home-manager switch --flake .#bischoflo                               # WSL, standalone
 ```
 
-### Building Manually
+## Validating runtime behaviour
 
-```bash
-# Build and activate configuration for current host
-sudo nixos-rebuild switch --flake .#framework
-
-# Build without activating (test first)
-sudo nixos-rebuild build --flake .#framework
-
-# Build for specific host without switching
-nix build .#nixosConfigurations.nas.config.system.build.toplevel
-
-# Quick local build check for current host
-nix build .#nixosConfigurations.framework.config.system.build.toplevel
-
-# Update home-manager for WSL (standalone)
-home-manager switch --flake .#bischoflo
-```
-
-### Testing
-
-```bash
-# Evaluate the whole flake (all hosts and packages)
-nix flake check
-```
-
-## VM Validation Expectations
-
-When a task is about runtime behavior on the `framework` desktop session, prefer validating it in `framework-agent-vm` instead of stopping at static inspection or a successful build. This especially applies to:
-
-- Sway/Wayland/XWayland behavior, window matching, and keybindings
-- GUI app launch behavior and Electron/Chromium Wayland mode
-- User-session services and other behavior that only shows up after login
-
-For those tasks:
-
-- Start `nix run .#framework-agent-vm` early once you have a plausible hypothesis
-- Treat local code inspection as preliminary; verify the final behavior in the VM before closing the task
-- If VM validation is not possible, say exactly what blocked it and what was verified instead
+When a task is about runtime behaviour of the `framework` desktop session — Sway
+and XWayland, window matching, keybindings, GUI app launch and Electron Wayland
+mode, or anything that only appears after login — a successful build and static
+inspection are preliminary. Verify it in the agent VM before closing the task
+(the `nixos-agent-test-vm` skill covers that), and if you can't, say exactly what
+blocked it and what you verified instead.
