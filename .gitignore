@@ -11,3 +11,6 @@ nas-efi-vars.fd
 data-alloy
 .claude/settings.local.json
 pkgdiff.txt
+relnotes.txt
+inputdiff.txt
+input-diffs
