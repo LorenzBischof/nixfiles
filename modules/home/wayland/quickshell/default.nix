@@ -115,46 +115,11 @@ let
     '';
   };
 
-  # Three upstream fixes for bugs this bar hits, none of them in a release:
-  # 0.3.1 (2026-08-21, current nixpkgs-unstable) is still the newest tag and all
-  # three landed on master after it. Drop the lot, and this override with them,
-  # once a release carries them.
-  #
-  # nm-service-watcher: NetworkManager restarting under a running quickshell
-  # tears its devices down and nothing ever re-registers them, so the bar
-  # latches to the red disconnected icon until quickshell itself is restarted.
-  # Reproducible with a plain `systemctl restart NetworkManager`, which is
-  # exactly what `just switch` does.
-  # https://git.outfoxxed.me/quickshell/quickshell/commit/0f9939ca4fac3a1db3653c51a3c23ca9812e2946
-  #
-  # nm-omitted-mode: joining a network from the wifi dropdown left it spinning
-  # forever. Connecting with a password calls AddAndActivateConnection with only
-  # the psk and lets NetworkManager complete the rest from the access point; the
-  # profile it writes leaves `802-11-wireless.mode` at its default, so NM omits
-  # it from GetSettings. quickshell matched that field against "infrastructure"
-  # exactly and dropped every profile without it, so the new connection was
-  # never attached to the network in the list: `known` stayed false, its state
-  # stayed Deactivated, and the row never learned it had connected -- even
-  # though NetworkManager had. nmtui writes mode explicitly, which is why it
-  # looked like only the bar was broken.
-  # https://git.outfoxxed.me/quickshell/quickshell/commit/052059fb7c
-  #
-  # scriptmodel-native-types: ScriptModel defaults to comparing entries by
-  # structure, and 0.3.1 is the one release where that walks a native QObject's
-  # properties as if it were a plain javascript object -- so two distinct
-  # objects can compare equal, and the model keeps the entry it already had.
-  # Every ScriptModel here holds native objects (wifi networks, bluetooth
-  # devices, pipewire nodes, workspaces), which is exactly the case this
-  # excludes from the structural walk. It also stops each list from deep
-  # comparing every property of every row on every update.
-  # https://git.outfoxxed.me/quickshell/quickshell/commit/c6a516096d
-  quickshell = pkgs.quickshell.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [
-      ./nm-service-watcher.patch
-      ./nm-omitted-mode.patch
-      ./scriptmodel-native-types.patch
-    ];
-  });
+  # The three upstream fixes this used to carry as local patches
+  # (nm-service-watcher, nm-omitted-mode, scriptmodel-native-types) are now in
+  # the 0.3.2 release nixpkgs packages, so the override that applied them is
+  # gone along with the patch files.
+  quickshell = pkgs.quickshell;
 
   # sway's only handle on the Fn key overlay. A keybinding can only exec a
   # process, so the Right-Ctrl binding goes through quickshell's IPC socket to
