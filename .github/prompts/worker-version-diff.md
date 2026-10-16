@@ -20,9 +20,9 @@ something this repo actually runs. A bump reads as a `-`/`+` pair on the same
 name. The file is missing or empty when nothing moved, or when the diff could not
 be computed — then your whole answer is one sentence saying so.
 
-## Which bumps to check
+## Which bumps to read a changelog for
 
-Most of that diff is routine, so pick what is worth the reader's attention:
+Every bump gets a bullet (see *Output*), but only some are worth reading about:
 
 - Anything crossing a major version, and anything for a service holding state
   that an upgrade migrates in place (databases, Grafana, Home Assistant,
@@ -40,33 +40,40 @@ Read them with `gh`, which answers in one call per release:
 `gh release list --repo <owner>/<repo> --limit 20` for the tags the bump crossed,
 then `gh release view --repo <owner>/<repo> <tag> --json body,url` for each.
 Don't fetch a `compare/<old>...<new>` page — it shows commits, not release notes,
-so it costs a read and still leaves you needing the releases. Reach for a web
-fetch only where a project publishes its notes outside GitHub releases, and then
+so it costs a read and still leaves you needing the releases. Where a project
+publishes its notes outside GitHub releases, `WebFetch` or `curl` reads them —
 fetch the notes page itself rather than an index that links to it.
 
 ## Output
 
-Exactly the packages you checked this way: a bullet each, nothing in it you
-didn't read a changelog for, and nothing you did read one for left out. Two
-shapes, depending on what the changelog said:
+A bullet for every bump in the diff, read or not — one per package, so something
+that moved on several hosts, or appears as both a service and a system package,
+is still a single line. The link on the new version is what marks a bump as read:
 
 ```
+- fwupd 2.1.6 → 2.1.8
 - grafana 13.1.6 → [13.2.3](https://github.com/grafana/grafana/releases/tag/v13.2.3)
 - jellyfin 12.1 → [12.2](https://github.com/jellyfin/jellyfin/releases/tag/v12.2.0):
   migrates the library database in place on first start with no rollback — worth
   snapshotting jellyfin's state on nas before this merges.
 ```
 
-Nothing to flag leaves the bullet at the versions alone: that it is listed at all
-is the evidence its changelog was read. Something to flag appends `: ` and a
-sentence or two — what changes, and what it needs here. Name the host when the
-bump is on one host only and that matters.
+- Didn't read it: the two versions as plain text, nothing else — no link, no
+  prose, no note that you skipped it. Unlinked is how the reader sees it wasn't
+  read.
+- Read it, nothing to flag: link the new version. The link is the evidence, so
+  it carries no prose either.
+- Something to flag: append `: ` and a sentence or two — what changes, and what
+  it needs here.
 
-The new version links to the changelog for that version: the GitHub release tag
-page (`gh release view --repo <owner>/<repo> <tag> --json url` gives it exactly),
-or the project's own release-notes page where GitHub releases aren't used. Leave
-the version as plain text when you could not establish a URL — never construct a
-link you haven't seen resolve.
+Name the host when the bump is on one host only and that matters. Keep the diff's
+order.
+
+The link is the changelog for that version: the GitHub release tag page
+(`gh release view --repo <owner>/<repo> <tag> --json url` gives it exactly), or
+the project's own release-notes page where GitHub releases aren't used. Never
+construct a link you haven't seen resolve — if you read notes you can't link,
+leave the version plain and say so in a clause, so it doesn't read as unread.
 
 Keep each bullet to a sentence or two of plain prose, and don't name internal
 files or paths: the reader only ever sees the PR.

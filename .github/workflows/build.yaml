@@ -131,9 +131,12 @@ jobs:
     # Every Dependabot flake.lock bump, pass or fail: diagnose/fix build breaks
     # and flag deprecation warnings the bump introduced. `!cancelled()` lets it
     # run regardless of the build result (a plain `needs` would skip on failure).
-    # Dependabot branches live in this repo (never forks), so this never grants
-    # write access to outside code.
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' }}
+    # On the pusher, not the PR author, which stays dependabot[bot] for the life
+    # of the PR: the fix this job pushes leaves flake.lock untouched, so the run
+    # it triggers has nothing new to analyse and the builds alone prove the fix.
+    # Only dependabot pushes a new lock (its own bump, or a rebase), and a fork
+    # PR never has it as sender, so this still never runs on outside code.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.sender.login == 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -342,12 +345,15 @@ jobs:
           # otherwise hides it "for security").
           show_full_output: true
           # auto mode classifies each tool call (allows safe read/build commands,
-          # fails closed in CI on anything risky). We only pre-allow the mutating
-          # tools (edits and the git commit/push), deny raw egress
-          # as a backstop, and domain-lock WebFetch since it's off by default.
-          # Task too: the prompt delegates the changelog and release-note reading
-          # to subagents so it stays out of the main thread's context, and that
-          # shouldn't depend on how the classifier reads a spawn.
+          # fails closed in CI on anything risky), so the only list left is a
+          # pre-allow for the tools whose blocking would sink the job: the edits
+          # and the git commit/push it exists to produce, plus Task, since the
+          # prompt delegates the changelog and release-note reading to subagents
+          # and that shouldn't depend on how the classifier reads a spawn.
+          # Nothing is denied. A `Bash(curl:*)` deny sat here as an egress
+          # backstop but never was one — WebFetch reaches any domain the
+          # classifier allows, and this job holds a write token it can `git push`
+          # with — and it cost a worker a turn when a changelog lived off GitHub.
           #
           # --tools cuts the built-in set to the ones an earlier run actually
           # used (Bash, Read, Edit, Write, WebFetch, ToolSearch) plus Task for
@@ -359,7 +365,7 @@ jobs:
           # deferred and has to be loaded. Unknown names here are ignored
           # silently, so a typo fails open: check against the init message's
           # tool list rather than assuming a name exists.
-          claude_args: '--permission-mode auto --add-dir "/nix/store" --tools "Bash,Read,Edit,Write,Task,WebFetch,ToolSearch" --allowedTools "Task,Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git push:*),WebFetch(domain:github.com),WebFetch(domain:raw.githubusercontent.com),WebFetch(domain:nixos.org)" --disallowedTools "Bash(curl:*),Bash(wget:*),Bash(nc:*)"'
+          claude_args: '--permission-mode auto --add-dir "/nix/store" --tools "Bash,Read,Edit,Write,Task,WebFetch,ToolSearch" --allowedTools "Task,Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git push:*)"'
           # Two things keep this one-shot job from ending mid-work, since
           # anything still running dies with the session. Background tasks are
           # off, so a build that outlives the 2-minute foreground timeout runs
@@ -453,13 +459,24 @@ jobs:
           done <<< "$previous"
 
   automerge-dependabot:
-    # Wait for analyze-claude too, so any deprecation/build fix it pushes lands
-    # before auto-merge is enabled. If that job fails, automerge is skipped.
-    # `merge-hold == 'false'` rather than `!= 'true'`: the analysis has to
-    # affirmatively clear the bump, so a skipped or broken verdict step leaves
-    # the PR for a human instead of merging it.
+    # Require passing builds and successful analysis with an explicit no-hold
+    # verdict. The bot's fix push skips analysis because flake.lock is unchanged.
+    # !cancelled() allows that skipped dependency; check success explicitly.
     needs: [build, analyze-claude]
-    if: ${{ github.event_name == 'pull_request' && needs.build.result == 'success' && needs.analyze-claude.outputs.merge-hold == 'false' && github.event.pull_request.user.login == 'dependabot[bot]' }}
+    if: >-
+      ${{
+        !cancelled()
+        && github.event_name == 'pull_request'
+        && github.event.pull_request.user.login == 'dependabot[bot]'
+        && needs.build.result == 'success'
+        && (
+          github.event.sender.login == 'github-actions[bot]'
+          || (
+            needs.analyze-claude.result == 'success'
+            && needs.analyze-claude.outputs.merge-hold == 'false'
+          )
+        )
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

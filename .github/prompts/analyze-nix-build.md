@@ -34,6 +34,13 @@ more than what any one command prints: reach the point where a thing can be
 dropped in as few reads as possible, cheap disqualifying check before expensive
 provenance, and stop reading about something once it's dropped.
 
+`/tmp/base` holds the pre-bump tree — this tree with the base `flake.lock` — so
+comparing across the bump needs no git history and no clone:
+`nix eval --impure --raw --expr '(builtins.getFlake "path:/tmp/base").inputs.nixpkgs.outPath'`
+gives the old nixpkgs store path to `diff` against the current one. Both
+revisions are already in the store. If it's missing the base commit was out of
+reach; don't reconstruct it.
+
 ## Delegating the reading
 
 Two parts of this job are mostly reading — many changelogs, many release-note
@@ -70,21 +77,23 @@ than that the bump was clean. Read previous analysis comments on the PR to check
 for resolved issues before writing the final body.
 
 The body is nothing but these sections, in this order — no status line, no
-preamble, no restating the task, no narrating how you looked into it. A section
-with nothing in it is left out entirely, except `### Input check` and
-`### Version diff`, which are always present, so a clean bump reads as those two
+preamble, no restating the task, no narrating how you looked into it. Nothing
+follows the last section either — no sign-off, no attribution, no "generated
+with" footer; the job appends its own. A section with nothing in it is left out
+entirely, `### Input check` included, so a clean bump reads as `### Version diff`
 alone:
 
-1. **`### Input check`** — the result of the third-party input skim described
-   below. When nothing stood out, one line naming the inputs you looked at, so
-   the reader can see which ones were covered: *Skimmed stylix, treefmt-nix,
-   voxtype and 5 others; nothing stood out.* When something did, a bullet per
-   input instead: which file, what the change does, and what you want a human to
-   look at. Never report an input as clean when you could not see its diff — say
-   the diff was unavailable and name it.
-2. **`### Build failures`** — a bullet per failed target, named by target: what
-   breaks, what it needs, and whether you pushed a fix or left it for a human.
-   No section means every target built, so don't say so.
+1. **`### Input check`** — present only when the third-party input skim described
+   below turned something up: a bullet per input, naming which file, what the
+   change does, and what you want a human to look at. A diff you couldn't see
+   counts as turning something up — say it was unavailable and name the input,
+   rather than reporting it clean. Nothing stood out means no section, not a line
+   saying so.
+2. **`### Build failures`** — a bullet per failed target, named by target. One or
+   two sentences on what broke and what it needs, then a second line in the same
+   bullet opening with a bold **`Fixed:`** and what you changed, or a bold
+   **`Not fixed:`** and the one reason it's left for a human. Bold the label
+   only. No section means every target built, so don't say so.
 3. **`### Deprecations`** — a bullet per deprecation or upstream change that needs
    something done here: what triggers it, what replaces it, and by when. Anything
    that needs no change here is left out rather than explained away.
@@ -102,8 +111,15 @@ an issue this one no longer finds, say so in a clause on the bullet it belonged
 to, or as a closing `### Resolved` line when the issue is gone from the diff
 altogether.
 
+A pushed commit already means the fix was verified, so none of how you convinced
+yourself belongs in the comment: not what evaluated, what built, what substitutes
+from the cache, nor the provenance work behind a finding. Cut the corroborating
+clause even where you worked for it.
+
 Don't name internal files, paths or job steps in the comment — the reader only sees
-the PR. Refer to logs by target name rather than by path.
+the PR. Refer to logs by target name rather than by path. These instructions and
+this repo's own comments are just as invisible, so neither is ever quotable as
+evidence.
 
 ## Build failures
 
@@ -140,8 +156,10 @@ and what the patch was doing, so a human can rebase it. A green build reached by
 deleting that patch is the wrong outcome.
 
 Either way the comment says what happened to each patch the bump touched —
-dropped as redundant and which commit now carries it, rebased, or left for a
-human. A patch vanishing from this repo is otherwise invisible to the reader.
+dropped as redundant, rebased, or left for a human — since a patch vanishing
+from this repo is otherwise invisible to the reader. Name what the patch did,
+not the file it lives in, and keep it to a clause: for a drop, the release that
+now carries the fix is justification enough.
 
 ## Deprecations
 
@@ -319,5 +337,4 @@ wait.
 If a fix is non-trivial, uncertain, or an upstream bug to wait out, don't edit or
 push anything — just describe it in the comment.
 
-Either way, say in the comment whether you pushed a fix and what it was, or that
-you left it for a human.
+Either way the bullet carries its **`Fixed:`** or **`Not fixed:`** line.
