@@ -241,7 +241,9 @@ jobs:
           fi
           # Root inputs whose locked revision moved. The exclusion is by
           # repository name, not input name, so nixpkgs forks and extra nixpkgs
-          # channels drop out too.
+          # channels drop out too. nix-secrets is excluded for the opposite
+          # reason: it is ours, so there is no supply chain to skim, and it
+          # holds plaintext secrets that this step would print to a public log.
           changed=$(jq -nr --slurpfile a /tmp/base/flake.lock --slurpfile b flake.lock '
             def srcs: .[0] as $f | $f.nodes as $n
               | ($f.nodes.root.inputs // {})
@@ -251,7 +253,8 @@ jobs:
             | ($before[$e.key] // empty) as $old
             | select((($old.rev // $old.narHash) != null)
                      and (($old.rev // $old.narHash) != ($e.value.rev // $e.value.narHash)))
-            | select(((($e.value.repo // "") | ascii_downcase) | IN("nixpkgs", "home-manager")) | not)
+            | select(((($e.value.repo // "") | ascii_downcase)
+                      | IN("nixpkgs", "home-manager", "nix-secrets")) | not)
             | [ $e.key,
                 (if $e.value.owner then "\($e.value.owner)/\($e.value.repo)"
                  else ($e.value.url // $e.value.type) end),

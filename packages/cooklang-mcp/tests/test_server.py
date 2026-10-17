@@ -1,16 +1,77 @@
 """The MCP surface exposed to clients."""
 
 import asyncio
+import json
 
-from cooklang_mcp import server
+import httpx
+import pytest
+from mcp.server.fastmcp.exceptions import ToolError
+
+from cooklang_mcp import menus, server
 from cooklang_mcp.server import INSTRUCTIONS, mcp
 
 
-def test_search_recipes_advertises_its_result_fields():
-    tools = {tool.name: tool for tool in asyncio.run(mcp.list_tools())}
+def tools():
+    return {tool.name: tool for tool in asyncio.run(mcp.list_tools())}
 
-    assert "list_recipes" not in tools
-    schema = tools["search_recipes"].model_dump(by_alias=True)["outputSchema"]
+
+def test_the_tool_surface_is_grouped_and_annotated():
+    """Names group by the thing they act on, and a read says it is one.
+
+    The old flat names are asserted absent because a client that cached them
+    would otherwise keep calling tools this server no longer answers.
+    """
+    listed = tools()
+
+    assert set(listed) == {
+        "recipe_search",
+        "recipe_read",
+        "recipe_write",
+        "recipe_delete",
+        "recipe_import",
+        "mark_cooked",
+        "shopping_list_read",
+        "shopping_list_edit",
+        "aisles_read",
+        "aisles_edit",
+    }
+    for retired in (
+        "list_recipes",
+        "search_recipes",
+        "read_recipe",
+        "write_recipe",
+        "fetch_recipe",
+        "shopping_list",
+        "add_to_shopping_list",
+        "remove_from_shopping_list",
+        "clear_shopping_list",
+        "check_shopping_item",
+        "read_aisles",
+        "edit_aisles",
+    ):
+        assert retired not in listed
+
+    reads = {
+        "recipe_search",
+        "recipe_read",
+        "recipe_import",
+        "shopping_list_read",
+        "aisles_read",
+    }
+    for name, tool in listed.items():
+        assert tool.annotations is not None, name
+        assert tool.annotations.readOnlyHint is (name in reads), name
+    # Only deletion is destructive; every other write can be undone by writing
+    # again, which is the distinction a client should gate on.
+    assert listed["recipe_delete"].annotations.destructiveHint is True
+    assert listed["recipe_write"].annotations.destructiveHint is False
+    # Only the importer reaches outside the collection.
+    assert listed["recipe_import"].annotations.openWorldHint is True
+    assert listed["recipe_read"].annotations.openWorldHint is False
+
+
+def test_recipe_search_advertises_its_result_fields():
+    schema = tools()["recipe_search"].model_dump(by_alias=True)["outputSchema"]
     summary = schema["$defs"]["RecipeSummary"]
 
     assert set(summary["properties"]) == {
@@ -22,6 +83,28 @@ def test_search_recipes_advertises_its_result_fields():
     }
     assert summary["required"] == ["path", "title", "web_url", "tags", "is_menu"]
     assert schema["properties"]["result"]["items"] == {"$ref": "#/$defs/RecipeSummary"}
+
+
+def test_every_tool_that_returns_a_url_asks_for_the_link_itself():
+    """`web_url`'s own description asks for the link, not just the server
+    instructions: those are advisory, an output schema always arrives.
+
+    `format` is the standard marker for a URL-valued string, and all MCP has to
+    offer — `resource_link` would promise a resource this server can read.
+    """
+    listed = tools()
+    for name, model in (
+        ("recipe_search", "RecipeSummary"),
+        ("recipe_read", "RecipeDocument"),
+        ("recipe_write", "RecipeWritten"),
+        ("mark_cooked", "MealCooked"),
+    ):
+        # A list result is wrapped and its model moved into `$defs`; a single
+        # one is the schema itself.
+        schema = listed[name].model_dump(by_alias=True)["outputSchema"]
+        web_url = schema.get("$defs", {}).get(model, schema)["properties"]["web_url"]
+        assert "Markdown link" in web_url["description"], name
+        assert web_url["format"] == "uri", name
 
 
 def test_recipe_tools_return_clickable_web_urls(monkeypatch):
@@ -52,17 +135,25 @@ def test_recipe_tools_return_clickable_web_urls(monkeypatch):
             return {"recipe": {"ingredients": [{"name": "rice"}]}}
 
     async def request(_method, _path, **_kwargs):
+        if _path == "/api/aisles":
+            return httpx.Response(
+                200,
+                json={
+                    "configured": True,
+                    "aisles": [{"ingredients": [{"names": ["rice"]}]}],
+                },
+            )
         return Response()
 
     monkeypatch.setattr(server.cook, "search_entries", search_entries)
     monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
     monkeypatch.setattr(server.cook, "request", request)
 
-    summary = asyncio.run(server.search_recipes("chili"))[0]
-    document = asyncio.run(server.read_recipe("./Weeknight meals/Chili & Rice.cook"))
-    shopping = asyncio.run(server.shopping_list())
+    summary = asyncio.run(server.recipe_search("chili"))[0]
+    document = asyncio.run(server.recipe_read("./Weeknight meals/Chili & Rice.cook"))
+    shopping = asyncio.run(server.shopping_list_read())
     written = asyncio.run(
-        server.write_recipe(
+        server.recipe_write(
             "Weeknight meals/Chili & Rice.cook",
             Response.text,
         )
@@ -75,38 +166,454 @@ def test_recipe_tools_return_clickable_web_urls(monkeypatch):
     assert document.web_url == expected
     assert document.source == Response.text
     assert shopping["recipes"][0]["web_url"] == expected
-    assert written == {
+    assert written.model_dump() == {
         "path": "Weeknight meals/Chili & Rice.cook",
         "web_url": expected,
         "written": True,
         "ingredients": ["rice"],
+        "warnings": [],
+        # A recipe, not a plan, so there are no referenced recipes to resolve.
+        "entries": [],
     }
 
 
-def test_meal_plan_convention_is_advertised():
-    tools = {tool.name: tool for tool in asyncio.run(mcp.list_tools())}
-    write_description = tools["write_recipe"].description
-    shopping_description = tools["shopping_list"].description
+PLAN = """\
+---
+title: Meal Plan
+---
+= Meals
+@./Kürbiswähe{2%servings}
 
+@paper towels{1}
+"""
+
+
+def _plan_collection(monkeypatch):
+    """A collection holding the one recipe the plan refers to."""
+    monkeypatch.setattr(server, "WEB_URL", "https://cook.example.test")
+
+    async def list_entries():
+        return [
+            {
+                "path": "Kürbiswähe.cook",
+                "title": "Kürbiswähe",
+                "tags": ["dinner"],
+                "is_menu": False,
+            }
+        ]
+
+    async def request(_method, path, **_kwargs):
+        if path == "/api/aisles":
+            return httpx.Response(200, json={"configured": False, "aisles": []})
+        if path.startswith("/api/recipes/raw/"):
+            return httpx.Response(200, text=PLAN)
+        return httpx.Response(200, json={"recipe": {"ingredients": []}})
+
+    monkeypatch.setattr(server.cook, "list_entries", list_entries)
+    monkeypatch.setattr(server.cook, "request", request)
+
+
+@pytest.mark.parametrize("tool", ["read", "write"])
+def test_menu_results_carry_each_recipe_s_own_page(monkeypatch, tool):
+    """A plan names its recipes, so an answer about the plan names them too.
+
+    The file holds `@./Kürbiswähe` and the result's own `web_url` is the plan's
+    page, so neither leaves the model a link for the recipe it is about to
+    mention. These entries do, in the result of the call just made.
+    """
+    _plan_collection(monkeypatch)
+
+    if tool == "read":
+        entries = asyncio.run(server.recipe_read("Meal Plan.menu")).entries
+    else:
+        entries = asyncio.run(server.recipe_write("Meal Plan.menu", PLAN)).entries
+
+    assert [entry.model_dump() for entry in entries] == [
+        {
+            "path": "Kürbiswähe.cook",
+            "title": "Kürbiswähe",
+            # The recipe's own page, not the plan's.
+            "web_url": "https://cook.example.test/recipe/K%C3%BCrbisw%C3%A4he.cook",
+            "tags": ["dinner"],
+            "is_menu": False,
+        }
+    ]
+
+
+def test_menu_entries_leave_out_what_is_not_a_recipe(monkeypatch):
+    """`@paper towels{1}` is a loose ingredient, and a mistyped reference is
+    not a page. Both are in the source either way; neither gets a URL."""
+    _plan_collection(monkeypatch)
+    plan = PLAN.replace("@paper towels{1}", "@./Kürbiswaehe{1}\n\n@paper towels{1}")
+
+    entries = asyncio.run(server.recipe_write("Meal Plan.menu", plan)).entries
+
+    assert [entry.title for entry in entries] == ["Kürbiswähe"]
+
+
+def test_only_menus_resolve_entries(monkeypatch):
+    """An ordinary recipe's ingredients are not recipes, so listing the
+    collection to discover that would be a request per read."""
+    _plan_collection(monkeypatch)
+
+    async def unexpected():
+        raise AssertionError("the collection was listed for a plain recipe")
+
+    monkeypatch.setattr(server.cook, "list_entries", unexpected)
+
+    assert asyncio.run(server.recipe_read("Risotto.cook")).entries == []
+    assert asyncio.run(server.recipe_write("Risotto.cook", PLAN)).entries == []
+
+
+def test_unresolvable_entries_cost_the_links_not_the_write(monkeypatch):
+    """A failure listing the collection leaves the names plain. It must not
+    turn a saved file into an error."""
+    _plan_collection(monkeypatch)
+
+    async def fails():
+        raise httpx.ConnectError("boom")
+
+    monkeypatch.setattr(server.cook, "list_entries", fails)
+
+    written = asyncio.run(server.recipe_write("Meal Plan.menu", PLAN))
+    assert written.written is True
+    assert written.entries == []
+
+
+@pytest.mark.parametrize("failure", ["parse", "catalogue", "write"])
+def test_write_failures_preserve_saved_status(monkeypatch, failure):
+    def fails(method, path):
+        if failure == "write":
+            return method == "PUT"
+        if failure == "catalogue":
+            return path == "/api/aisles"
+        return method == "GET" and path != "/api/aisles"
+
+    async def request(method, path, **kwargs):
+        if fails(method, path):
+            raise server.cook.CookCliError("unavailable")
+        return httpx.Response(200, json={"recipe": {"ingredients": [{"name": "rice"}]}})
+
+    monkeypatch.setattr(server.cook, "request", request)
+    if failure == "write":
+        with pytest.raises(server.cook.CookCliError):
+            asyncio.run(server.recipe_write("Rice.cook", "Add @rice."))
+    else:
+        result = asyncio.run(server.recipe_write("Rice.cook", "Add @rice."))
+        assert result.written is True
+        assert len(result.warnings) == 1
+        assert isinstance(result.warnings[0], str)
+        assert "Recipe saved" in result.warnings[0]
+
+
+# -- shopping list --------------------------------------------------------
+
+
+def shopping_calls(monkeypatch, changes):
+    """Run one `shopping_list_edit` through the tool, and report what it sent.
+
+    Through `call_tool` rather than the function, so the schema that rejects a
+    malformed change is part of what is being tested.
+    """
+    sent = []
+
+    async def request(method, path, **kwargs):
+        sent.append((method, path, kwargs.get("json")))
+        return httpx.Response(200, json={})
+
+    async def shopping_list():
+        return {"recipes": [], "categories": [], "pantry_items": []}
+
+    monkeypatch.setattr(server.cook, "request", request)
+    monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
+    result = asyncio.run(mcp.call_tool("shopping_list_edit", {"changes": changes}))[1]
+    return sent, result
+
+
+def test_one_batch_covers_every_shopping_list_verb(monkeypatch):
+    """The four tools this replaced, as one ordered batch."""
+    sent, result = shopping_calls(
+        monkeypatch,
+        [
+            {"action": "add", "path": "Risotto.cook", "scale": 2},
+            {"action": "add", "path": "Meal Plan.menu"},
+            {"action": "remove", "path": "Caprese.cook"},
+            {"action": "check", "name": "rice"},
+            {"action": "uncheck", "name": "rice"},
+            {"action": "clear"},
+        ],
+    )
+
+    assert [(path, body) for _method, path, body in sent] == [
+        ("/api/shopping_list/add", {"path": "Risotto.cook", "scale": 2.0}),
+        ("/api/shopping_list/add_menu", {"path": "Meal Plan.menu", "scale": 1.0}),
+        ("/api/shopping_list/remove", {"path": "Caprese.cook"}),
+        ("/api/shopping_list/check", {"name": "rice"}),
+        ("/api/shopping_list/uncheck", {"name": "rice"}),
+        ("/api/shopping_list/clear", None),
+    ]
+    # The whole list comes back, so the client never has to read it again.
+    assert result["applied"] == 6
+    assert result["recipes"] == []
+    assert "categories" in result
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"action": "add"},
+        {"action": "remove"},
+        {"action": "check"},
+        {"action": "uncheck"},
+        {"action": "add", "path": "Risotto.cook", "scale": 0},
+        {"action": "unknown", "path": "Risotto.cook"},
+        # A field the action does not read is refused, not ignored: read as a
+        # bare `clear`, the first of these would empty the whole list.
+        {"action": "clear", "path": "Risotto.cook"},
+        {"action": "check", "name": "rice", "path": "Risotto.cook"},
+        {"action": "remove", "path": "Risotto.cook", "scale": 2},
+        {"action": "add", "path": "Risotto.cook", "name": "rice"},
+    ],
+)
+def test_a_shopping_change_that_cannot_be_expressed_never_reaches_the_server(
+    monkeypatch, change
+):
+    async def unexpected(*args, **kwargs):
+        pytest.fail("an invalid change reached the server")
+
+    monkeypatch.setattr(server.cook, "request", unexpected)
+    with pytest.raises(ToolError):
+        asyncio.run(mcp.call_tool("shopping_list_edit", {"changes": [change]}))
+
+
+# -- mark_cooked ----------------------------------------------------------
+
+
+def cook_run(monkeypatch, files, **kwargs):
+    """Run `mark_cooked` against a fake collection, and report the writes."""
+    monkeypatch.setattr(server, "WEB_URL", "https://cook.example.test")
+    written = {}
+
+    async def list_entries():
+        return [
+            {
+                "path": path,
+                "title": menus.normalise(path),
+                "tags": [],
+                "is_menu": path.endswith(".menu"),
+            }
+            for path in files
+        ]
+
+    async def request(method, path, **options):
+        if method == "GET" and path.startswith("/api/recipes/raw/"):
+            return httpx.Response(200, text=files[path[len("/api/recipes/raw/") :]])
+        if method == "PUT":
+            written[path[len("/api/recipes/") :]] = options["content"].decode()
+            return httpx.Response(200, json={})
+        raise AssertionError(f"unexpected {method} {path}")
+
+    monkeypatch.setattr(server.cook, "list_entries", list_entries)
+    monkeypatch.setattr(server.cook, "request", request)
+    result = asyncio.run(server.mark_cooked(**kwargs))
+    return written, result
+
+
+def test_marking_cooked_records_history_then_clears_the_plan(monkeypatch):
+    plan = (
+        "---\ntitle: Meal Plan\n---\n= Meals\n@./Risotto{2%servings}\n\n@./Caprese{}\n"
+    )
+    history = (
+        "---\ntitle: Meal History\n---\n"
+        "= Friday (2026-10-16)\n@./Chili{}\n\n"
+        "= Monday (2026-10-12)\n@./Soup{}\n"
+    )
+    written, result = cook_run(
+        monkeypatch,
+        {"Meal Plan.menu": plan, "Meal History.menu": history},
+        path="Risotto.cook",
+        cooked_on="2026-10-14",
+        feedback="Use less salt.",
+    )
+
+    # A new section, in newest-first order between the two that exist.
+    assert written["Meal History.menu"] == (
+        "---\ntitle: Meal History\n---\n"
+        "= Friday (2026-10-16)\n@./Chili{}\n\n"
+        "= Wednesday (2026-10-14)\n@./Risotto{}\n\n"
+        "Feedback: Use less salt.\n\n"
+        "= Monday (2026-10-12)\n@./Soup{}\n"
+    )
+    # Only the cooked recipe leaves the plan.
+    assert written["Meal Plan.menu"] == (
+        "---\ntitle: Meal Plan\n---\n= Meals\n@./Caprese{}\n"
+    )
+    assert result.removed_from_plan is True
+    assert result.history_created is False
+    assert result.cooked_on == "2026-10-14"
+
+
+def test_marking_cooked_reports_the_rest_of_the_plan_with_its_pages(monkeypatch):
+    """Saying what is left means naming those recipes, so the result carries
+    their pages — the plan's own source holds only `@./Caprese`."""
+    _, result = cook_run(
+        monkeypatch,
+        {
+            "Meal Plan.menu": "= Meals\n@./Risotto{}\n\n@./Caprese{}\n",
+            "Risotto.cook": "",
+            "Caprese.cook": "",
+        },
+        path="Risotto.cook",
+        cooked_on="2026-10-14",
+    )
+
+    assert result.removed_from_plan is True
+    # The cooked one is gone; what is left is linkable.
+    assert [(entry.title, entry.web_url) for entry in result.remaining_plan] == [
+        ("Caprese", "https://cook.example.test/recipe/Caprese.cook")
+    ]
+
+
+def test_an_emptied_or_absent_plan_leaves_nothing_to_link(monkeypatch):
+    _, emptied = cook_run(
+        monkeypatch,
+        {"Meal Plan.menu": "= Meals\n@./Risotto{}\n", "Risotto.cook": ""},
+        path="Risotto.cook",
+        cooked_on="2026-10-14",
+    )
+    _, no_plan = cook_run(monkeypatch, {}, path="Risotto.cook", cooked_on="2026-10-14")
+
+    assert emptied.remaining_plan == []
+    assert no_plan.remaining_plan == []
+
+
+def test_an_estimated_date_is_marked_and_reuses_a_matching_section(monkeypatch):
+    written, result = cook_run(
+        monkeypatch,
+        {
+            "Meal Plan.menu": "= Meals\n@./Risotto{}\n",
+            "Meal History.menu": "= Wednesday (2026-10-14)\n@./Soup{}\n",
+        },
+        path="./Risotto",
+        cooked_on="2026-10-14",
+        date_estimated=True,
+    )
+
+    assert written["Meal History.menu"] == (
+        "= Wednesday (2026-10-14)\n@./Risotto{} — date estimated\n\n@./Soup{}\n"
+    )
+    assert result.date_estimated is True
+    assert result.removed_from_plan is True
+
+
+def test_a_missing_history_is_created_and_a_missing_plan_is_not_required(monkeypatch):
+    written, result = cook_run(
+        monkeypatch,
+        {},
+        path="Risotto.cook",
+        cooked_on="2026-10-14",
+    )
+
+    assert written == {
+        "Meal History.menu": (
+            "---\ntitle: Meal History\n---\n= Wednesday (2026-10-14)\n@./Risotto{}\n"
+        )
+    }
+    assert result.history_created is True
+    assert result.removed_from_plan is False
+    assert "no Meal Plan.menu" in result.note
+
+
+def test_a_recipe_absent_from_the_plan_leaves_it_untouched(monkeypatch):
+    written, result = cook_run(
+        monkeypatch,
+        {"Meal Plan.menu": "= Meals\n@./Caprese{}\n", "Meal History.menu": ""},
+        path="Risotto.cook",
+        cooked_on="2026-10-14",
+    )
+
+    assert "Meal Plan.menu" not in written
+    assert result.removed_from_plan is False
+    assert "only the history changed" in result.note
+
+
+def test_a_date_that_is_not_a_date_is_refused_before_anything_is_written(monkeypatch):
+    async def unexpected(*args, **kwargs):
+        pytest.fail("a bad date reached the server")
+
+    monkeypatch.setattr(server.cook, "list_entries", unexpected)
+    monkeypatch.setattr(server.cook, "request", unexpected)
+    for bad in ("yesterday", "2026-13-01", "14.10.2026", ""):
+        with pytest.raises(Exception):  # noqa: B017 - pydantic pattern or ValueError
+            asyncio.run(server.mark_cooked(path="Risotto.cook", cooked_on=bad))
+
+
+# -- instructions ---------------------------------------------------------
+
+
+def test_the_instructions_keep_only_what_is_cross_cutting():
+    """Policy that belongs to one tool lives in that tool's description.
+
+    The server instructions sit in context for the whole session, so they carry
+    the link rule and the two file names and nothing else; the procedures moved
+    to the tool that performs them, where they are read at the moment of use.
+    """
+    listed = tools()
+
+    assert "clickable Markdown link" in INSTRUCTIONS
+    assert "`web_url`" in INSTRUCTIONS
+    # A URL does not expire when the next call returns a different one: the
+    # miss this is aimed at was a plan write whose own URL was the plan's.
+    assert "not only the one from the last call" in INSTRUCTIONS
+    # And the instructions never explain how a URL is built, so a name without
+    # one cannot be linked to a guess.
+    assert "Never construct or guess a URL" in INSTRUCTIONS
+    assert "/recipe/" not in INSTRUCTIONS
     assert "`Meal Plan.menu`" in INSTRUCTIONS
     assert "`Meal History.menu`" in INSTRUCTIONS
-    assert "Only copy" in INSTRUCTIONS
-    assert "explicitly asks" in INSTRUCTIONS
-    assert "Skip an already-planned path" in INSTRUCTIONS
-    assert "`Risotto.cook` and `./Risotto` are the same path" in INSTRUCTIONS
-    assert "all of them are checked" in INSTRUCTIONS
-    assert "— date estimated" in INSTRUCTIONS
-    assert "ask for brief, optional feedback" in INSTRUCTIONS
-    assert "Feedback:" in INSTRUCTIONS
-    assert "Reuse a matching date section" in INSTRUCTIONS
-    assert "newest-first" in INSTRUCTIONS
-    assert "history successfully before removing" in INSTRUCTIONS
-    assert "clickable Markdown link" in INSTRUCTIONS
-    assert "`web_url` returned by the tools" in INSTRUCTIONS
+    assert "mark_cooked" in INSTRUCTIONS
+
+    # Relocated, and gone from the block that used to carry them.
+    for moved, home in (
+        ("date_estimated", "mark_cooked"),
+        ("optional", "mark_cooked"),
+        ("plausible past date", "mark_cooked"),
+        ("explicitly asks", "shopping_list_read"),
+        ("still upcoming or was already cooked", "shopping_list_read"),
+        ("ticked off", "shopping_list_edit"),
+    ):
+        assert moved not in INSTRUCTIONS, moved
+        assert moved in listed[home].description, (moved, home)
+
+    # The marker's exact wording went further than a description: it is written
+    # by code now, so no instruction has to spell it out at all.
+    assert "date estimated" not in INSTRUCTIONS
+    assert menus.ESTIMATED == "— date estimated"
+
+    # Shorter than the file-format guidance it used to compete with.
+    assert len(INSTRUCTIONS) < len(listed["recipe_write"].description)
+
+
+def test_recipe_read_and_recipe_import_say_which_one_reaches_the_web():
+    listed = tools()
+
+    assert "recipe_import" in listed["recipe_read"].description
+    assert "collection" in listed["recipe_read"].description
+    assert "web page" in listed["recipe_import"].description
+    assert "recipe_write" in listed["recipe_import"].description
+
+
+def test_the_meal_plan_file_format_stays_with_the_tool_that_writes_it():
+    write_description = tools()["recipe_write"].description
+
     assert "`Meal Plan.menu`" in write_description
-    assert "`Meal History.menu`" in write_description
     assert "blank line (two newline characters)" in write_description
-    assert "— date estimated" in write_description
-    assert "Feedback:" in write_description
-    assert "source path and scale" in shopping_description
-    assert "`checked` individually" in shopping_description
+    assert "source.url" in write_description
+    # History is mark_cooked's to write, so this only points at it.
+    assert "mark_cooked" in write_description
+
+
+def test_every_tool_description_is_json_serialisable_and_non_empty():
+    for name, tool in tools().items():
+        assert tool.description and tool.description.strip(), name
+        json.dumps(tool.model_dump(by_alias=True))

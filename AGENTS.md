@@ -13,6 +13,14 @@ Modules define options under a `my.*` namespace and host configs enable them:
 `my.system.*`, `my.services.*`, `my.programs.*`, `my.profiles.*` — for example
 `my.system.autoUpgrade`, `my.programs.firefox`, `my.profiles.ai`.
 
+## Secrets
+
+The `secrets.*` values the host configs read come from the private `nix-secrets`
+flake, whose `default.nix` holds them in plaintext — OIDC client secrets, the
+restic repository, domains, ntfy and healthchecks IDs. Never read that file or
+print an evaluated `secrets.*` value: not into a transcript, a CI log, or a PR
+comment. This repo and its Actions logs are public.
+
 ## Nix + Bash interpolation
 
 When writing shell scripts inside Nix strings (for example `writeShellScript` or
