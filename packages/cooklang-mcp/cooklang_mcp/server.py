@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 from datetime import date as Date
 from difflib import get_close_matches
@@ -29,8 +30,9 @@ from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, BaseModel, Field, model_validator
 
+from . import catalogue, menus
 from . import cookcli as cook
-from . import menus
+from .diagnostics import Diagnostic, DiagnosticsUnavailable, diagnose
 from .importer import fetch_recipe as fetch_recipe_from_url
 
 WEB_URL = (
@@ -41,17 +43,31 @@ WEB_URL = (
 
 PLAN_PATH = "Meal Plan.menu"
 HISTORY_PATH = "Meal History.menu"
+# Where `shopping_list_edit`'s `add_item` collects the things no recipe calls
+# for. A `.menu` rather than a `.cook`, so the collection lists it beside the
+# plan instead of offering it as something to cook.
+EXTRAS_PATH = "Extra Items.menu"
 
+# Served in the `initialize` result, which the spec says a client should put in
+# front of the model. claude.ai and Claude Desktop drop the field instead, so
+# there nothing below reaches the model and the tool descriptions are all it
+# sees: https://github.com/anthropics/claude-ai-mcp/issues/93 (open, triaged,
+# no ETA). Claude Code does deliver it, but as a user turn truncated at 2048
+# characters. So every load-bearing rule here is repeated in the tool it
+# applies to, and this text is the summary rather than the only copy — keep it
+# that way, and keep it short.
 INSTRUCTIONS = f"""\
 Browse and manage the user's personal recipe collection, meal plans, and \
 shopping list. This includes finding something to cook, working with recipes, \
 planning meals, and importing recipes from the web.
 
 Whenever an answer names a recipe or meal plan you have a web URL for, make \
-the name a clickable Markdown link to it — the confirmation after a write \
-included, and the recipes inside a meal plan, which come with URLs of their \
-own. Any `web_url` a tool returned in this conversation counts, not only the \
-one from the last call. Never construct or guess a URL: a name you have none \
+the name a clickable Markdown link to it — every name, every time, however \
+many an answer carries: the confirmation after a write, the summary that \
+closes a run of several writes and names each recipe it touched, and the \
+recipes inside a meal plan, which come with URLs of their own. Any `web_url` \
+a tool returned in this conversation counts, not only the one from the last \
+call. Never construct or guess a URL: a name you have none \
 for stays plain, and a recipe's external `source.url` is where it came from, \
 not its page here.
 
@@ -95,8 +111,8 @@ Scale = Annotated[
 # served by another process, is not.
 URI = {"format": "uri"}
 
-# The server instructions carry the link rule as well, but a client is free to
-# drop those and an output schema always arrives, so this says what to do with
+# The server instructions carry the link rule as well, but clients drop those
+# (see above) and an output schema always arrives, so this says what to do with
 # the URL rather than naming it. Nothing renders the link but the model: the
 # protocol has no way to hand the user something clickable.
 WebUrl = Annotated[
@@ -151,13 +167,23 @@ class RecipeDocument(BaseModel):
 
 
 class RecipeWritten(BaseModel):
-    """What one write saved, and the two ways to check it came out right."""
+    """What one write saved, and the three ways to check it came out right."""
 
     path: str = Field(description="Path the file was written to.")
     web_url: WebUrl
     # Never false: a write that did not happen raises instead. It is here so
     # that a `warnings` entry about a failed check cannot read as a failed save.
     written: bool = Field(default=True, description="True once the file is saved.")
+    diagnostics: list[Diagnostic] = Field(
+        default_factory=list,
+        description=(
+            "What the Cooklang parser reported about the saved file, empty "
+            "when it reported nothing. Say so and offer a fix whenever this "
+            "holds an `error`: the file is saved, but it is not a readable "
+            "recipe until that line is corrected. Mention a `warning` only "
+            "where it affects what the user asked for."
+        ),
+    )
     ingredients: list[str] = Field(
         default_factory=list,
         description=(
@@ -167,7 +193,11 @@ class RecipeWritten(BaseModel):
     )
     warnings: list[str] = Field(
         default_factory=list,
-        description="Ingredient names the aisle catalogue did not recognise.",
+        description=(
+            "Prose about the write: ingredient names the aisle catalogue did "
+            "not recognise, and a sentence for any check that could not be "
+            "run — which is not the same as a check that came back clean."
+        ),
     )
     entries: MenuEntries
 
@@ -295,6 +325,10 @@ async def recipe_search(
 
     An empty query matches everything. Results contain metadata only; use
     `recipe_read` for the complete recipe or meal plan.
+
+    Every hit carries its own page. Naming one in an answer means linking that
+    name to its `web_url` — every name, every time, however many the answer
+    holds, and in a later reply just as much as this one.
     """
     return [_summary(entry) for entry in await cook.search_entries(query)]
 
@@ -307,6 +341,10 @@ async def recipe_read(path: Path) -> RecipeDocument:
     For a meal plan or history, `entries` resolves the recipes it refers to,
     each with its own page. Naming one of them in an answer means linking it
     from there: the file's own `web_url` is the plan's page, not theirs.
+
+    `web_url` is the only page to link. A `source.url` in the frontmatter is
+    the web page the recipe was copied from, not its page in the collection,
+    and linking a name to it sends the user off to the original site.
 
     This reads the collection. To read a recipe off a web page instead, so it
     can be imported, use `recipe_import`.
@@ -444,6 +482,15 @@ async def _put_recipe(path: str, source: str) -> None:
     )
 
 
+# The docstring deliberately skips the syntax a model already knows and can
+# look up — @ingredients, braces, % units, # cookware, ~ timers, frontmatter
+# (https://cooklang.org/docs/spec/) and `.menu` references and scaling
+# (https://cooklang.org/guides/meal-planning/). It keeps the traps those pages
+# do not warn about, and the conventions this collection adds on top. The
+# result carries both checks the parser can give: what it said about the file
+# (`diagnostics`) and what it made of it (`ingredients`), so a syntax mistake
+# surfaces either as a reported line or as a missing ingredient, never as
+# silence.
 @mcp.tool(annotations=WRITE)
 async def recipe_write(
     path: Path,
@@ -462,98 +509,110 @@ async def recipe_write(
     recipe or meal plan, read it first and write back the complete updated
     document.
 
-    Cooklang is forgiving — text it cannot interpret becomes a plain step
-    rather than an error — so the result lists the ingredients the parser
-    actually found. Read them back: an ingredient missing from that list was
-    dropped, and will be missing from the shopping list too.
+    Nothing rejects a malformed file, so the result carries what became of it.
+    `diagnostics` is the Cooklang parser's own errors and warnings, each with
+    its line: an `error` means the file is saved but unreadable, and is worth
+    raising with the user and offering to fix. The parser is lenient, though,
+    and says nothing about the commonest mistake — an unclosed brace makes
+    `@sugar{2%g and` a plain step, silently — which is why `ingredients` lists
+    the names it actually found. Read them back: one missing from that list was
+    dropped, and will be missing from the shopping list too. The result's
+    `warnings` name ingredients the aisle catalogue does not know, so one thing
+    does not reach the list under two names; they are hints, and a genuinely
+    new ingredient stays as written.
 
-    The result's `warnings` name the ingredients the aisle catalogue does not
-    know, so that one thing does not reach the shopping list under two names.
-    They are hints: an ingredient that really is new stays as written.
+    Preparation belongs in a note, not the name: `@onion{1}(finely diced)`
+    keeps the shopping list and the aisle catalogue saying "onion" while the
+    step still reads "finely diced". The braces go first even when empty —
+    `@soy sauce{}(diced)` — because a name without them ends at the first
+    space.
 
-    End the confirmation with the recipe's title linked to the result's
-    `web_url`, so the user can open the saved page and see for themselves that
-    it came out right.
-
-    Writing a meal plan also returns `entries`: the recipes it now holds, each
-    with its own page. A confirmation that names one of them — "X is on your
-    meal plan" — links that name to its entry's `web_url`, never to the
-    result's own, which is the plan's page.
-
-    A folder in the path must already exist — writing into one that does not
-    fails rather than creating it.
-
-    An ingredient's name ends at the first space unless it is followed by
-    braces, so `@soy sauce{2%tbsp}` defines "soy sauce" while `@soy sauce`
-    defines "soy" and leaves "sauce" as prose. Preparation belongs in a note
-    rather than the name: `@onion{1}(finely diced)` keeps the shopping list
-    saying "onion" while the step still reads "finely diced". The note is
-    parentheses directly after the component with no space between, and
-    cookware takes one too: `#pan{}(heavy-bottomed)`. Always write the braces
-    first — without them the name ends before the note. A timer cannot carry a
-    note; the parentheses stay prose.
-
-    A recipe that came from a web page must record where it came from: its
-    frontmatter carries `source.url` with the full original URL, not the site
-    name and not a shortened link. The key is `source.url` and not `source`,
-    because that is the one the web UI renders as a clickable link.
+    A recipe taken from a web page records its origin as `source.url` in the
+    frontmatter, holding the full URL: not the site name, not a shortened link,
+    and not the key `source`, which the web UI does not render as a link.
     `recipe_import` hands back a frontmatter block with that line already in it.
 
-    A meal plan is an ordinary Cooklang file whose ingredients may be
-    references to other recipes. Keep upcoming recipes in the root file
-    `Meal Plan.menu`, in order under `Meals`. Separate consecutive recipe
-    references with a blank line (two newline characters); a single line break
-    leaves them in one Cooklang step, so the web UI displays both paths on one
-    line:
+    Upcoming recipes go in the root file `Meal Plan.menu`, in order under a
+    single `= Meals` section — not a section per day. Separate references with a
+    blank line (two newline characters) — a single line break leaves them in
+    one step, and the web UI then prints both paths on one line.
 
-        ---
-        title: Meal Plan
-        ---
         = Meals
         @./Risotto{2%servings}
 
         @./Caprese{2%servings}
 
-        @paper towels{1}
+    `Meal History.menu` is the record, under `Weekday (YYYY-MM-DD)` headings,
+    but `mark_cooked` writes it — reach for this tool only to correct an entry
+    already there. Those two root files are the whole of the plan and the
+    record: do not create weekly or date-named plan files, which the web UI
+    never shows as the plan and `mark_cooked` cannot drain. A single
+    ingredient to buy is not part of the plan either — it goes through
+    `shopping_list_edit`'s `add_item`, which writes `Extra Items.menu` itself.
 
-    `@./Name{N}` pulls in that recipe scaled by N, `{N%servings}` scales it to
-    N servings instead, and a bare `@item{N}` is a loose ingredient belonging
-    to no recipe.
+    A folder in the path must already exist — writing into one that does not
+    fails rather than creating it.
 
-    `Meal History.menu` follows the same shape under `Weekday (YYYY-MM-DD)`
-    headings, but `mark_cooked` writes it — reach for this tool only to correct
-    an entry already there.
+    End the confirmation with the recipe's title linked to the result's
+    `web_url`, so the user can open the saved page and check it themselves. For
+    a meal plan, `entries` carries the recipes it now holds, each with its own
+    page: naming one of them links that name to its entry's `web_url`, never to
+    the result's own, which is the plan's page.
     """
     await _put_recipe(path, source)
     entries = await _menu_entries(path, source)
+    warnings: list[str] = []
+    diagnostics: list[Diagnostic] = []
+    try:
+        diagnostics = await diagnose(path, source)
+    except DiagnosticsUnavailable as err:
+        # The language server is a second process behind a WebSocket, so it
+        # can be unreachable in ways the save was not. Say so: an empty
+        # `diagnostics` is otherwise a claim that nothing is wrong, and a
+        # syntax error would pass as silence.
+        logging.getLogger(__name__).warning("Diagnostics unavailable: %s", err)
+        warnings.append(
+            "Recipe saved, but the parser could not be asked about it, so a "
+            "syntax error in it would not show up here."
+        )
     try:
         parsed = (await cook.request("GET", f"/api/recipes/{path}")).json()
     except Exception as err:  # noqa: BLE001 - the write itself succeeded
+        # A file with a parse error in it is exactly what a failed read back
+        # looks like, and `diagnostics` has already named the line. Saying
+        # "reading it back failed" there would describe a glitch, when what
+        # happened is that the recipe does not parse.
+        if any(found.severity == "error" for found in diagnostics):
+            warnings.append(
+                "Recipe saved, but it does not parse, so its page shows the "
+                "error in place of the recipe and its ingredients are on no "
+                "shopping list. `diagnostics` says where."
+            )
+        else:
+            warnings.append(
+                "Recipe saved, but reading it back failed, so its "
+                f"ingredients were not checked: {err}"
+            )
         return RecipeWritten(
             path=path,
             web_url=recipe_web_url(path),
+            diagnostics=diagnostics,
             entries=entries,
-            warnings=[
-                (
-                    "Recipe saved, but reading it back failed, so its "
-                    f"ingredients were not checked: {err}"
-                )
-            ],
+            warnings=warnings,
         )
     ingredients = parsed.get("recipe", {}).get("ingredients", [])
     try:
-        warnings = await _ingredient_warnings(ingredients)
+        warnings += await _ingredient_warnings(ingredients)
     except Exception as err:  # noqa: BLE001 - post-save checks must not hide success
         logging.getLogger(__name__).warning("Ingredient check failed: %s", err)
-        warnings = [
-            (
-                "Recipe saved, but the aisle catalogue could not be read, so its "
-                "ingredients were not checked."
-            )
-        ]
+        warnings.append(
+            "Recipe saved, but the aisle catalogue could not be read, so its "
+            "ingredients were not checked."
+        )
     return RecipeWritten(
         path=path,
         web_url=recipe_web_url(path),
+        diagnostics=diagnostics,
         ingredients=[ingredient["name"] for ingredient in ingredients],
         warnings=warnings,
         entries=entries,
@@ -709,10 +768,18 @@ async def mark_cooked(
 _SHOPPING_FIELDS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "add": (frozenset({"path", "scale"}), frozenset({"path"})),
     "remove": (frozenset({"path"}), frozenset({"path"})),
+    "add_item": (frozenset({"name", "quantity"}), frozenset({"name"})),
+    "remove_item": (frozenset({"name"}), frozenset({"name"})),
     "check": (frozenset({"name"}), frozenset({"name"})),
     "uncheck": (frozenset({"name"}), frozenset({"name"})),
     "clear": (frozenset(), frozenset()),
 }
+
+# An added item is written into a Cooklang file, where `@`, `%` and braces are
+# the syntax an ingredient is made of. A name carrying one would be stored as
+# something other than what was asked for, and there is nothing to escape it
+# with, so it is refused — no ingredient is really spelled that way.
+_ITEM_NAME = re.compile(r"^[^@{}%\r\n]+$")
 
 
 class ShoppingChange(BaseModel):
@@ -720,12 +787,29 @@ class ShoppingChange(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    action: Literal["add", "remove", "check", "uncheck", "clear"]
+    action: Literal[
+        "add", "remove", "add_item", "remove_item", "check", "uncheck", "clear"
+    ]
     path: Path | None = None
     scale: Scale | None = None
     name: Annotated[
         str | None,
-        Field(description="Ingredient name exactly as `shopping_list_read` gave it."),
+        Field(
+            description=(
+                "Ingredient name: for `add_item` as it should read on the "
+                "list, otherwise exactly as `shopping_list_read` gave it."
+            )
+        ),
+    ] = None
+    quantity: Annotated[
+        str | None,
+        Field(
+            description=(
+                "`add_item` only: how much to buy, written as on a list — "
+                "`2`, `500 g`, `1 TL`, `a pinch`. Omit when the user did not "
+                "say, and the item is listed without one."
+            )
+        ),
     ] = None
 
     @model_validator(mode="after")
@@ -733,7 +817,7 @@ class ShoppingChange(BaseModel):
         allowed, required = _SHOPPING_FIELDS[self.action]
         given = {
             field
-            for field in ("path", "scale", "name")
+            for field in ("path", "scale", "name", "quantity")
             if getattr(self, field) is not None
         }
         if unused := given - allowed:
@@ -742,6 +826,12 @@ class ShoppingChange(BaseModel):
             )
         if missing := required - given:
             raise ValueError(f"{self.action!r} needs {', '.join(sorted(missing))}.")
+        if self.action == "add_item" and not _ITEM_NAME.match(self.name.strip()):
+            raise ValueError(
+                "An item name cannot be blank or hold any of @ % { }; write a "
+                "quantity in `quantity` and a preparation in the name's own "
+                "words."
+            )
         return self
 
 
@@ -753,11 +843,28 @@ async def shopping_list_read() -> dict[str, Any]:
     Quantities are summed with unit conversion, reduced by whatever the pantry
     holds, and grouped into store aisles by the Cooklang library, so the result
     is authoritative — do not total ingredients yourself. `pantry_items` names
-    the ingredients that were already at home and have been subtracted.
+    the ingredients that were already at home and have been subtracted; no tool
+    here changes what the pantry holds.
 
     This is the same list the collection's web UI shows, including which items
     have been ticked off. `recipes` carries each source path and scale;
-    ingredient entries carry `checked` individually.
+    ingredient entries carry `checked` individually. `Extra Items.menu` among
+    them is not a recipe: it is the single ingredients added with
+    `shopping_list_edit`'s `add_item`, and it is not something to cook, to
+    plan, or to copy anywhere.
+
+    An ingredient does not say which recipe it came from, and cannot: the same
+    name from two sources is summed into one entry, so 30 g of butter a recipe
+    calls for and 250 g added by hand are one 280 g line. Do not tell the user
+    what a quantity is made of. `extra_items` is the exception — the names
+    added with `add_item`, and so the only names `remove_item` can take off.
+    One of them may still be part of a recipe's quantity as well.
+
+    Each entry in `recipes` also carries a `web_url`, its page in the user's
+    collection. Naming one of those recipes in an answer means linking that
+    name to its `web_url` — every name, every time, here or in a later reply.
+    Ingredients have no page, so their names stay plain; never assemble a URL
+    for one.
 
     Copying these recipes into `Meal Plan.menu` is only ever done when the user
     explicitly asks for it. Then read the plan, append the missing recipe paths
@@ -770,11 +877,37 @@ async def shopping_list_read() -> dict[str, Any]:
     result = await cook.shopping_list()
     for recipe in result["recipes"]:
         recipe["web_url"] = recipe_web_url(recipe["path"])
+    result["extra_items"] = await _extra_items(result["recipes"])
     return result
 
 
+async def _extra_items(recipes: list[dict[str, Any]]) -> list[str]:
+    """The names on the list that were added as single items.
+
+    The aggregated list says nothing about where an ingredient came from: 30 g
+    of butter a recipe calls for and 250 g added by hand arrive as one 280 g
+    line, under the one name. So the only way to know which names
+    `remove_item` can reach is to read the file behind them.
+
+    A failure costs the field and not the read, the same way resolving a
+    menu's entries does.
+    """
+    if not any(menus.same_recipe(recipe["path"], EXTRAS_PATH) for recipe in recipes):
+        return []
+    try:
+        source = (await cook.request("GET", f"/api/recipes/raw/{EXTRAS_PATH}")).text
+    except Exception as err:  # noqa: BLE001 - the list itself was read fine
+        logging.getLogger(__name__).warning("Reading the loose items failed: %s", err)
+        return []
+    return menus.items(source)
+
+
 def _shopping_request(change: ShoppingChange) -> tuple[str, dict[str, Any] | None]:
-    """One validated change as the endpoint and body that apply it."""
+    """One validated change as the endpoint and body that apply it.
+
+    The item actions are not among them: they are file surgery first and a
+    list call only sometimes, so `_edit_extras` has them.
+    """
     if change.action == "add":
         # A menu is added as one entry with its recipes resolved and nested
         # inside; `add` would store it as a single opaque file instead.
@@ -785,6 +918,66 @@ def _shopping_request(change: ShoppingChange) -> tuple[str, dict[str, Any] | Non
     if change.action in ("check", "uncheck"):
         return change.action, {"name": change.name}
     return "clear", None
+
+
+async def _stored_extras() -> dict[str, Any] | None:
+    """The shopping list's entry for the loose items, if it holds one.
+
+    Compared with `same_recipe` because the store drops the extension: the
+    file is `Extra Items.menu` and the entry comes back as `Extra Items`.
+    """
+    stored = (await cook.request("GET", "/api/shopping_list/items")).json()
+    return next(
+        (item for item in stored if menus.same_recipe(item["path"], EXTRAS_PATH)),
+        None,
+    )
+
+
+async def _edit_extras(change: ShoppingChange) -> None:
+    """Apply one `add_item` or `remove_item`, and keep the list in step.
+
+    `Extra Items.menu` goes on the list as soon as it holds something and
+    comes off when it holds nothing, so the list never carries an entry with
+    no ingredients under it.
+
+    Off the list, whatever the file still holds is the last trip's: the user
+    cleared the list after shopping, here or in the web UI, which tells this
+    server nothing. So an addition then starts from an empty file rather than
+    reviving items that are already in the cupboard.
+
+    Deleted from the collection while still on the list, it starts from empty
+    as well. Asking for the file and getting a 404 would otherwise fail every
+    addition from then on, with no way back short of taking the entry off the
+    list by hand.
+    """
+    name = change.name.strip()
+    stored = await _stored_extras()
+    source = ""
+    if stored is not None:
+        existing = {entry["path"] for entry in await cook.list_entries()}
+        source = await _read_menu(EXTRAS_PATH, existing) or ""
+    if change.action == "add_item":
+        source = menus.add_item(source, name, change.quantity)
+    else:
+        source, removed = menus.remove_item(source, name)
+        if not removed:
+            raise ValueError(
+                f"{name!r} is not on the list as a single item. An ingredient "
+                "a recipe calls for leaves with that recipe — `remove` its "
+                "path — or can be ticked off with `check`."
+            )
+    await _put_recipe(EXTRAS_PATH, source)
+    remaining = menus.items(source)
+    if remaining and stored is None:
+        await cook.request(
+            "POST",
+            "/api/shopping_list/add_menu",
+            json={"path": EXTRAS_PATH, "scale": 1.0},
+        )
+    elif not remaining and stored is not None:
+        await cook.request(
+            "POST", "/api/shopping_list/remove", json={"path": stored["path"]}
+        )
 
 
 @mcp.tool(annotations=WRITE)
@@ -798,76 +991,99 @@ async def shopping_list_edit(
 
     Actions, with the fields they take (? optional): `add`(path, scale?) puts a
     recipe, or every recipe in a meal plan, on the list; `remove`(path) takes
-    one back off; `check`(name) ticks an ingredient off and `uncheck`(name)
-    puts it back; `clear` empties the list completely. Each action takes only
-    its own fields — a `clear` carrying a path is refused rather than read as
-    emptying the list, so send `remove` when one recipe is what you mean.
+    one back off; `add_item`(name, quantity?) puts a single ingredient on it
+    and `remove_item`(name) takes that back off; `check`(name) ticks an
+    ingredient off and `uncheck`(name) puts it back; `clear` empties the list
+    completely. Each action takes only its own fields — a `clear` carrying a
+    path is refused rather than read as emptying the list, so send `remove`
+    when one recipe is what you mean.
 
     They are applied in the order given, and a failure part-way through leaves
     the earlier ones applied — this is the same list the web UI shows, not a
     transaction. The result is the whole list afterwards, so there is no need
-    to read it back.
+    to read it back. It has the shape `shopping_list_read` returns, `recipes`
+    and their `web_url`s included: a confirmation that names a recipe links it
+    from there.
+
+    `add_item` is for what no recipe calls for — kitchen roll, a carton of
+    milk, more of something that ran out. Those are collected in
+    `Extra Items.menu`, which this tool writes and keeps on the list; never
+    create or edit that file with `recipe_write`, and never put a loose
+    ingredient in `Meal Plan.menu` instead. Adding a name already there
+    replaces its quantity rather than listing it twice, so pass the total the
+    user now wants. The items clear themselves once the list has been cleared,
+    so nothing carries over from the last trip. `check` and `uncheck` treat
+    them like any other ingredient, while `remove_item` reaches only items
+    added this way: an ingredient a recipe calls for leaves with the recipe.
 
     `clear` after the user has shopped is the normal end of a trip. When a
     meal-plan copy has just been written, clear the list if every ingredient is
     ticked off, and say that you did; if any is still unticked, ask first and
     otherwise leave it alone.
     """
-    requests = [_shopping_request(change) for change in changes]
-    for endpoint, body in requests:
+    for change in changes:
+        if change.action in ("add_item", "remove_item"):
+            await _edit_extras(change)
+            continue
+        endpoint, body = _shopping_request(change)
         await cook.request(
             "POST",
             f"/api/shopping_list/{endpoint}",
             **({"json": body} if body is not None else {}),
         )
-    return {"applied": len(requests), **await shopping_list_read()}
+    return {"applied": len(changes), **await shopping_list_read()}
 
 
 # -- aisles ---------------------------------------------------------------
-
-
-class AisleChange(BaseModel):
-    """One edit to the aisle file; `cook server` checks each action's fields."""
-
-    model_config = {"extra": "forbid"}
-
-    action: Literal[
-        "add_aisle",
-        "rename_aisle",
-        "remove_aisle",
-        "move_aisle",
-        "add_ingredient",
-        "remove_ingredient",
-    ]
-    name: str | None = None
-    aisle: str | None = None
-    new_name: str | None = None
-    position: Annotated[int, Field(ge=0)] | None = None
+#
+# Both edit tools take a discriminated union, so the input schema already
+# publishes every action's fields and which are required. The docstrings
+# therefore carry only the behaviour behind each action, which no schema can
+# state, and never a second copy of the field list.
 
 
 @mcp.tool(annotations=READ)
-async def aisles_read(query: str = "", uncategorized: bool = False) -> dict[str, Any]:
-    """Read the shopping list's aisles as {aisle: [ingredient names]}.
+async def aisles_read(
+    query: str | list[str] = "", uncategorized: bool = False
+) -> dict[str, Any]:
+    """Read aisles as {aisle: [[preferred name, alias, ...], ...]}.
 
-    An empty query lists every aisle; otherwise only the aisles whose own name
-    contains it, with their whole contents, and the matching names of the
-    others, ignoring case. `uncategorized` also lists the ingredient names the
-    collection uses that no aisle has yet. Pass `revision` to `aisles_edit`;
-    `configured` is false when the collection has no aisle file at all.
+    Aisles are the store sections the shopping list is grouped into.
+
+    Each inner list is one ingredient: its preferred shopping-list name first,
+    followed by all its aliases. A case-insensitive substring query matches any
+    name and returns the whole group. For example, searching "milk" returns
+    [["milk", "milch"], ["whole milk"]]. Matching an aisle's name returns all
+    its ingredients. Pass a list such as ["milk", "Milch", "milks"] to match
+    ANY term, returning each ingredient once. Blank terms are ignored; no
+    nonblank terms returns every aisle, including empty ones.
+    `uncategorized` also lists the ingredient names the collection uses that no
+    aisle has yet. `configured` is false when the collection has no aisle file
+    at all. Use ingredients_edit to change ingredients and aliases, or
+    aisles_edit to organize aisles.
     """
     catalogue = (await cook.request("GET", "/api/aisles")).json()
-    query = query.strip().casefold()
+    terms = {
+        term.strip().casefold()
+        for term in ([query] if isinstance(query, str) else query)
+    }
+    terms.discard("")
+
+    def matches(name: str) -> bool:
+        return not terms or any(term in name.casefold() for term in terms)
+
     aisles = {}
     for aisle in catalogue["aisles"]:
-        names = [name for entry in aisle["ingredients"] for name in entry["names"]]
-        if query not in aisle["name"].casefold():
-            names = [name for name in names if query in name.casefold()]
-            if not names:
-                continue
-        aisles[aisle["name"]] = names
+        aisle_matches = matches(aisle["name"])
+        groups = [
+            entry["names"]
+            for entry in aisle["ingredients"]
+            if aisle_matches or any(matches(name) for name in entry["names"])
+        ]
+        if aisle_matches or groups:
+            aisles[aisle["name"]] = groups
     result = {
         "configured": catalogue["configured"],
-        "revision": catalogue["revision"],
         "aisles": aisles,
     }
     if catalogue["warnings"]:
@@ -875,80 +1091,72 @@ async def aisles_read(query: str = "", uncategorized: bool = False) -> dict[str,
     if uncategorized:
         unassigned = (await cook.request("GET", "/api/aisles/uncategorized")).json()
         result["uncategorized"] = [
-            item["name"]
-            for item in unassigned["ingredients"]
-            if query in item["name"].casefold()
+            item["name"] for item in unassigned["ingredients"] if matches(item["name"])
         ]
     return result
 
 
 @mcp.tool(annotations=WRITE)
 async def aisles_edit(
-    revision: Annotated[
-        str | None,
-        Field(
-            description="From aisles_read; null only to create a missing aisle file."
-        ),
-    ],
-    changes: Annotated[
-        list[AisleChange],
-        Field(
-            description="Applied in order, all or none; empty only to create the file."
-        ),
-    ],
+    changes: Annotated[list[catalogue.AisleChange], Field(min_length=1)],
 ) -> dict[str, Any]:
-    """Change the aisle file in one atomic batch, and return its new revision.
+    """Organize aisles in one atomic batch: create, rename, move or delete one.
+    Use ingredients_edit for the ingredients inside them.
 
-    Read first and send that revision: a stale one fails instead of overwriting
-    an edit made meanwhile, and then you read again and reconsider the batch.
-    For a collection with no aisle file, `revision=null` with `changes=[]`
-    creates one; edit it afterwards with the revision that comes back.
+    `create` appends to the end unless given a position, names are matched
+    ignoring case, and deleting a nonempty aisle fails unless
+    delete_ingredients is true — which deletes its ingredient groups with it.
+    A missing catalogue is initialized on the first aisle created.
 
-    Actions, with their fields (? optional): add_aisle(name, position?),
-    rename_aisle(name, new_name), remove_aisle(name), move_aisle(name, position),
-    add_ingredient(aisle, name), remove_ingredient(name).
-
-    `position` counts from 0; without it an aisle goes last. Removing an aisle
-    removes its ingredients too. An ingredient is found by name ignoring case,
-    and removing it drops its whole line, including any other spellings sharing
-    it; to move one, remove it and add it back in the same batch. Recipes are
-    never touched: an aisle only groups the ingredient on the shopping list.
+    Recipes are never changed. Changes run in order, all or none. Concurrent
+    edits fail; read again before retrying.
     """
-    if revision is None:
-        if changes:
-            raise ValueError("Create with changes=[], then edit with the new revision.")
-        catalogue = (await cook.request("POST", "/api/aisles")).json()
-        return {"revision": catalogue["revision"], "created": True}
-    if not revision or not changes:
-        raise ValueError("Editing needs a revision and at least one change.")
-    catalogue = (
+    return await _edit_catalogue(changes)
+
+
+@mcp.tool(annotations=WRITE)
+async def ingredients_edit(
+    changes: Annotated[list[catalogue.IngredientChange], Field(min_length=1)],
+) -> dict[str, Any]:
+    """Categorize ingredients and manage aliases in one atomic batch: create,
+    update, merge or delete an ingredient group.
+
+    `create` needs an aisle that already exists — make one with aisles_edit
+    first. `update` touches only the fields it is given and matches
+    `ingredient` against any existing name, ignoring case; moving an ingredient
+    keeps its aliases, and renaming keeps the old name as one, so pass it in
+    remove_aliases to drop it. Removing the preferred name means naming another
+    preferred_name in the same update. Aliases are alternative spellings of one
+    ingredient, never a replacement for the complete group.
+
+    `merge` folds groups into the one owning preferred_name, which supplies the
+    aisle and position, and keeps every alias. An alias owned by a third
+    ingredient fails the whole batch rather than being merged silently, so use
+    merge only when the ingredients really are the same thing. `delete` removes
+    a whole group; to drop a single alias, update with remove_aliases instead.
+
+    Recipes never change. Changes run in order, all or none. Concurrent edits
+    fail; read again before retrying.
+    """
+    return await _edit_catalogue(changes)
+
+
+async def _edit_catalogue(changes) -> dict[str, Any]:
+    current = (await cook.request("GET", "/api/aisles")).json()
+    batch = catalogue.compile_changes(current, changes)
+    if not current["configured"]:
+        current = (await cook.request("POST", "/api/aisles")).json()
+    updated = (
         await cook.request(
             "POST",
             "/api/aisles/changes",
-            json={
-                "revision": revision,
-                "changes": [_aisle_change(change) for change in changes],
-            },
+            json={"revision": current["revision"], "changes": batch},
         )
     ).json()
-    result = {"revision": catalogue["revision"], "applied": len(changes)}
-    if catalogue["warnings"]:
-        result["warnings"] = catalogue["warnings"]
+    result = {"applied": len(changes)}
+    if updated["warnings"]:
+        result["warnings"] = updated["warnings"]
     return result
-
-
-def _aisle_change(change: AisleChange) -> dict[str, Any]:
-    """One change as the API takes it.
-
-    The API stores an ingredient as a list of spellings, the first of which the
-    shopping list shows. Only ever write one: a second spelling is a second way
-    to write the same ingredient, which is the inconsistency the write warnings
-    exist to prevent.
-    """
-    body = change.model_dump(exclude_none=True)
-    if change.action == "add_ingredient" and "name" in body:
-        body["names"] = [body.pop("name")]
-    return body
 
 
 def main() -> None:

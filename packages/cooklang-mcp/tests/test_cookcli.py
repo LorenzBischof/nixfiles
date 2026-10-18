@@ -242,3 +242,15 @@ def test_format_quantities_reads_as_a_cook_would_write_it():
     )
     # An ingredient named without a quantity.
     assert format_quantities([]) == "some"
+
+
+def test_a_websocket_endpoint_keeps_the_servers_address(monkeypatch):
+    """`COOKLANG_SERVER_URL` becomes the HTTP client's base URL, and the
+    WebSocket endpoint has to land on the same host and port."""
+    monkeypatch.setattr(cookcli._http, "base_url", "http://127.0.0.1:9080")
+    assert cookcli.ws_url("/api/ws/lsp") == "ws://127.0.0.1:9080/api/ws/lsp"
+
+
+def test_a_tls_server_is_reached_over_tls(monkeypatch):
+    monkeypatch.setattr(cookcli._http, "base_url", "https://cook.example.test")
+    assert cookcli.ws_url("/api/ws/lsp") == "wss://cook.example.test/api/ws/lsp"

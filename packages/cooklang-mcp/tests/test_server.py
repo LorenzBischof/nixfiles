@@ -34,6 +34,7 @@ def test_the_tool_surface_is_grouped_and_annotated():
         "shopping_list_edit",
         "aisles_read",
         "aisles_edit",
+        "ingredients_edit",
     }
     for retired in (
         "list_recipes",
@@ -170,6 +171,7 @@ def test_recipe_tools_return_clickable_web_urls(monkeypatch):
         "path": "Weeknight meals/Chili & Rice.cook",
         "web_url": expected,
         "written": True,
+        "diagnostics": [],
         "ingredients": ["rice"],
         "warnings": [],
         # A recipe, not a plan, so there are no referenced recipes to resolve.
@@ -304,6 +306,83 @@ def test_write_failures_preserve_saved_status(monkeypatch, failure):
         assert len(result.warnings) == 1
         assert isinstance(result.warnings[0], str)
         assert "Recipe saved" in result.warnings[0]
+
+
+def _collection(monkeypatch, ingredient, *, read_back=True):
+    """One recipe holding `ingredient`, whose catalogue knows that name — so
+    the only warnings a write produces are the ones under test. With
+    `read_back=False` the read after the write fails, which is what a file that
+    does not parse looks like from here."""
+
+    async def request(method, path, **_kwargs):
+        if path == "/api/aisles":
+            return httpx.Response(
+                200,
+                json={
+                    "configured": True,
+                    "aisles": [{"ingredients": [{"names": [ingredient]}]}],
+                },
+            )
+        if method == "GET" and not read_back:
+            raise server.cook.CookCliError("GET failed (500): Division by zero")
+        return httpx.Response(
+            200, json={"recipe": {"ingredients": [{"name": ingredient}]}}
+        )
+
+    monkeypatch.setattr(server.cook, "request", request)
+
+
+def _reports(monkeypatch, **diagnostic):
+    """A language server that reports one diagnostic about every file."""
+
+    async def diagnose(_path, _source):
+        return [server.Diagnostic(**diagnostic)]
+
+    monkeypatch.setattr(server, "diagnose", diagnose)
+
+
+def test_what_the_parser_says_comes_back_with_the_write(monkeypatch):
+    _collection(monkeypatch, "rice")
+    _reports(
+        monkeypatch, severity="warning", line=3, message="Unsupported value for key"
+    )
+
+    written = asyncio.run(server.recipe_write("Rice.cook", "Add @rice{1%cup}"))
+    assert written.written is True
+    assert written.ingredients == ["rice"]
+    assert [d.model_dump() for d in written.diagnostics] == [
+        {"severity": "warning", "line": 3, "message": "Unsupported value for key"}
+    ]
+    assert written.warnings == []
+
+
+def test_a_file_that_does_not_parse_is_said_to_be_broken_not_unread(monkeypatch):
+    """A read back failing *is* what a parse error looks like, so the two must
+    not be reported the same way."""
+    _collection(monkeypatch, "rice", read_back=False)
+    _reports(monkeypatch, severity="error", line=9, message="Division by zero")
+
+    written = asyncio.run(server.recipe_write("Rice.cook", "Add @rice{1/0%g}"))
+    assert written.written is True
+    assert written.diagnostics[0].severity == "error"
+    (warning,) = written.warnings
+    assert "does not parse" in warning
+    assert "reading it back failed" not in warning
+
+
+def test_a_parser_that_cannot_be_asked_does_not_pass_as_a_clean_file(monkeypatch):
+    _collection(monkeypatch, "rice")
+
+    async def unavailable(_path, _source):
+        raise server.DiagnosticsUnavailable("refused")
+
+    monkeypatch.setattr(server, "diagnose", unavailable)
+
+    written = asyncio.run(server.recipe_write("Rice.cook", "Add @rice{1%cup}"))
+    assert written.written is True
+    assert written.diagnostics == []
+    (warning,) = written.warnings
+    assert "could not be asked" in warning
 
 
 # -- shopping list --------------------------------------------------------
@@ -565,6 +644,9 @@ def test_the_instructions_keep_only_what_is_cross_cutting():
     # A URL does not expire when the next call returns a different one: the
     # miss this is aimed at was a plan write whose own URL was the plan's.
     assert "not only the one from the last call" in INSTRUCTIONS
+    # Nor does the rule weaken as the names pile up: the other miss was a
+    # summary closing several writes that named every recipe and linked none.
+    assert "run of several writes" in INSTRUCTIONS
     # And the instructions never explain how a URL is built, so a name without
     # one cannot be linked to a guess.
     assert "Never construct or guess a URL" in INSTRUCTIONS
@@ -617,3 +699,239 @@ def test_every_tool_description_is_json_serialisable_and_non_empty():
     for name, tool in tools().items():
         assert tool.description and tool.description.strip(), name
         json.dumps(tool.model_dump(by_alias=True))
+
+
+def extras_run(monkeypatch, changes, files=None, listed=()):
+    """Run `shopping_list_edit` against a fake collection and list.
+
+    `listed` is what the shopping list already stores — the store drops the
+    extension, so `Extra Items` is how its own entry comes back.
+    """
+    files = dict(files or {})
+    sent = []
+
+    async def list_entries():
+        return [
+            {
+                "path": path,
+                "title": menus.normalise(path),
+                "tags": [],
+                "is_menu": path.endswith(".menu"),
+            }
+            for path in files
+        ]
+
+    async def request(method, path, **options):
+        if method == "GET" and path == "/api/shopping_list/items":
+            return httpx.Response(200, json=[{"path": p, "scale": 1.0} for p in listed])
+        if method == "GET" and path.startswith("/api/recipes/raw/"):
+            return httpx.Response(200, text=files[path[len("/api/recipes/raw/") :]])
+        if method == "PUT":
+            files[path[len("/api/recipes/") :]] = options["content"].decode()
+            return httpx.Response(200, json={})
+        sent.append((path, options.get("json")))
+        return httpx.Response(200, json={})
+
+    async def shopping_list():
+        return {"recipes": [], "categories": [], "pantry_items": []}
+
+    monkeypatch.setattr(server.cook, "list_entries", list_entries)
+    monkeypatch.setattr(server.cook, "request", request)
+    monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
+    asyncio.run(mcp.call_tool("shopping_list_edit", {"changes": changes}))
+    return files, sent
+
+
+def test_a_first_item_creates_the_file_and_puts_it_on_the_list(monkeypatch):
+    files, sent = extras_run(
+        monkeypatch, [{"action": "add_item", "name": "Milch", "quantity": "1 l"}]
+    )
+
+    assert files["Extra Items.menu"] == "---\ntitle: Extra Items\n---\n@Milch{1%l}\n"
+    assert sent == [
+        ("/api/shopping_list/add_menu", {"path": "Extra Items.menu", "scale": 1.0})
+    ]
+
+
+def test_a_second_item_joins_the_file_without_adding_the_menu_twice(monkeypatch):
+    files, sent = extras_run(
+        monkeypatch,
+        [{"action": "add_item", "name": "Taschentücher", "quantity": "2"}],
+        files={"Extra Items.menu": "---\ntitle: Extra Items\n---\n@Milch{1%l}\n"},
+        listed=["Extra Items"],
+    )
+
+    assert files["Extra Items.menu"] == (
+        "---\ntitle: Extra Items\n---\n@Milch{1%l}\n\n@Taschentücher{2}\n"
+    )
+    assert sent == []
+
+
+def test_items_from_the_last_trip_do_not_come_back(monkeypatch):
+    """Off the list means it was cleared — here or in the web UI, which says
+    nothing to this server — so the file is last trip's and is dropped."""
+    files, sent = extras_run(
+        monkeypatch,
+        [{"action": "add_item", "name": "Butter", "quantity": "250 g"}],
+        files={"Extra Items.menu": "---\ntitle: Extra Items\n---\n@Milch{1%l}\n"},
+        listed=[],
+    )
+
+    assert files["Extra Items.menu"] == "---\ntitle: Extra Items\n---\n@Butter{250%g}\n"
+    assert sent == [
+        ("/api/shopping_list/add_menu", {"path": "Extra Items.menu", "scale": 1.0})
+    ]
+
+
+def test_removing_the_last_item_takes_the_menu_off_the_list(monkeypatch):
+    """An entry with no ingredients under it would otherwise sit there
+    claiming the user still has something to buy."""
+    files, sent = extras_run(
+        monkeypatch,
+        [{"action": "remove_item", "name": "Milch"}],
+        files={"Extra Items.menu": "---\ntitle: Extra Items\n---\n@Milch{1%l}\n"},
+        listed=["Extra Items"],
+    )
+
+    assert menus.items(files["Extra Items.menu"]) == []
+    # By the path the store gave back, which carries no extension.
+    assert sent == [("/api/shopping_list/remove", {"path": "Extra Items"})]
+
+
+def test_removing_one_of_several_items_leaves_the_menu_on_the_list(monkeypatch):
+    files, sent = extras_run(
+        monkeypatch,
+        [{"action": "remove_item", "name": "Milch"}],
+        files={
+            "Extra Items.menu": (
+                "---\ntitle: Extra Items\n---\n@Milch{1%l}\n\n@Taschentücher{2}\n"
+            )
+        },
+        listed=["Extra Items"],
+    )
+
+    assert files["Extra Items.menu"] == (
+        "---\ntitle: Extra Items\n---\n@Taschentücher{2}\n"
+    )
+    assert sent == []
+
+
+def test_removing_an_ingredient_a_recipe_calls_for_says_so(monkeypatch):
+    """`remove_item` reaches only the loose items. Silently doing nothing
+    would be reported to the user as a removal that never happened."""
+    with pytest.raises(ToolError) as error:
+        extras_run(
+            monkeypatch,
+            [{"action": "remove_item", "name": "Mehl"}],
+            files={"Extra Items.menu": "---\ntitle: Extra Items\n---\n@Milch{1%l}\n"},
+            listed=["Extra Items"],
+        )
+
+    assert "not on the list as a single item" in str(error.value)
+
+
+def test_a_cleared_list_in_the_same_batch_is_seen_by_the_next_item(monkeypatch):
+    """`clear` is one request and the file is another, so the two stay in step
+    only because each item reads the list back."""
+    files, sent = extras_run(
+        monkeypatch,
+        [
+            {"action": "clear"},
+            {"action": "add_item", "name": "Butter"},
+        ],
+        files={"Extra Items.menu": "---\ntitle: Extra Items\n---\n@Milch{1%l}\n"},
+        listed=[],
+    )
+
+    assert files["Extra Items.menu"] == "---\ntitle: Extra Items\n---\n@Butter{}\n"
+    assert sent == [
+        ("/api/shopping_list/clear", None),
+        ("/api/shopping_list/add_menu", {"path": "Extra Items.menu", "scale": 1.0}),
+    ]
+
+
+def test_a_file_deleted_from_under_the_list_is_written_again(monkeypatch):
+    """Deleted by hand while the list still names it. Asking the collection
+    for it would 404, and every addition from then on would fail with no way
+    back short of editing the list by hand."""
+    files, sent = extras_run(
+        monkeypatch,
+        [{"action": "add_item", "name": "Butter", "quantity": "250 g"}],
+        files={},
+        listed=["Extra Items"],
+    )
+
+    assert files["Extra Items.menu"] == "---\ntitle: Extra Items\n---\n@Butter{250%g}\n"
+    # Already on the list, so it is not added a second time.
+    assert sent == []
+
+
+def test_the_list_says_which_names_were_added_by_hand(monkeypatch):
+    """Nothing else in the result does: the aggregator sums a recipe's butter
+    and a loose one into a single line under a single name."""
+
+    async def shopping_list():
+        return {
+            "recipes": [
+                {"path": "Risotto.cook", "scale": 1.0},
+                {"path": "Extra Items.menu", "scale": 1.0},
+            ],
+            "categories": [
+                {
+                    "category": "other",
+                    "items": [{"name": "butter", "quantity": "280 g"}],
+                }
+            ],
+            "pantry_items": [],
+        }
+
+    async def request(method, path, **_options):
+        assert (method, path) == ("GET", "/api/recipes/raw/Extra Items.menu")
+        return httpx.Response(
+            200, text="---\ntitle: Extra Items\n---\n@butter{250%g}\n\n@Milch{1%l}\n"
+        )
+
+    monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
+    monkeypatch.setattr(server.cook, "request", request)
+
+    assert asyncio.run(server.shopping_list_read())["extra_items"] == [
+        "butter",
+        "Milch",
+    ]
+
+
+def test_a_list_without_loose_items_does_not_go_looking_for_them(monkeypatch):
+    async def shopping_list():
+        return {
+            "recipes": [{"path": "Risotto.cook", "scale": 1.0}],
+            "categories": [],
+            "pantry_items": [],
+        }
+
+    async def request(*_args, **_kwargs):
+        pytest.fail("the loose-items file was read when nothing pointed at it")
+
+    monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
+    monkeypatch.setattr(server.cook, "request", request)
+
+    assert asyncio.run(server.shopping_list_read())["extra_items"] == []
+
+
+def test_a_loose_items_file_that_cannot_be_read_costs_the_field_only(monkeypatch):
+    """The list was read fine; only the note about which names are loose is
+    missing, and an empty field is honest about that."""
+
+    async def shopping_list():
+        return {
+            "recipes": [{"path": "Extra Items.menu", "scale": 1.0}],
+            "categories": [],
+            "pantry_items": [],
+        }
+
+    async def request(*_args, **_kwargs):
+        raise server.cook.CookCliError("cook server unreachable")
+
+    monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
+    monkeypatch.setattr(server.cook, "request", request)
+
+    assert asyncio.run(server.shopping_list_read())["extra_items"] == []

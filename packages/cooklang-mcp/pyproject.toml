@@ -10,6 +10,7 @@ dependencies = [
   "recipe-scrapers>=15",
   "beautifulsoup4>=4.12",
   "pyyaml>=6",
+  "websockets>=13",
 ]
 
 [project.scripts]

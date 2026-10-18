@@ -1,12 +1,14 @@
 """Meal-plan and meal-history files, edited structurally rather than by prose.
 
-`Meal Plan.menu` and `Meal History.menu` are ordinary Cooklang files, so a
-client could edit them with the recipe tools alone. It did so badly: recording
-a cooked meal means appending to one file under the right date section, in the
-right order, and removing the same recipe from another, and every part of that
-was a paragraph of instructions the model could drop. `mark_cooked` does it
-here instead, and the instructions shrink to the one judgement that is really
-the model's — which day the meal was eaten.
+`Meal Plan.menu`, `Meal History.menu` and `Extra Items.menu` are ordinary
+Cooklang files, so a client could edit them with the recipe tools alone. It did
+so badly: recording a cooked meal means appending to one file under the right
+date section, in the right order, and removing the same recipe from another,
+and every part of that was a paragraph of instructions the model could drop.
+`mark_cooked` does it here instead, and the instructions shrink to the one
+judgement that is really the model's — which day the meal was eaten. The
+single ingredients `shopping_list_edit` collects in `Extra Items.menu` are
+written here for the same reason.
 
 A file is parsed as optional YAML frontmatter followed by sections introduced
 by `= Heading`, each holding blocks of lines separated by blank lines. A block
@@ -19,6 +21,7 @@ trip tidies spacing rather than preserving it byte for byte.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date as Date
 
@@ -31,8 +34,18 @@ _HEADING_DATE = re.compile(r"\((\d{4}-\d{2}-\d{2})\)")
 # too rather than silently ignoring a reference written `@./Risotto`.
 _COMPONENT = re.compile(r"^@(?:(?P<braced>[^{@]*)\{|(?P<bare>[^{@\s]+))")
 
+# What a written amount looks like in front of its unit: a number, a decimal,
+# a fraction or a range. A unit may not open with a digit, so `3 1/2 l` does
+# not split and is stored whole — as is `a pinch`, which Cooklang reads as a
+# text quantity and shows back unchanged.
+_AMOUNT = re.compile(
+    r"^(\d+(?:[.,]\d+)?(?:\s*/\s*\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?)"
+    r"(?:\s*([^\s\d].*))?$"
+)
+
 ESTIMATED = "— date estimated"
 HISTORY_FRONTMATTER = (_FENCE, "title: Meal History", _FENCE)
+EXTRAS_FRONTMATTER = (_FENCE, "title: Extra Items", _FENCE)
 
 
 @dataclass
@@ -185,13 +198,74 @@ def remove_from_plan(source: str, path: str) -> tuple[str, bool]:
     Only blocks that open with a reference to this recipe go. A loose
     ingredient, or a note under some other recipe, is left where it is.
     """
+    return _without(source, lambda name: same_recipe(name, path))
+
+
+def add_item(source: str, name: str, quantity: str | None = None) -> str:
+    """`source` with `name` on it at `quantity`, as a block of its own.
+
+    A name already in the file has its block rewritten rather than a second one
+    appended: asking twice for milk means one bottle of milk, where two blocks
+    would be added up into two.
+    """
+    menu = parse(source) if source.strip() else _new_extras()
+    block = [f"@{name}{{{_braced(quantity)}}}"]
+    for section in menu.sections:
+        for index, existing in enumerate(section.blocks):
+            found = component(existing[0])
+            if found is not None and found.casefold() == name.casefold():
+                section.blocks[index] = block
+                return render(menu)
+    menu.sections[-1].blocks.append(block)
+    return render(menu)
+
+
+def remove_item(source: str, name: str) -> tuple[str, bool]:
+    """`source` without the loose ingredient `name`, and whether it held one.
+
+    Matched by name, where a recipe is matched by path: an item here was
+    written as `@Milch{1%l}` and has no file behind it.
+    """
+    return _without(source, lambda found: found.casefold() == name.casefold())
+
+
+def items(source: str) -> list[str]:
+    """The names a loose-items file holds, in file order."""
+    return [
+        name
+        for section in parse(source).sections
+        for block in section.blocks
+        if (name := component(block[0])) is not None
+    ]
+
+
+def _braced(quantity: str | None) -> str:
+    """A written amount as the text inside an ingredient's braces.
+
+    `500 g` becomes `500%g`, so the shopping list can add it to the 200 g a
+    recipe asks for. What does not split that way goes in whole and stays the
+    words the user chose.
+    """
+    text = (quantity or "").strip()
+    if not text or "%" in text:
+        return text
+    match = _AMOUNT.match(text)
+    if not match:
+        return text
+    amount, unit = match.group(1).strip(), (match.group(2) or "").strip()
+    return f"{amount}%{unit}" if unit else amount
+
+
+def _without(source: str, matches: Callable[[str], bool]) -> tuple[str, bool]:
+    """`source` without the blocks whose first line names a matching
+    component, and whether any went."""
     menu = parse(source)
     removed = False
     for section in menu.sections:
         kept = []
         for block in section.blocks:
             name = component(block[0])
-            if name is not None and same_recipe(name, path):
+            if name is not None and matches(name):
                 removed = True
                 continue
             kept.append(block)
@@ -201,3 +275,7 @@ def remove_from_plan(source: str, path: str) -> tuple[str, bool]:
 
 def _new_history() -> Menu:
     return Menu(frontmatter=list(HISTORY_FRONTMATTER), sections=[Section(heading=None)])
+
+
+def _new_extras() -> Menu:
+    return Menu(frontmatter=list(EXTRAS_FRONTMATTER), sections=[Section(heading=None)])

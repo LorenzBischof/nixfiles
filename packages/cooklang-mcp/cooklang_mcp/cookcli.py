@@ -34,6 +34,17 @@ class CookCliError(RuntimeError):
     """A request to `cook server` failed."""
 
 
+def ws_url(path: str) -> str:
+    """A WebSocket endpoint of this server, from the same base URL.
+
+    So that `COOKLANG_SERVER_URL` is read in one place. The only such endpoint
+    is the language-server bridge (see `diagnostics.py`), which is the same
+    process on the same address — only the scheme differs.
+    """
+    url = _http.base_url.join(path)
+    return str(url.copy_with(scheme="wss" if url.scheme == "https" else "ws"))
+
+
 async def request(method: str, path: str, **kwargs: Any) -> httpx.Response:
     try:
         response = await _http.request(method, path, **kwargs)

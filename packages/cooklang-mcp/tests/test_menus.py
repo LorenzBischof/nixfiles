@@ -172,3 +172,80 @@ def test_a_heading_without_a_date_is_left_in_place():
     assert menus.heading_date("Meals") is None
     assert menus.heading_date("Friday (2026-02-30)") is None
     assert menus.heading_date("Friday (2026-10-16)") == date(2026, 10, 16)
+
+
+# -- loose shopping-list items --------------------------------------------
+
+EXTRAS = "---\ntitle: Extra Items\n---\n@Milch{1%l}\n\n@Taschentücher{2}\n"
+
+
+def test_an_empty_items_file_gets_frontmatter():
+    assert menus.add_item("", "Milch", "1 l") == (
+        "---\ntitle: Extra Items\n---\n@Milch{1%l}\n"
+    )
+
+
+def test_each_item_is_its_own_block():
+    """A single line break would leave both in one step, and the web UI then
+    prints the two on one line."""
+    source = menus.add_item(menus.add_item("", "Milch", "1 l"), "Taschentücher", "2")
+
+    assert source == EXTRAS
+    assert menus.items(source) == ["Milch", "Taschentücher"]
+
+
+@pytest.mark.parametrize(
+    ("quantity", "braces"),
+    [
+        ("500 g", "500%g"),
+        ("1 TL", "1%TL"),
+        ("2", "2"),
+        ("1.5 dl", "1.5%dl"),
+        ("2-3 Stück", "2-3%Stück"),
+        ("1/2 Bund", "1/2%Bund"),
+        # Not an amount with a unit behind it: kept as the words it is, which
+        # Cooklang reads as a text quantity.
+        ("a pinch", "a pinch"),
+        ("3 1/2 l", "3 1/2 l"),
+        # Already written the way a file does.
+        ("200%g", "200%g"),
+        (None, ""),
+        ("  ", ""),
+    ],
+)
+def test_a_written_amount_becomes_a_cooklang_quantity(quantity, braces):
+    assert menus.add_item("", "Milch", quantity) == (
+        f"---\ntitle: Extra Items\n---\n@Milch{{{braces}}}\n"
+    )
+
+
+def test_adding_a_name_already_there_replaces_its_quantity():
+    """Twice asked for is still one bottle of milk; a second block would be
+    added up into two."""
+    source = menus.add_item(EXTRAS, "milch", "2 l")
+
+    assert source == "---\ntitle: Extra Items\n---\n@milch{2%l}\n\n@Taschentücher{2}\n"
+    assert menus.items(source) == ["milch", "Taschentücher"]
+
+
+def test_removing_an_item_leaves_the_others_in_place():
+    source, removed = menus.remove_item(EXTRAS, "MILCH")
+
+    assert removed is True
+    assert source == "---\ntitle: Extra Items\n---\n@Taschentücher{2}\n"
+
+
+def test_removing_the_last_item_leaves_a_file_with_no_items():
+    source, _ = menus.remove_item(EXTRAS, "Milch")
+    source, removed = menus.remove_item(source, "Taschentücher")
+
+    assert removed is True
+    assert menus.items(source) == []
+    assert source == "---\ntitle: Extra Items\n---\n"
+
+
+def test_removing_an_item_that_is_not_there_changes_nothing():
+    source, removed = menus.remove_item(EXTRAS, "Butter")
+
+    assert removed is False
+    assert source == EXTRAS

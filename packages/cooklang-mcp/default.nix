@@ -23,6 +23,7 @@ python3Packages.buildPythonApplication {
     mcp
     httpx
     recipe-scrapers
+    websockets
     beautifulsoup4
     pyyaml
   ];
