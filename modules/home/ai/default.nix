@@ -30,6 +30,12 @@ let
   wrappedCodex = pkgs.writeShellScriptBin "codex" ''
     exec ${lib.getExe baseCodex} -c ${lib.escapeShellArg codexNotifyConfigArg} ${lib.escapeShellArgs cfg.codexArgs} "$@"
   '';
+  workLogExtract = pkgs.writers.writePython3Bin "work-log-extract" {
+    flakeIgnore = [
+      "E501" # long lines read fine; wrapping them hurts more than it helps here
+      "W503" # black-style line breaks before binary operators
+    ];
+  } (builtins.readFile ./skills/work-log/extract.py);
   mkBwrapTool =
     {
       name,
@@ -248,6 +254,7 @@ in
       codexBwrap
       claudeBwrap
       piBwrap
+      workLogExtract
       inputs.llm-agents.packages.${system}.pi
       #inputs.nix-ai-tools.packages.${system}.openclaw
     ];
