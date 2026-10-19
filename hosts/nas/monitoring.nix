@@ -212,6 +212,32 @@ in
                 annotations:
                   summary: "nixpkgs is outdated on {{ $labels.instance }}"
                   description: "The running system's nixpkgs is {{ $value | printf \"%.0f\" }} days old."
+          - name: galaxus
+            rules:
+              # The Galaxus MCP server on vps replays the storefront's own
+              # persisted GraphQL operations, and the shop rotates their hashes
+              # whenever it deploys a new frontend - which breaks all seven tools
+              # at once. The daily check on vps exports the count; re-capturing
+              # them needs a headed browser on framework, so this is a
+              # do-something alert, not a wait-and-see one.
+              - alert: GalaxusHashesStale
+                expr: galaxus_stale_operation_hashes > 0
+                for: 2h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Galaxus query hashes have rotated ({{ $value }} stale)"
+                  description: "The shop no longer accepts {{ $value }} of the persisted query hashes, so galaxus-mcp tools are failing. Re-capture them headed on framework (npm run refresh-hashes), copy the result into packages/galaxus-mcp/operations.json, then switch vps."
+              # The check itself going quiet hides a rotation, so alert on the
+              # metric ageing out. last_over_time bridges scrape gaps; the daily
+              # timer means 3 days is several missed runs, not one late one.
+              - alert: GalaxusHashCheckStale
+                expr: (time() - last_over_time(galaxus_hash_check_timestamp_seconds[1w])) / 86400 > 3
+                labels:
+                  severity: info
+                annotations:
+                  summary: "Galaxus hash check has not run for {{ $value | printf \"%.0f\" }} days"
+                  description: "galaxus-hash-check.service on {{ $labels.instance }} has not completed successfully in {{ $value | printf \"%.0f\" }} days, so a hash rotation would go unnoticed."
           - name: autoupgrade
             rules:
               # Informational heads-up while an upgrade build is actually running.

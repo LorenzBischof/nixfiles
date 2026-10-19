@@ -94,6 +94,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nixos-agent-test-vm.url = "github:lorenzbischof/nixos-agent-test-vm";
+    # Galaxus/Digitec product search, for the MCP server on vps. Upstream ships no
+    # flake.nix, so this is a plain source pin - of the TypeScript only. The
+    # persisted GraphQL query hashes it replays rotate whenever the shop deploys a
+    # new frontend, and those live in packages/galaxus-mcp/operations.json, which
+    # overrides the copy in this tree: a rotation is an edit there, not a bump
+    # here. This pin moves only for actual code changes.
+    galaxus-mcp = {
+      url = "github:zurchpet/galaxus-mcp";
+      flake = false;
+    };
   };
 
   outputs =
@@ -314,6 +324,7 @@
         claude-code = inputs.llm-agents.packages.${system}.claude-code;
         cooklang-mcp = pkgs.callPackage ./packages/cooklang-mcp { };
         cook-cli-server = pkgs.callPackage ./packages/cook-cli-server.nix { };
+        galaxus-mcp = pkgs.callPackage ./packages/galaxus-mcp { src = inputs.galaxus-mcp; };
       };
       apps.${system}.framework-agent-vm =
         (nixos-agent-test-vm.mkAgentVm {

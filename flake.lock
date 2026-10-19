@@ -435,6 +435,22 @@
         "type": "github"
       }
     },
+    "galaxus-mcp": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791620429,
+        "narHash": "sha256-hL7N12ScMPpg2qITGMDNAqwudIVjIyqcscnZIlpMoRE=",
+        "owner": "zurchpet",
+        "repo": "galaxus-mcp",
+        "rev": "eaa5693763d2a5cfa4366607d492a921e9f8653e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "zurchpet",
+        "repo": "galaxus-mcp",
+        "type": "github"
+      }
+    },
     "gnome-shell": {
       "flake": false,
       "locked": {
@@ -659,11 +675,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792272597,
-        "narHash": "sha256-Rs+cDOTUMzwJ3zU7FgOLX0j5HmRQV+4S6b+DlWwd8EA=",
+        "lastModified": 1792440092,
+        "narHash": "sha256-IPWfQSReG176Z5zFtQfzRFqV3MbvGcuQst8DXWWtPic=",
         "owner": "lorenzbischof",
         "repo": "nix-secrets",
-        "rev": "81017c5fe441642d95a32b882409a4423eeb5ba1",
+        "rev": "8c77086ab323a0d9f780f8ee2a500658d20c1305",
         "type": "github"
       },
       "original": {
@@ -933,6 +949,7 @@
         "alias-watch": "alias-watch",
         "asustor-platform-driver": "asustor-platform-driver",
         "disko": "disko",
+        "galaxus-mcp": "galaxus-mcp",
         "home-manager": "home-manager",
         "lanzaboote": "lanzaboote",
         "llm-agents": "llm-agents",
