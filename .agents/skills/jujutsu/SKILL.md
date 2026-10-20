@@ -16,6 +16,27 @@ Use jj, not `git status`, `git diff`, `git add`, `git commit`, or `git stash`.
 
 When publishing is requested, point `main` at the intended tip with `jj bookmark set main -r <rev>`, then `jj git push`. Use `@-` when `@` is empty, otherwise `@`.
 
+## Splitting one change into several
+
+`jj split` is non-interactive when given filesets and `-m`, and `-A`/`-B`/`-o` extract the *selected* paths into a new commit at that location while the remainder stays where it is. So carve one large change bottom-up, one command per piece:
+
+```
+jj split -r <holding> -A <parent> -m "scope: first piece" path/a path/b
+jj split -r <holding> -A '@-'     -m "scope: second piece" path/c
+```
+
+The remainder is then a worklist that shrinks on its own — nothing to track by hand, and no second head to reconcile. The last piece needs no split at all: `jj describe -r <holding>`, since splitting an empty commit is refused.
+
+Filesets are per-file, so a file whose hunks belong to different pieces needs hand-editing — make the edit at a child change and `jj squash --into <rev>`. Restore the *final* version of such a file and revert the hunks that belong later, rather than editing the base forward: the final text is authoritative, so nothing has to be retyped.
+
+Order the pieces by dependency, and put independent fixes lowest so they can be published without the rest. Evaluate the intermediate revisions too, not just the tip — a piece that does not build on its own is not a piece.
+
+## jj undo reaches further than it looks
+
+Every jj invocation snapshots the working copy first, `jj undo` included: it records its own `snapshot working copy` operation and then undoes that. So a bad edit is recoverable even with no jj command in between, and undo rewrites the files on disk, not just the commit. It also reverts the rebases a `jj squash --into` triggered, and `jj op log` plus `jj op restore <id>` reaches back further than one step. Untracked files are never snapshotted, so undo will not bring back one that was clobbered.
+
+Do not work defensively around history edits: `jj edit <rev>` on a revision with descendants, an in-place `jj split`, and a squash that rebases descendants are all undoable. Building a parallel chain of changes and proving it equal to the original before abandoning it is wasted effort.
+
 ## Diffs and reporting
 
 Use `jj diff --from 'trunk()'` for all unpushed work and `jj log -r 'trunk()::@'` for its history.
