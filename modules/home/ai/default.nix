@@ -234,7 +234,7 @@ in
         "-s"
         "workspace-write"
         "-a"
-        "untrusted"
+        "on-request"
         "-c"
         "sandbox_workspace_write.network_access=true"
         "-c"
