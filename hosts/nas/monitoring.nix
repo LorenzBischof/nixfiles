@@ -136,6 +136,19 @@ in
           ];
         }
         {
+          # Alloy on vps, deriving counters from the public MCP name's access
+          # log (see hosts/vps/mcp.nix). Its own job because these are not node
+          # metrics - which also means TargetDown covers the pipeline going
+          # quiet, so it needs no staleness check of its own.
+          job_name = "alloy";
+          static_configs = [
+            {
+              targets = [ "vps:12345" ];
+              labels.instance = "vps";
+            }
+          ];
+        }
+        {
           job_name = "restic";
           static_configs = [
             {
@@ -238,6 +251,40 @@ in
                 annotations:
                   summary: "Galaxus hash check has not run for {{ $value | printf \"%.0f\" }} days"
                   description: "galaxus-hash-check.service on {{ $labels.instance }} has not completed successfully in {{ $value | printf \"%.0f\" }} days, so a hash rotation would go unnoticed."
+          - name: mcp
+            rules:
+              # The public MCP name is the one service here reachable from off
+              # the tailnet, and nginx alone answers a refused request - the MCP
+              # servers never see it. Alloy on vps turns the access log into
+              # these counters, under the name its metrics stage produces: it
+              # prefixes `loki_process_custom_` and, counter or not, appends no
+              # `_total`.
+              #
+              # One rule for both failure statuses, since the series carry the
+              # status and the response is the same lookup. 401 is almost always
+              # our own connector after a rekey of mcp-nginx-auth - the symptom
+              # there is claude.ai failing with no indication why; 429 is the
+              # rate limiter in mcp.nix catching repeated failures from one
+              # address, i.e. guessing rather than one stale client.
+              - alert: McpTokenRejected
+                expr: increase(loki_process_custom_nginx_mcp_responses{status=~"401|429"}[15m]) > 0
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "MCP auth refused {{ $value | printf \"%.0f\" }} requests with {{ $labels.status }} in 15m"
+                  description: "nginx on {{ $labels.instance }} refused requests to the public MCP name. 401 is a wrong bearer token - if mcp-nginx-auth was just rekeyed, the claude.ai connector still holds the old one. 429 is the rate limiter throttling repeated wrong tokens from a single address."
+              # The one that means act now. A 403 is ordinary background noise -
+              # anything that finds the name and is not Anthropic gets one - but
+              # a 403 whose token *matched* cannot happen legitimately: the
+              # token is held outside the egress range, i.e. it has leaked.
+              # This is the series the custom log format exists for.
+              - alert: McpTokenUsedFromForeignSource
+                expr: increase(loki_process_custom_nginx_mcp_responses{status="403", authorized="1"}[15m]) > 0
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "Valid MCP token presented from outside the Anthropic egress range"
+                  description: "{{ $value | printf \"%.0f\" }} requests to the public MCP name on {{ $labels.instance }} carried a bearer token that matches but came from an address outside the allowed egress range. The address check refused them, but the token is held somewhere it should not be: rekey mcp-nginx-auth."
           - name: autoupgrade
             rules:
               # Informational heads-up while an upgrade build is actually running.
