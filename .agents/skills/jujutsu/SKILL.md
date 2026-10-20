@@ -27,6 +27,8 @@ jj split -r <holding> -A '@-'     -m "scope: second piece" path/c
 
 The remainder is then a worklist that shrinks on its own — nothing to track by hand, and no second head to reconcile. The last piece needs no split at all: `jj describe -r <holding>`, since splitting an empty commit is refused.
 
+Where the new commit lands also decides what is on disk: extracting to a location *above* `@` (`-A '@'`) takes those paths out of the working-copy change, so jj rewrites the files on disk to their pre-edit state and the content survives only in the new commit — which surprises anything still holding those files, an editor or a concurrent agent. Keep extracted pieces at or below `@` (`-B '@'`, `-A '@-'`) and the working copy keeps the final text. `jj undo` restores the commit and the files together.
+
 Filesets are per-file, so a file whose hunks belong to different pieces needs hand-editing — make the edit at a child change and `jj squash --into <rev>`. Restore the *final* version of such a file and revert the hunks that belong later, rather than editing the base forward: the final text is authoritative, so nothing has to be retyped.
 
 Order the pieces by dependency, and put independent fixes lowest so they can be published without the rest. Evaluate the intermediate revisions too, not just the tip — a piece that does not build on its own is not a piece.
