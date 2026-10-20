@@ -3,6 +3,17 @@
 A personal NixOS configuration using flakes, managing several hosts with shared
 modules for both system and home-manager config.
 
+## Version control
+
+This repository uses jj (Jujutsu) with a colocated git repo; jj owns the working
+copy. Use jj for status, diffs, history, commits and publishing — not `git
+status`, `git diff`, `git add`, `git commit` or `git stash`. The `jujutsu` skill
+holds the workflow: work in an empty `@`, `jj absorb`, splitting one change into
+several, and the reach of `jj undo`.
+
+Run jj with the sandbox disabled — a sandboxed jj writes 0-byte deny stubs into
+the repository root, and they get snapshotted into the change.
+
 ## Layout and module pattern
 
 `hosts/<host>/` holds per-host config, split into `nixos/` and `home/`.
