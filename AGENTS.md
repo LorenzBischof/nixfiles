@@ -12,7 +12,16 @@ holds the workflow: work in an empty `@`, `jj absorb`, splitting one change into
 several, and the reach of `jj undo`.
 
 Run jj with the sandbox disabled — a sandboxed jj writes 0-byte deny stubs into
-the repository root, and they get snapshotted into the change.
+the repository root, and they get snapshotted into the change. Check `jj diff -r
+<change> --summary` before considering a change final.
+
+jj owning the working copy also means **nix reads the git tree, not your edits**.
+`nix build` / `nixos-rebuild --flake .#host` build from the git index, which jj
+only refreshes when a jj command runs. Editing a file and going straight to `just
+switch` can therefore build stale content: nix produces an identical derivation,
+deploys nothing, and the service never restarts — looking exactly like "the change
+didn't apply". Run any jj command (`jj st` will do) after editing and before
+switching.
 
 ## Layout and module pattern
 
@@ -23,6 +32,17 @@ the repository root, and they get snapshotted into the change.
 Modules define options under a `my.*` namespace and host configs enable them:
 `my.system.*`, `my.services.*`, `my.programs.*`, `my.profiles.*` — for example
 `my.system.autoUpgrade`, `my.programs.firefox`, `my.profiles.ai`.
+
+## Working style
+
+When a fix starts accumulating moving parts — a new daemon, a new interface, a
+layer on top of a layer — stop and enumerate simpler shapes first: ones that reuse
+infrastructure already running, or that dissolve the problem. Present the minimal
+option before the canonical one.
+
+Prometheus node-exporter textfile metrics are written by a systemd oneshot with an
+atomic tmp+mv, never by `system.activationScripts`; add a refresh timer only if the
+value actually drifts at runtime.
 
 ## Secrets
 

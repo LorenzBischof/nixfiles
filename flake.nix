@@ -100,6 +100,30 @@
       url = "github:zurchpet/galaxus-mcp";
       flake = false;
     };
+    # basic-memory pins its dependencies exactly and tests only that set, which
+    # nixpkgs' python set never matches, so packages/basic-memory builds from
+    # upstream's own uv.lock. A flake input rather than a fetchFromGitHub so the
+    # lock is read at eval time without import-from-derivation; a bump is the
+    # tag in this URL.
+    basic-memory = {
+      url = "github:basicmachines-co/basic-memory/v0.24.1";
+      flake = false;
+    };
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -313,6 +337,7 @@
       #};
       formatter.${system} = treefmtEval.config.build.wrapper;
       packages.${system} = {
+        basic-memory = pkgs.callPackage ./packages/basic-memory { inherit inputs; };
         # Exposed for CI: the auto-fix job hands this store path to
         # claude-code-action instead of letting it run its own install.
         claude-code = inputs.llm-agents.packages.${system}.claude-code;
