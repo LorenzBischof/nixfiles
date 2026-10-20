@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "galaxus": {
+      "type": "http",
+      "url": "${MCP_BASE_URL}/galaxus"
+    },
+    "cooklang": {
+      "type": "http",
+      "url": "${MCP_BASE_URL}/cooklang"
+    }
+  }
+}

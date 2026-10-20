@@ -202,6 +202,7 @@
                 users.lbischof = import ./hosts/framework/home;
                 extraSpecialArgs = {
                   inherit self inputs pkgs-citrix-workspace;
+                  secrets = import nix-secrets;
                 };
               };
             }

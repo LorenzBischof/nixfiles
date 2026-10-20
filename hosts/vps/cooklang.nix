@@ -6,7 +6,6 @@
 }:
 let
   domain = config.my.homelab.domain;
-  mcpDomain = "meals.${domain}";
   # `recipes.${domain}` is already Mealie on nas, so the browser UI gets its own
   # name rather than colliding with it.
   uiDomain = "cook.${domain}";
@@ -86,23 +85,16 @@ in
     # Every tool but `fetch_recipe` is a call to cook-server; without it the
     # server answers, but answers nothing but errors.
     wants = [ "cook-server.service" ];
-    # LoadCredential snapshots the token once, at start, and the unit text does
-    # not change when the secret is rekeyed - so nothing restarts this and the
-    # server keeps checking against a stale token. Every request then fails the
-    # bearer check and claude.ai sees the 404 below, with nothing in the log to
-    # say why. Tie the unit to the encrypted file so a rekey restarts it.
-    restartTriggers = [ config.age.secrets.cooklang-mcp-token.file ];
     environment = {
       COOKLANG_SERVER_URL = "http://127.0.0.1:${toString uiPort}";
       COOKLANG_WEB_URL = "https://${uiDomain}";
       COOKLANG_MCP_TRANSPORT = "http";
       COOKLANG_MCP_PORT = toString mcpPort;
-      # The shared bearer token, placed here by LoadCredential below.
-      COOKLANG_MCP_TOKEN_FILE = "%d/token";
+      # No token: it binds loopback only, and the bearer check lives in nginx
+      # so it can apply to the public name alone - see mcp.nix.
     };
     serviceConfig = {
       ExecStart = "${cooklang-mcp}/bin/cooklang-mcp";
-      LoadCredential = "token:${config.age.secrets.cooklang-mcp-token.path}";
       Restart = "on-failure";
       RestartSec = "5s";
 
@@ -129,25 +121,15 @@ in
     };
   };
 
-  # Publicly reachable, because claude.ai connects from the internet. Same
-  # pattern as the n8n webhook vhost: nginx listens on the tailnet by default
-  # and a vhost opts in to the public NIC.
-  services.nginx.virtualHosts."${mcpDomain}" = {
-    forceSSL = true;
-    useACMEHost = domain;
-    listenAddresses = [ "10.0.0.238" ] ++ config.services.nginx.defaultListenAddresses;
-    # An exact match, so widening this later cannot publish anything else.
-    locations."= /mcp" = {
-      proxyPass = "http://127.0.0.1:${toString mcpPort}";
-      extraConfig = ''
-        # Anthropic's documented egress range. The bearer token guards against a
-        # leaked URL; this guards against everyone else.
-        allow 160.79.104.0/21;
-        deny all;
-        # Streamable HTTP responses are SSE and must not be buffered.
-        proxy_buffering off;
-      '';
-    };
+  # Registered under the public MCP name only; mcp.nix serves the same set of
+  # locations again under the tailnet name, so this is the single place the
+  # server's path and port are stated. An exact match, so widening the vhost
+  # later cannot publish anything else; because `proxyPass` carries a URI, nginx
+  # replaces the matched path with the `/mcp` this server actually serves.
+  services.nginx.virtualHosts."mcp.${domain}".locations."= /cooklang" = {
+    proxyPass = "http://127.0.0.1:${toString mcpPort}/mcp";
+    # Streamable HTTP responses are SSE and must not be buffered.
+    extraConfig = "proxy_buffering off;";
   };
 
   # Tailnet only: no extra listen address.

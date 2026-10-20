@@ -6,7 +6,6 @@
 }:
 let
   domain = config.my.homelab.domain;
-  mcpDomain = "galaxus.${domain}";
 
   mcpPort = 3002;
 
@@ -23,23 +22,17 @@ in
     description = "Galaxus MCP server";
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
-    # LoadCredential snapshots the token once, at start, and the unit text does
-    # not change when the secret is rekeyed - so nothing restarts this and the
-    # server keeps checking against a stale token, failing every request with a
-    # 401 that says nothing about why. Tie the unit to the encrypted file.
-    restartTriggers = [ config.age.secrets.galaxus-mcp-token.file ];
     environment = {
       GALAXUS_MCP_TRANSPORT = "http";
       GALAXUS_MCP_PORT = toString mcpPort;
-      # The shared bearer token, placed here by LoadCredential below.
-      GALAXUS_MCP_TOKEN_FILE = "%d/token";
+      # No token: it binds loopback only, and the bearer check lives in nginx
+      # so it can apply to the public name alone - see mcp.nix.
       GALAXUS_PORTAL = "galaxus";
       # Product names and specification labels come back in this language.
       GALAXUS_LANGUAGE = "de";
     };
     serviceConfig = {
       ExecStart = "${galaxus-mcp}/bin/galaxus-mcp-http";
-      LoadCredential = "token:${config.age.secrets.galaxus-mcp-token.path}";
       Restart = "on-failure";
       RestartSec = "5s";
 
@@ -74,25 +67,15 @@ in
     };
   };
 
-  # Publicly reachable, because claude.ai connects from the internet. Same
-  # pattern as the cooklang MCP vhost: nginx listens on the tailnet by default
-  # and a vhost opts in to the public NIC.
-  services.nginx.virtualHosts."${mcpDomain}" = {
-    forceSSL = true;
-    useACMEHost = domain;
-    listenAddresses = [ "10.0.0.238" ] ++ config.services.nginx.defaultListenAddresses;
-    # An exact match, so widening this later cannot publish anything else.
-    locations."= /mcp" = {
-      proxyPass = "http://127.0.0.1:${toString mcpPort}";
-      extraConfig = ''
-        # Anthropic's documented egress range. The bearer token guards against a
-        # leaked URL; this guards against everyone else.
-        allow 160.79.104.0/21;
-        deny all;
-        # Streamable HTTP responses are SSE and must not be buffered.
-        proxy_buffering off;
-      '';
-    };
+  # Registered under the public MCP name only; mcp.nix serves the same set of
+  # locations again under the tailnet name, so this is the single place the
+  # server's path and port are stated. An exact match, so widening the vhost
+  # later cannot publish anything else; because `proxyPass` carries a URI, nginx
+  # replaces the matched path with the `/mcp` this server actually serves.
+  services.nginx.virtualHosts."mcp.${domain}".locations."= /galaxus" = {
+    proxyPass = "http://127.0.0.1:${toString mcpPort}/mcp";
+    # Streamable HTTP responses are SSE and must not be buffered.
+    extraConfig = "proxy_buffering off;";
   };
 
   # The shop rotates the persisted query hashes the server replays whenever it

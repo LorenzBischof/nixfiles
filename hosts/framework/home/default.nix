@@ -7,6 +7,7 @@
   lib,
   stylix,
   inputs,
+  secrets,
   ...
 }:
 let
@@ -309,6 +310,11 @@ in
     if [[ -r /run/agenix/github-token ]]; then
       export GH_TOKEN=$(grep -oP '(?<=github\.com=)\S+' /run/agenix/github-token)
     fi
+    # The tailnet-only name for the MCP servers on vps, which .mcp.json reads.
+    # Exported rather than written into .mcp.json because that file is checked
+    # into a public repo and the domain is a nix-secrets value. No token: the
+    # bearer check is on the public name only, and that name is not this one.
+    export MCP_BASE_URL=https://mcp-tnet.${secrets.vps-domain}
   '';
 
   services.etesync-dav.enable = true;
