@@ -250,6 +250,9 @@ in
   config = lib.mkIf cfg.enable {
     home.packages = [
       pkgs.nil
+      # Agents reach for python3 for one-off scripting; without it on PATH they
+      # fall back to awk and sed, which is where the fiddly mistakes come from.
+      pkgs.python3
       pkgs.socat
       codexBwrap
       claudeBwrap
