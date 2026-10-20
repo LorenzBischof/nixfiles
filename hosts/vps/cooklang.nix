@@ -48,6 +48,13 @@ in
     description = "Cooklang recipe server";
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
+    # CookCLI discovers the pantry at startup and disables editing if absent.
+    # An empty TOML file enables it; keep the inventory writable and intact.
+    preStart = ''
+      if [ ! -e config/pantry.conf ]; then
+        touch config/pantry.conf
+      fi
+    '';
     serviceConfig = {
       # Since 0.38 the server 403s any Host that is not localhost or an IP, so
       # the proxied name has to be named here or the whole UI is refused.

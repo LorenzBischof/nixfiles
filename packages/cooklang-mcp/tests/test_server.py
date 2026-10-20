@@ -141,7 +141,9 @@ def test_recipe_tools_return_clickable_web_urls(monkeypatch):
                 200,
                 json={
                     "configured": True,
-                    "aisles": [{"ingredients": [{"names": ["rice"]}]}],
+                    "aisles": [
+                        {"name": "pantry", "ingredients": [{"names": ["rice"]}]}
+                    ],
                 },
             )
         return Response()
@@ -173,6 +175,9 @@ def test_recipe_tools_return_clickable_web_urls(monkeypatch):
         "written": True,
         "diagnostics": [],
         "ingredients": ["rice"],
+        # The catalogue already holds "rice", so there is nothing to sort.
+        "new_ingredients": [],
+        "aisles": [],
         "warnings": [],
         # A recipe, not a plan, so there are no referenced recipes to resolve.
         "entries": [],
@@ -320,7 +325,9 @@ def _collection(monkeypatch, ingredient, *, read_back=True):
                 200,
                 json={
                     "configured": True,
-                    "aisles": [{"ingredients": [{"names": [ingredient]}]}],
+                    "aisles": [
+                        {"name": "pantry", "ingredients": [{"names": [ingredient]}]}
+                    ],
                 },
             )
         if method == "GET" and not read_back:
@@ -354,6 +361,40 @@ def test_what_the_parser_says_comes_back_with_the_write(monkeypatch):
         {"severity": "warning", "line": 3, "message": "Unsupported value for key"}
     ]
     assert written.warnings == []
+
+
+def test_a_new_name_comes_back_ready_to_be_sorted(monkeypatch):
+    """The write is where a new ingredient is cheapest to catalogue, so its
+    result carries the whole decision: the name, what it resembles, and the
+    aisles to put it in."""
+
+    async def request(method, path, **_kwargs):
+        if path == "/api/aisles":
+            return httpx.Response(
+                200,
+                json={
+                    "configured": True,
+                    "warnings": [],
+                    "aisles": [
+                        {"name": "produce", "ingredients": [{"names": ["onion"]}]},
+                        {"name": "pantry", "ingredients": []},
+                    ],
+                },
+            )
+        return httpx.Response(
+            200,
+            json={"recipe": {"ingredients": [{"name": "onions"}, {"name": "saffron"}]}},
+        )
+
+    monkeypatch.setattr(server.cook, "request", request)
+
+    written = asyncio.run(server.recipe_write("Pilaf.cook", "Add @onions{2}"))
+    assert written.warnings == []
+    assert written.aisles == ["produce", "pantry"]
+    assert [
+        (new.name, [(found.name, found.aisle) for found in new.similar])
+        for new in written.new_ingredients
+    ] == [("onions", [("onion", "produce")]), ("saffron", [])]
 
 
 def test_a_file_that_does_not_parse_is_said_to_be_broken_not_unread(monkeypatch):
@@ -435,6 +476,33 @@ def test_one_batch_covers_every_shopping_list_verb(monkeypatch):
     assert result["applied"] == 6
     assert result["recipes"] == []
     assert "categories" in result
+
+
+def test_the_shopping_list_carries_its_own_page(monkeypatch):
+    """The list is a page as much as a recipe is, so the words for it link.
+
+    Both tools return it, and an empty list returns it too: "nothing on the
+    list yet" is an answer about the list, and links the same way.
+    """
+    monkeypatch.setattr(server, "WEB_URL", "https://cook.example.test")
+    expected = "https://cook.example.test/shopping-list"
+
+    async def shopping_list():
+        return {"recipes": [], "categories": [], "pantry_items": []}
+
+    monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
+    assert asyncio.run(server.shopping_list_read())["web_url"] == expected
+
+    _sent, result = shopping_calls(monkeypatch, [{"action": "clear"}])
+    assert result["web_url"] == expected
+
+    # Said in both descriptions, because a client that drops the server
+    # instructions has nothing else: the result is a plain object, so no
+    # output schema carries the rule the way `web_url`'s own field does.
+    listed = tools()
+    for name in ("shopping_list_read", "shopping_list_edit"):
+        assert "shopping list" in listed[name].description
+        assert "Markdown link" in listed[name].description, name
 
 
 @pytest.mark.parametrize(
@@ -633,9 +701,10 @@ def test_a_date_that_is_not_a_date_is_refused_before_anything_is_written(monkeyp
 def test_the_instructions_keep_only_what_is_cross_cutting():
     """Policy that belongs to one tool lives in that tool's description.
 
-    The server instructions sit in context for the whole session, so they carry
-    the link rule and the two file names and nothing else; the procedures moved
-    to the tool that performs them, where they are read at the moment of use.
+    The server instructions sit in context for the whole session, so they
+    carry what spans tools — the link rule, sorting a new ingredient, the two
+    file names — and nothing else; the procedures moved to the tool that
+    performs them, where they are read at the moment of use.
     """
     listed = tools()
 
@@ -651,9 +720,20 @@ def test_the_instructions_keep_only_what_is_cross_cutting():
     # one cannot be linked to a guess.
     assert "Never construct or guess a URL" in INSTRUCTIONS
     assert "/recipe/" not in INSTRUCTIONS
+    # The shopping list is linked by the words for it rather than by a name,
+    # which no one tool's description can establish on its own either.
+    assert 'the words "shopping list" are that link' in INSTRUCTIONS
+    assert "/shopping-list" not in INSTRUCTIONS
     assert "`Meal Plan.menu`" in INSTRUCTIONS
     assert "`Meal History.menu`" in INSTRUCTIONS
     assert "mark_cooked" in INSTRUCTIONS
+
+    # Sorting a new ingredient starts in one tool's result and finishes in
+    # another's call, so the instructions carry it the way they carry the link
+    # rule: no one tool's description is read at both moments.
+    assert "`new_ingredients`" in INSTRUCTIONS
+    assert "`ingredients_edit`" in INSTRUCTIONS
+    assert "ask the user" in INSTRUCTIONS
 
     # Relocated, and gone from the block that used to carry them.
     for moved, home in (
@@ -674,6 +754,42 @@ def test_the_instructions_keep_only_what_is_cross_cutting():
 
     # Shorter than the file-format guidance it used to compete with.
     assert len(INSTRUCTIONS) < len(listed["recipe_write"].description)
+
+
+def test_the_entry_points_say_when_to_reach_for_the_collection():
+    """A client that drops the instructions sees names and descriptions only.
+
+    The instructions are where "these are the user's own recipes" is said,
+    and a client without them answers a question about dinner out of its own
+    cooking knowledge and calls nothing. So every tool a cold conversation
+    lands on first says when it is the one to reach for, in the words a user
+    actually uses: a request about dinner or the groceries contains neither
+    "recipe" nor "shopping list".
+    """
+    listed = tools()
+
+    for name, words in (
+        # Searching has to win against answering from general knowledge,
+        # which is the only one of these a client would otherwise do anyway.
+        ("recipe_search", ("dinner", "lunch", "general cooking knowledge")),
+        ("recipe_read", ("how long", "eating")),
+        ("recipe_write", ("kept",)),
+        # A pasted link arrives with nothing said about it more often than not.
+        ("recipe_import", ("bare URL",)),
+        ("mark_cooked", ("last night", "eaten")),
+        ("shopping_list_read", ("supermarket", "groceries")),
+        ("shopping_list_edit", ("out of", "going to buy")),
+    ):
+        for word in words:
+            assert word in listed[name].description, (name, word)
+
+    # Said once more where a client that does deliver them reads it first.
+    assert "whether or not" in INSTRUCTIONS
+    assert '"recipe" or "cooking"' in INSTRUCTIONS
+
+    # The server name is the other thing every client shows the model, so it
+    # carries the everyday word for the shopping half of the collection.
+    assert "Groceries" in mcp.name
 
 
 def test_recipe_read_and_recipe_import_say_which_one_reaches_the_web():

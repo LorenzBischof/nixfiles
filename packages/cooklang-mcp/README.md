@@ -63,11 +63,20 @@ reasons the endpoint shapes force:
   closing a run of writes to several recipes named them all and linked none:
   phrased around a single write, the rule read as being about the one-line
   confirmation that follows one.
+- **The shopping list** is a page as well, `/shopping-list` rather than a file
+  under `/recipe/`, and both shopping tools return it as the result's own
+  `web_url` — including for an empty list, since "nothing on it yet" is an
+  answer about the list too. Nothing identifies it but the words for it, so the
+  rule asks for those words as the link rather than a name. The result is a
+  plain object, so no output schema can carry the rule the way `web_url`'s
+  field description does; it lives in both tool descriptions and the server
+  instructions instead.
 - **`recipe_write`** reads the file back after writing it and returns the
   ingredients the parser found. Cooklang turns text it cannot interpret into a
   plain step rather than an error, so a mistyped ingredient is silently
   dropped; this is what makes it visible. It also returns `diagnostics`, the
-  parser's own errors and warnings — see below.
+  parser's own errors and warnings — see below — and `new_ingredients`, the
+  names the aisle catalogue does not hold yet, with what to sort each into.
 - **`shopping_list_read`** asks for the stored list and then for the
   ingredients it adds up to, because the store holds recipes and only the
   aggregator turns them into ingredients. This is exactly what the web UI does,
@@ -79,6 +88,44 @@ reasons the endpoint shapes force:
   the web UI. Each action accepts only its own fields, so a `clear` carrying a
   path is refused rather than read as emptying the list — that mistake costs a
   whole shopping trip.
+
+## Being reached for at all
+
+A tool's description is read twice: once to decide whether to call it, and
+once to call it correctly. Everything below is the second reading, and for a
+long time the descriptions here were only that — reference material for a
+client already committed to the collection, written in the collection's own
+vocabulary. Nothing in them said when the collection applies, and the one
+place that did say it was the server instructions, which claude.ai and Claude
+Desktop drop.
+
+The cost is not a wrong tool, it is no tool. "What should I have for dinner?"
+and "anything I need from the shop?" contain neither *recipe* nor *shopping
+list*, and a client with no reason to think the user has a collection answers
+the first out of its own cooking knowledge and the second not at all — both
+plausibly enough that nothing looks broken. So each tool a cold conversation
+lands on first now opens with when it is the one to reach for, phrased the way
+the user would ask: dinner, lunch, something quick, what is in the fridge,
+the supermarket, being out of milk, having eaten something last night. The
+search tool additionally has to win against a general answer, so it says so —
+their collection first, and no invented dish offered as one of theirs. The
+server name carries the same words, since it is the other thing every client
+puts in front of the model.
+
+Both readings share one description, which is why the trigger wording is a
+paragraph at the top rather than spread through: it is the part a selection
+pass reads, and the part that has to stay short.
+
+## Adding a meal plan to the shopping list
+
+The tool descriptions tell clients to read the plan and add its recipes
+individually, preserving their scales, rather than add `Meal Plan.menu` (or
+another whole meal-plan menu). This is a temporary workaround for the reported
+CookCLI behavior: editing a menu does not reliably update the shopping list,
+and a recipe included through a menu cannot be removed individually. Plan
+edits do not imply shopping-list edits; clients should make explicit changes
+when asked to update the list. The internally managed `Extra Items.menu`
+below is unaffected. Revisit this guidance when CookCLI handles both cases.
 
 ## A single ingredient on the list
 
@@ -154,19 +201,39 @@ own source would only give the model `@./Caprese`.
 
 `aisle.conf` groups the shopping list by store aisle, so it doubles as the
 collection's vocabulary of ingredient names. `recipe_write` reads it back after
-every write and returns a `warnings` list naming the ingredients it does not
-hold — the one moment where `onion` quietly becoming `onions` is still cheap to
-fix, before the shopping list shows both. A clean write returns `warnings: []`.
+every write and returns `new_ingredients`: the names it does not hold. A write
+is the one moment where `onion` quietly becoming `onions` is still cheap to
+fix, before the shopping list shows both — and the moment a genuinely new
+ingredient is cheapest to file under an aisle, because an uncategorized name
+drops to the bottom of the list under *other*. A clean write returns
+`new_ingredients: []`.
 
-A warning is a hint, not a correction: nothing is renamed and nothing is written
-to the catalogue, because ingredients that really are different have to stay
-different. A name the catalogue knows passes whatever its case, a repeated name
-warns once, and the names with nothing similar to them share one warning line.
-Similar ones are found by two cheap rules — one name's words sitting inside the
+So the result is shaped as the whole of that decision rather than a hint, and
+the instructions ask for it to be settled in one `ingredients_edit` batch
+before the write is confirmed: each entry carries the catalogued ingredients it
+resembles, as `similar`, each with its aisle, and the result carries `aisles`,
+the aisles there are to choose from. A name that is another spelling of a
+`similar` one becomes an alias of it — a rename when the new spelling is the
+better shopping-list name — and anything else is created in the aisle it
+belongs in.
+
+What is not automated is the judgement, because both halves of it are
+semantic and neither has a cheap rule: whether two names are one ingredient
+(`whole milk` is not `milk`), and which aisle a new one belongs in. The server
+therefore proposes and never decides — it writes nothing to the catalogue of
+its own accord, and it does not guess an aisle. When no existing aisle fits,
+the instructions say to ask the user rather than invent one, since an aisle
+is a shape of the user's supermarket and not of the recipe. A collection with
+no `aisle.conf` at all is the same question one step earlier, and says so.
+
+Candidates come from two cheap rules — one name's words sitting inside the
 other's (`butter` for `unsalted butter`), or a near spelling (`onion` for
 `onions`) — because one extra qualifier or one wrong letter is what the mistake
-actually looks like. A write whose catalogue read fails still reports
-`written: true` and says so in `warnings`; only the write itself failing raises.
+actually looks like. Three at most, and each named as the shopping list shows
+it, which is also the name an edit identifies it by. A name the catalogue knows
+passes whatever its case, and a name repeated in one recipe appears once. A
+write whose catalogue read fails still reports `written: true` and says so in
+`warnings`; only the write itself failing raises.
 
 `aisles_read` returns `aisles` as `{aisle: [[preferred name, alias, ...], ...]}`.
 Each inner list is one ingredient, with its preferred shopping-list name first.

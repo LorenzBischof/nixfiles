@@ -56,10 +56,20 @@ EXTRAS_PATH = "Extra Items.menu"
 # characters. So every load-bearing rule here is repeated in the tool it
 # applies to, and this text is the summary rather than the only copy — keep it
 # that way, and keep it short.
+#
+# The first paragraph is the one the client needs most and is also repeated,
+# because it is not a rule but the cue that a tool applies at all: a request
+# about what to have for dinner, or about the groceries, carries neither the
+# word "recipe" nor "shopping list", and without being told the user has a
+# collection a client answers it out of its own cooking knowledge and calls
+# nothing. So each tool a cold conversation lands on first opens by saying
+# when it is the one to reach for, in the words the user would actually use —
+# see `test_the_entry_points_say_when_to_reach_for_the_collection`.
 INSTRUCTIONS = f"""\
-Browse and manage the user's personal recipe collection, meal plans, and \
-shopping list. This includes finding something to cook, working with recipes, \
-planning meals, and importing recipes from the web.
+The user's own recipes, meal plan, shopping list and record of what they have \
+eaten. Food is always about this collection: what to cook or eat, what is \
+planned, what to buy, what was eaten. Search it before answering from general \
+cooking knowledge, whether or not the words "recipe" or "cooking" are used.
 
 Whenever an answer names a recipe or meal plan you have a web URL for, make \
 the name a clickable Markdown link to it — every name, every time, however \
@@ -67,15 +77,29 @@ many an answer carries: the confirmation after a write, the summary that \
 closes a run of several writes and names each recipe it touched, and the \
 recipes inside a meal plan, which come with URLs of their own. Any `web_url` \
 a tool returned in this conversation counts, not only the one from the last \
-call. Never construct or guess a URL: a name you have none \
-for stays plain, and a recipe's external `source.url` is where it came from, \
-not its page here.
+call. The shopping list has a page of its own, returned by both shopping \
+tools as the result's own `web_url`: when an answer mentions the shopping \
+list, the words "shopping list" are that link. Never construct or guess a \
+URL: a name you have none for stays plain, and a recipe's external \
+`source.url` is where it came from, not its page here.
+
+A write's `new_ingredients` are the ingredient names no aisle lists yet. \
+Sort every one of them into an aisle before you answer, in a single \
+`ingredients_edit` batch: an `update` adding the name as an alias of the \
+`similar` ingredient it is another spelling of, or a `create` in whichever of \
+the result's `aisles` it belongs in. Ingredients that are genuinely different \
+stay different, and when no existing aisle fits, ask the user which to use \
+rather than creating one.
 
 `{PLAN_PATH}` at the collection root is the ordered queue of upcoming recipes, \
 under `Meals`. `{HISTORY_PATH}` is the record of cooked ones. Both are \
 ordinary recipe files, so `recipe_read` and `recipe_write` work on them — but \
 when the user says a recipe was cooked, use `mark_cooked`, which moves it from \
-the one to the other. Do not create weekly or date-named plan files.\
+the one to the other. Do not create weekly or date-named plan files. When adding \
+a meal plan to the shopping list, read it and add its individual recipes with \
+their scales, never the whole menu file. This is a temporary workaround until \
+CookCLI handles menu updates and removing individual recipes correctly: editing \
+the plan must not be assumed to update the shopping list.\
 """
 
 # All four hints are advisory, and a client is free to ignore them. Only
@@ -166,6 +190,43 @@ class RecipeDocument(BaseModel):
     entries: MenuEntries
 
 
+class SimilarIngredient(BaseModel):
+    """A catalogued ingredient that a new name may be another spelling of."""
+
+    name: str = Field(
+        description=(
+            "Its preferred shopping-list name, which is also what identifies "
+            "it to `ingredients_edit`."
+        )
+    )
+    aisle: str = Field(description="The aisle it is sorted into.")
+
+
+class NewIngredient(BaseModel):
+    """An ingredient name the aisle catalogue does not hold yet."""
+
+    name: str = Field(description="The name as the saved recipe spells it.")
+    similar: list[SimilarIngredient] = Field(
+        default_factory=list,
+        description=(
+            "Catalogued ingredients worth comparing it against, in no "
+            "particular order, empty when the catalogue has nothing like it. "
+            "One of these being the same ingredient under another spelling "
+            "is what makes this an alias rather than a new entry; a related "
+            "but distinct ingredient keeps its own entry, and its aisle is "
+            "the first guess for where that entry goes."
+        ),
+    )
+
+
+class CatalogueCheck(BaseModel):
+    """What the aisle catalogue made of one recipe's ingredients."""
+
+    new_ingredients: list[NewIngredient] = Field(default_factory=list)
+    aisles: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class RecipeWritten(BaseModel):
     """What one write saved, and the three ways to check it came out right."""
 
@@ -191,12 +252,37 @@ class RecipeWritten(BaseModel):
             "reading it back failed, which `warnings` then says."
         ),
     )
+    new_ingredients: list[NewIngredient] = Field(
+        default_factory=list,
+        description=(
+            "Ingredient names in the saved file that no aisle lists yet. "
+            "Sort all of them into aisles before answering, in one "
+            "`ingredients_edit` batch, so the shopping list groups them and "
+            "one thing never reaches it under two names: `update` the "
+            "`similar` ingredient with this name in `add_aliases` when the "
+            "two are the same ingredient — adding `preferred_name` if this "
+            "spelling is the one the shopping list should show — and "
+            "otherwise `create` it in the aisle from `aisles` it belongs in. "
+            "Never fold together ingredients that are really different: "
+            "'whole milk' is not 'milk'. If no aisle in `aisles` fits, ask "
+            "the user which to use instead of creating one. Empty when the "
+            "catalogue already knows every name, or could not be read, which "
+            "`warnings` then says."
+        ),
+    )
+    aisles: list[str] = Field(
+        default_factory=list,
+        description=(
+            "The aisles the collection has, in catalogue order: the choices "
+            "for a `new_ingredients` entry, and filled in only when there is "
+            "one to sort."
+        ),
+    )
     warnings: list[str] = Field(
         default_factory=list,
         description=(
-            "Prose about the write: ingredient names the aisle catalogue did "
-            "not recognise, and a sentence for any check that could not be "
-            "run — which is not the same as a check that came back clean."
+            "Prose about the write: a sentence for any check that could not "
+            "be run — which is not the same as a check that came back clean."
         ),
     )
     entries: MenuEntries
@@ -243,6 +329,16 @@ def recipe_web_url(path: str) -> str:
     return f"{WEB_URL}/recipe/{quote(path, safe='/')}"
 
 
+def shopping_list_web_url() -> str:
+    """Return the public Cook page for the shopping list itself.
+
+    The one page here that is not a file: it is the list the two shopping
+    tools read and write, and the words "shopping list" in an answer are what
+    links to it.
+    """
+    return f"{WEB_URL}/shopping-list"
+
+
 def _summary(entry: dict[str, Any]) -> RecipeSummary:
     """One entry from the recipe tree, with its page filled in."""
     return RecipeSummary.model_validate(
@@ -283,7 +379,7 @@ def _token() -> str | None:
 
 _secret = _token()
 mcp = FastMCP(
-    "Cook Recipes & Plan Meals",
+    "Recipes, Meal Plans & Groceries",
     instructions=INSTRUCTIONS,
     host=os.environ.get("COOKLANG_MCP_HOST", "127.0.0.1"),
     port=int(os.environ.get("COOKLANG_MCP_PORT", "3001")),
@@ -320,8 +416,16 @@ async def recipe_search(
         ),
     ] = "",
 ) -> list[RecipeSummary]:
-    """Search the user's recipes and meal plans for a recipe to cook, matching
-    recipe names, ingredients, instructions, tags, or other metadata.
+    """Search the user's own recipes and meal plans, matching recipe names,
+    ingredients, instructions, tags, or other metadata.
+
+    This is the collection they cook out of, so reach for it whenever food
+    comes up at all, not only when they say "recipe" or "cooking": what to
+    have for dinner tonight, lunch, breakfast, something quick, something
+    with what is in the fridge, ideas for the week, what they are in the mood
+    for. Search here before answering from general cooking knowledge, and
+    never hand them an invented dish as though it were one of theirs — no
+    hits is itself the answer that they have nothing for it.
 
     An empty query matches everything. Results contain metadata only; use
     `recipe_read` for the complete recipe or meal plan.
@@ -337,6 +441,11 @@ async def recipe_search(
 async def recipe_read(path: Path) -> RecipeDocument:
     """Read one recipe or meal plan already in the user's collection: its raw
     Cooklang source, frontmatter included, and its clickable Cook web page.
+
+    This answers how one of their dishes is made — what goes in it, how long
+    it takes, what it serves — and what is coming up to eat, since
+    `Meal Plan.menu` is the queue of that: "what are we eating this week" is
+    a read of that file.
 
     For a meal plan or history, `entries` resolves the recipes it refers to,
     each with its own page. Naming one of them in an answer means linking it
@@ -375,65 +484,70 @@ def _runs_inside(outer: tuple[str, ...], inner: tuple[str, ...]) -> bool:
     )
 
 
-def _similar(name: str, known: dict[str, str]) -> list[str]:
-    """Catalogue names worth a second look, by two cheap rules.
+def _similar(name: str, known: dict[str, SimilarIngredient]) -> list[SimilarIngredient]:
+    """Catalogued ingredients worth comparing a new name against.
 
-    One name's words run inside the other's ("butter" for "unsalted butter",
-    "garlic clove" for "garlic cloves"), or the whole names are spelled nearly
-    the same ("onion" for "onions"). Three at most: this is a hint, not a list.
+    Two cheap rules: one name's words run inside the other's ("butter" for
+    "unsalted butter", "garlic clove" for "garlic cloves"), or the whole names
+    are spelled nearly the same ("onion" for "onions"). Three at most — these
+    are candidates for the model to judge, not a ranking.
     """
     words = _words(name)
     matches = [
-        preferred
-        for key, preferred in known.items()
+        found
+        for key, found in known.items()
         if _runs_inside(words, _words(key)) or _runs_inside(_words(key), words)
     ]
     matches += [known[key] for key in get_close_matches(name, known, n=3, cutoff=0.8)]
-    return list(dict.fromkeys(matches))[:3]
+    unique: dict[str, SimilarIngredient] = {}
+    for found in matches:
+        unique.setdefault(found.name.casefold(), found)
+    return list(unique.values())[:3]
 
 
-async def _ingredient_warnings(ingredients: list[dict[str, Any]]) -> list[str]:
-    """What the aisle catalogue does not recognise in a recipe's ingredients.
+async def _catalogue_check(ingredients: list[dict[str, Any]]) -> CatalogueCheck:
+    """The ingredient names no aisle holds yet, and what to compare them to.
 
-    A hint, never a correction: ingredients that really are different stay
-    different, and nothing here renames one or writes to the catalogue. A
-    recipe reference is not an ingredient, so it is left out.
+    The judgement the sorting needs — whether two names are one ingredient,
+    and which aisle a genuinely new one belongs in — is the model's, so this
+    writes nothing to the catalogue and does not guess an aisle. It gathers
+    what one `ingredients_edit` batch needs to settle every new name without
+    reading the catalogue again: the candidates each name resembles, and the
+    aisles there are to choose from. A recipe reference is not an ingredient,
+    so it is left out.
     """
     names: dict[str, str] = {}
     for ingredient in ingredients:
         if not ingredient.get("reference"):
             names.setdefault(ingredient["name"].casefold(), ingredient["name"])
     if not names:
-        return []
+        return CatalogueCheck()
     catalogue = (await cook.request("GET", "/api/aisles")).json()
     if not catalogue["configured"]:
-        return ["The collection has no aisle file, so the names were not checked."]
+        return CatalogueCheck(
+            warnings=[
+                "The collection has no aisle file, so its ingredients could "
+                "not be sorted into aisles. Ask the user which aisles they "
+                "shop by before creating any."
+            ]
+        )
     known = {
-        name.casefold(): entry["names"][0]
+        name.casefold(): SimilarIngredient(name=entry["names"][0], aisle=aisle["name"])
         for aisle in catalogue["aisles"]
         for entry in aisle["ingredients"]
         for name in entry["names"]
     }
-    warnings = []
-    unknown = []
-    for key, name in sorted(names.items()):
-        if key in known:
-            continue
-        similar = _similar(key, known)
-        if similar:
-            warnings.append(
-                f"{name!r} is new, but the catalogue has "
-                f"{', '.join(repr(match) for match in similar)}. "
-                "Reuse one only if it is the same ingredient."
-            )
-        else:
-            unknown.append(name)
-    if unknown:
-        warnings.append(
-            "Not in the aisle catalogue, which is fine for a new ingredient: "
-            + ", ".join(repr(name) for name in unknown)
-        )
-    return warnings
+    new = [
+        NewIngredient(name=name, similar=_similar(key, known))
+        for key, name in sorted(names.items())
+        if key not in known
+    ]
+    if not new:
+        return CatalogueCheck()
+    return CatalogueCheck(
+        new_ingredients=new,
+        aisles=[aisle["name"] for aisle in catalogue["aisles"]],
+    )
 
 
 async def _menu_entries(path: str, source: str) -> list[RecipeSummary]:
@@ -509,6 +623,10 @@ async def recipe_write(
     recipe or meal plan, read it first and write back the complete updated
     document.
 
+    Reach for it whenever the user wants something kept: a recipe they
+    dictated, pasted or want saved, a change to one of theirs, or the week's
+    meals queued up.
+
     Nothing rejects a malformed file, so the result carries what became of it.
     `diagnostics` is the Cooklang parser's own errors and warnings, each with
     its line: an `error` means the file is saved but unreadable, and is worth
@@ -516,10 +634,20 @@ async def recipe_write(
     and says nothing about the commonest mistake — an unclosed brace makes
     `@sugar{2%g and` a plain step, silently — which is why `ingredients` lists
     the names it actually found. Read them back: one missing from that list was
-    dropped, and will be missing from the shopping list too. The result's
-    `warnings` name ingredients the aisle catalogue does not know, so one thing
-    does not reach the list under two names; they are hints, and a genuinely
-    new ingredient stays as written.
+    dropped, and will be missing from the shopping list too.
+
+    `new_ingredients` holds the names no aisle lists yet, each with the
+    catalogued ingredients it resembles. Sort all of them in one
+    `ingredients_edit` batch before answering, so the shopping list groups
+    them and one thing never reaches it under two names: when a `similar`
+    entry is the same ingredient under another spelling, `update` that
+    ingredient with the new name in `add_aliases` — passing `preferred_name`
+    too if the new spelling is the one the list should show — and otherwise
+    `create` the name in whichever aisle from `aisles` it belongs in, which
+    for a related ingredient is usually its `similar` entry's. Ingredients
+    that really are different stay apart: "whole milk" is not "milk". If no
+    aisle in `aisles` fits, ask the user which to use instead of creating one.
+    Say in one line what you sorted where.
 
     Preparation belongs in a note, not the name: `@onion{1}(finely diced)`
     keeps the shopping list and the aisle catalogue saying "onion" while the
@@ -549,6 +677,11 @@ async def recipe_write(
     never shows as the plan and `mark_cooked` cannot drain. A single
     ingredient to buy is not part of the plan either — it goes through
     `shopping_list_edit`'s `add_item`, which writes `Extra Items.menu` itself.
+
+    Writing the plan does not synchronize the shopping list. When asked to
+    shop for the plan, add each referenced recipe separately with its scale
+    through `shopping_list_edit`, never `Meal Plan.menu` itself. This temporary
+    CookCLI workaround keeps recipes individually removable from the list.
 
     A folder in the path must already exist — writing into one that does not
     fails rather than creating it.
@@ -601,20 +734,23 @@ async def recipe_write(
             warnings=warnings,
         )
     ingredients = parsed.get("recipe", {}).get("ingredients", [])
+    check = CatalogueCheck()
     try:
-        warnings += await _ingredient_warnings(ingredients)
+        check = await _catalogue_check(ingredients)
     except Exception as err:  # noqa: BLE001 - post-save checks must not hide success
         logging.getLogger(__name__).warning("Ingredient check failed: %s", err)
         warnings.append(
             "Recipe saved, but the aisle catalogue could not be read, so its "
-            "ingredients were not checked."
+            "ingredients were neither checked nor sorted into aisles."
         )
     return RecipeWritten(
         path=path,
         web_url=recipe_web_url(path),
         diagnostics=diagnostics,
         ingredients=[ingredient["name"] for ingredient in ingredients],
-        warnings=warnings,
+        new_ingredients=check.new_ingredients,
+        aisles=check.aisles,
+        warnings=warnings + check.warnings,
         entries=entries,
     )
 
@@ -635,6 +771,10 @@ async def recipe_import(
 ) -> dict[str, Any]:
     """Read a recipe off a web page so it can be imported. This saves nothing:
     convert the returned material to Cooklang and pass it to `recipe_write`.
+
+    Any link to a dish is one of these, including a bare URL the user pastes
+    with nothing said about it: a food page they send is a recipe they are
+    thinking of keeping, so read it and offer to save it.
 
     Everything you write must come from this result. A recipe reconstructed
     from memory is not the one at that URL, however familiar the dish looks:
@@ -692,13 +832,19 @@ async def mark_cooked(
         Field(
             description=(
                 "How it turned out, or what to change next time. Recorded "
-                "below the recipe; omit when the user has nothing to say."
+                "below the recipe; pass it only when they have already said, "
+                "never to hold the entry back until they do."
             )
         ),
     ] = None,
 ) -> MealCooked:
     """Record that a recipe was cooked: add it to `Meal History.menu` and take
     it off `Meal Plan.menu`.
+
+    Use it whenever they mention having eaten something of theirs — "we had
+    the risotto last night", "I made the curry on Sunday", "that one was
+    good" about a dish they cooked — and not only when they ask to mark one
+    cooked. The same file answers what they have been eating lately.
 
     This replaces editing those two files by hand. It reuses an existing
     section for that date or opens a new one in the right place, keeps the
@@ -709,11 +855,17 @@ async def mark_cooked(
     `remaining_plan` is what is still queued afterwards, each recipe with its
     own page: say what is left from there, linking every name to its entry.
 
-    Ask the user when it was cooked, and ask for brief feedback, saying it is
-    optional. Pass the exact date when they know it. When the answer is vague
-    or they do not remember, pick a plausible past date from the dates already
-    in the history — normally avoid putting two recipes on one inferred day,
-    though treat that as a soft rule — and pass `date_estimated`.
+    Ask the user when it was cooked, then record it straight away. Pass the
+    exact date when they know it. When the answer is vague or they do not
+    remember, pick a plausible past date from the dates already in the history
+    — normally avoid putting two recipes on one inferred day, though treat
+    that as a soft rule — and pass `date_estimated`.
+
+    Ask for brief feedback afterwards, saying it is optional, and add what
+    they say by editing `Meal History.menu` with `recipe_write`: a
+    `Feedback: ...` block directly below the recipe's reference. Never wait on
+    that answer before calling this — a question left open while nothing is
+    recorded reads to the user as already done.
     """
     cooked = Date.fromisoformat(cooked_on)
     existing = {entry["path"] for entry in await cook.list_entries()}
@@ -840,6 +992,11 @@ async def shopping_list_read() -> dict[str, Any]:
     """Read the user's shopping list, including the recipes or meal plans that
     were added and the resulting ingredients.
 
+    This is the list they shop from, so it answers anything about buying
+    food: what to get, whether something is on it already, what is still
+    missing. Read it when they are heading to the shop or the supermarket or
+    doing the groceries, however they put it.
+
     Quantities are summed with unit conversion, reduced by whatever the pantry
     holds, and grouped into store aisles by the Cooklang library, so the result
     is authoritative — do not total ingredients yourself. `pantry_items` names
@@ -860,6 +1017,10 @@ async def shopping_list_read() -> dict[str, Any]:
     added with `add_item`, and so the only names `remove_item` can take off.
     One of them may still be part of a recipe's quantity as well.
 
+    The result's own `web_url` is the list's page. Whenever an answer mentions
+    the shopping list, make the words "shopping list" a Markdown link to it —
+    every mention, every time, here or in a later reply.
+
     Each entry in `recipes` also carries a `web_url`, its page in the user's
     collection. Naming one of those recipes in an answer means linking that
     name to its `web_url` — every name, every time, here or in a later reply.
@@ -878,6 +1039,10 @@ async def shopping_list_read() -> dict[str, Any]:
     for recipe in result["recipes"]:
         recipe["web_url"] = recipe_web_url(recipe["path"])
     result["extra_items"] = await _extra_items(result["recipes"])
+    # The list's own page, alongside the pages of the recipes on it. Present
+    # even for an empty list: "nothing on the shopping list yet" is as much an
+    # answer about the list as any other, and links the same way.
+    result["web_url"] = shopping_list_web_url()
     return result
 
 
@@ -989,8 +1154,12 @@ async def shopping_list_edit(
 ) -> dict[str, Any]:
     """Change the shopping list, and return it as it now stands.
 
+    This is the tool for "we are out of milk", "we need bread", "put that on
+    the list", "pick up kitchen roll", and for "I have got everything" at the
+    end of a trip: anything that changes what the user is going to buy.
+
     Actions, with the fields they take (? optional): `add`(path, scale?) puts a
-    recipe, or every recipe in a meal plan, on the list; `remove`(path) takes
+    recipe on the list; `remove`(path) takes
     one back off; `add_item`(name, quantity?) puts a single ingredient on it
     and `remove_item`(name) takes that back off; `check`(name) ticks an
     ingredient off and `uncheck`(name) puts it back; `clear` empties the list
@@ -998,12 +1167,26 @@ async def shopping_list_edit(
     path is refused rather than read as emptying the list, so send `remove`
     when one recipe is what you mean.
 
+    To shop for a meal plan, read the menu and send a separate `add` for each
+    referenced recipe, preserving its scale. Never add `Meal Plan.menu` or
+    another whole meal-plan menu as the source. This is a temporary workaround
+    until CookCLI correctly handles menu changes and individual recipe removal:
+    changing a menu does not reliably refresh its shopping-list ingredients,
+    and recipes added through a menu cannot be removed individually. Read the
+    shopping list first to avoid adding recipes already present. Changes to the
+    plan must not be assumed to change the list; use explicit recipe-level
+    shopping-list edits when the user asks to update it. `Extra Items.menu`,
+    managed internally by `add_item` and `remove_item`, is separate from this
+    meal-plan guidance.
+
     They are applied in the order given, and a failure part-way through leaves
     the earlier ones applied — this is the same list the web UI shows, not a
     transaction. The result is the whole list afterwards, so there is no need
     to read it back. It has the shape `shopping_list_read` returns, `recipes`
     and their `web_url`s included: a confirmation that names a recipe links it
-    from there.
+    from there, and the result's own `web_url` is the list's page — a
+    confirmation saying what is now on the shopping list makes those words a
+    Markdown link to it.
 
     `add_item` is for what no recipe calls for — kitchen roll, a carton of
     milk, more of something that ran out. Those are collected in
@@ -1119,7 +1302,10 @@ async def ingredients_edit(
     changes: Annotated[list[catalogue.IngredientChange], Field(min_length=1)],
 ) -> dict[str, Any]:
     """Categorize ingredients and manage aliases in one atomic batch: create,
-    update, merge or delete an ingredient group.
+    update, merge or delete an ingredient group. This is where a write's
+    `new_ingredients` get sorted: one batch, an `update` with `add_aliases`
+    for a name that is another spelling of a catalogued ingredient and a
+    `create` for one that is not.
 
     `create` needs an aisle that already exists — make one with aisles_edit
     first. `update` touches only the fields it is given and matches
