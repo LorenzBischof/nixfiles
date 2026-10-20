@@ -315,6 +315,17 @@ in
     programs.claude-code = {
       enable = true;
       package = inputs.llm-agents.packages.${system}.claude-code;
+      # No "Co-Authored-By: Claude" on commits and no "Generated with Claude
+      # Code" on pull requests. Commits here are the description line and nothing
+      # else.
+      settings.includeCoAuthoredBy = false;
+      # Required, because the rest of ~/.claude/settings.json is hand-maintained:
+      # the default merges nothing and would replace that file with a read-only
+      # store symlink holding only what is declared here. With this, activation
+      # merges the declared keys into the writable file and leaves the others
+      # alone - at the price that removing a declaration later does not remove it
+      # from the file.
+      mutableSettings = true;
     };
 
     programs.codex = {
