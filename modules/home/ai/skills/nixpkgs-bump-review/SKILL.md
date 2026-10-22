@@ -5,41 +5,45 @@ description: Use when reviewing a nixpkgs version-bump pull request (usually ope
 
 # Reviewing a nixpkgs version bump
 
-The user is nixpkgs maintainer **LorenzBischof** (githubId 1837725). Bots open
-`pkg: old -> new` PRs against their packages and ping them for testing. This skill is
-that review.
+Bots open `pkg: old -> new` PRs against packages the user maintains and ping them for
+testing. This skill is that review.
 
-Maintainership obliges keeping the package **working and current** — not ownership.
-Non-maintainer committers may merge after ~1 week of silence, so the cost of skipping a
-review is a merge without you. The duties for a bot PR: read the diff, read upstream,
-run the built program, give a verdict.
+Maintainership obliges keeping the package **working and current** — not ownership. The FAQ's
+duties for a bot PR: review the diff, review upstream changelogs and commits, follow the PR's
+test instructions, then approve or request changes.
 
-Find work by searching open nixpkgs PRs that mention `LorenzBischof`. Maintained packages
-are wherever `LorenzBischof` appears under `pkgs/` — grep rather than trusting a list.
+Find the work:
+
+```bash
+gh search prs --repo NixOS/nixpkgs --state open --involves @me --json number,title,updatedAt
+```
+
+`--involves`, not `--mentions`: a `[Backport release-*]` PR carries no maintainer ping (§8).
 
 ## 1. The PR, and what CI actually proves
 
-Pull the PR's metadata, diff, checks, and body.
+```bash
+gh pr view <PR> --repo NixOS/nixpkgs --json title,body,labels,state,mergedAt
+gh pr diff <PR> --repo NixOS/nixpkgs
+gh pr checks <PR> --repo NixOS/nixpkgs
+```
 
-**Do not assume CI built the package.** Nixpkgs CI is GitHub Actions — `Eval/*`, `Lint/*`,
-`Check/*`, `Build/*` — and the `Build /` jobs build *shell, docs, lib, tarball*, not your
-package. Reading "Build / x86_64-linux ✓" as "the package built" is wrong. Ofborg
-(`pkg, pkg.passthru.tests on <system>`) does build it, but it no longer runs on every PR —
-it is absent entirely on some bumps. Check whether it is there before relying on it; on
-darwin it lags or fails for unrelated reasons, and the merge bot ignores darwin.
+**Do not assume CI built the package.** The `Build /` jobs build *shell, docs, lib, tarball*
+— not your package — so a green `Build / x86_64-linux` says nothing about this bump. Ofborg
+(`pkg, pkg.passthru.tests on <system>`) does build it, but no longer runs on every PR and is
+absent entirely on some bumps, so check whether it is there at all before relying on it.
 
-On an r-ryantm PR the real build evidence is the **`nixpkgs-review` result pasted in the PR
-body** — the bot's build, on the bot's checkout, usually x86_64-linux only. Treat it as
-evidence, and say whose build it was in the verdict.
+The real build evidence is in the PR body: the **`nixpkgs-review` result** (the bot's build,
+usually x86_64-linux only — say whose build it was in the verdict), the **Checks done** list,
+whose `found <version> with grep in /nix/store/...` names the bot's output path, and the
+collapsed **Instructions to test this update**, which is where §6 gets its commands.
 
-The label `2.status: merge-bot eligible` is CI's verdict on §8. For blast
-radius, the Eval Summary's rebuild counts are authoritative — the `10.rebuild-*` labels
-count attrs, the body's "N total rebuild path(s)" counts paths from the bot's older
-checkout, so they legitimately disagree.
+The label `2.status: merge-bot eligible` is CI's verdict on §8. For blast radius use the Eval
+Summary's rebuild counts, not the body's "N total rebuild path(s)".
 
 If the PR is **already merged**, review anyway if the user asked: the levers left are a
-follow-up fix or, more often, an open `[Backport release-*]` PR carrying the same change
-onto a stable branch — see §8.
+follow-up fix or, more often, an open `[Backport release-*]` PR carrying the same change onto
+a stable branch — see §8.
 
 ## 2. The diff should be boring
 
@@ -49,7 +53,8 @@ A clean bump changes *only* `version`, the `src` `hash`/`rev`/`tag`, and one of
 - **Downgrade**, or a jump onto a major upstream still calls a preview.
 - **Pre-release as stable** — `-rc`, `-beta`, `-dev` in the version, *and* GitHub's
   `prerelease` flag on the release, which can be set on a clean-looking version string.
-- **`-unstable-` versions** must stay `<last-release>-unstable-YYYY-MM-DD`.
+- **`-unstable-` versions** must stay `<last-release>-unstable-YYYY-MM-DD`, or
+  `0-unstable-YYYY-MM-DD` where upstream has no suitable preceding release.
 - **Source moved** — a changed `owner`/`repo`/`url`. Verify the new target is the official
   upstream, not a fork or typosquat.
 - **A hash changed with no version change**, or `rev` no longer derived from `version` —
@@ -58,23 +63,20 @@ A clean bump changes *only* `version`, the `src` `hash`/`rev`/`tag`, and one of
 
 ## 3. Read the whole `package.nix`, not just the diff
 
-The diff is three lines. The assumptions live in the ~40 unchanged lines around them, and
-the review is checking those against the changed source. So read the file first and list
-what it hardcodes about upstream — the fetch target and tag scheme; the dependency hash;
-build inputs; which slice of the tree gets built (`subPackages`, `sourceRoot`,
-`cargoBuildFlags`, `pyproject`/`build-system`, `makeFlags`); version-stamping build flags
-(Go `ldflags -X`, CMake `-DVERSION=`, a `substituteInPlace` writing a version literal); any
-`substituteInPlace`/`patches`/`patchShebangs`; wrapper PATH; install paths; the test setup
-(`checkFlags`, `doCheck`, `pytestCheckHook`, `disabledTests`, `pythonImportsCheck`); and the
-`meta` fields.
+The diff is three lines; the assumptions live in the ~40 unchanged lines around them, and
+the review is checking those against the changed source. So read the file first and list what
+it hardcodes about upstream: the fetch target and tag scheme, the dependency hash, build
+inputs, which slice of the tree gets built, any version-stamping build flag, every
+`substituteInPlace`/`patches`/`patchShebangs`, the wrapper PATH, install paths, the test
+setup, and the `meta` fields.
 
-The specific attribute names differ per ecosystem; the review question does not. Every item
-above is *a claim this derivation makes about upstream's layout*, and the bump is the moment
-those claims can quietly stop being true.
+Each is a claim about upstream's layout that a bump can quietly falsify. Attribute names
+differ per ecosystem; the question does not. If you cannot tell why one is there (a pin,
+a `disabledTests`, an opinionated patch), you cannot tell whether it still applies at the new
+version; say so rather than assuming.
 
-**Search-and-replace patching fails in one direction only, which makes it the sharpest
-thing to check.** `substituteInPlace` patches paths or strings upstream had *at the old
-version*:
+**Search-and-replace patching fails in one direction only.** `substituteInPlace` patches
+paths or strings upstream had *at the old version*:
 
 - Upstream **removed or renamed** the target → the substitution errors out. Loud, CI
   catches it, fine.
@@ -89,137 +91,96 @@ one that still applies to changed code is silent.
 
 ## 4. Fetch upstream at both tags — and don't trust the compare view
 
-> **GitHub's compare API and web view truncate at 300 files.** On a busy range they will
-> omit files that genuinely changed, with no error — just a short list. Verified: kyverno
-> `v1.18.2...v1.19.0` is 270 commits, the compare returns exactly 300 files, and `go.mod`
-> and `go.sum` are **not among them** even though `go.sum` did change. Concluding
-> "lockfile unchanged" from that lands you straight in the stale-`vendorHash` trap below —
-> the failure mode arrived at by following the check meant to prevent it.
+> **GitHub's compare API and web view truncate at 300 files.** On a range of a few hundred
+> commits they omit files that genuinely changed, with no error — just a short list, which can
+> leave out the lockfile when the lockfile did change. Concluding "lockfile unchanged" from
+> that lands you in the stale-`vendorHash` trap in §5.
 
 So for any file whose change matters — the lockfile (`go.sum`, `Cargo.lock`,
 `package-lock.json`, `poetry.lock`), LICENSE, the build definition (`Makefile`,
 `CMakeLists.txt`, `pyproject.toml`, `setup.py`), and every source your §3 assumption list
 names — **fetch it at both tags and compare directly** rather than asking what the compare
-view listed. Use the compare range
-for commit messages and a rough sense of scope, not as evidence a file is unchanged.
+view listed. Use the compare range for commit messages and a rough sense of scope, not as
+evidence a file is unchanged.
 
 Release notes are often 300 lines of dependency one-liners with no "breaking changes"
 heading. Grep the body for `remov|deprecat|breaking|BREAKING|CVE` rather than reading top
 to bottom, then follow the linked PRs that match.
 
-## 5. Check upstream against the assumption list
+## 5. What the bump can quietly invalidate
 
-Note breaking changes and security fixes; the user runs several of these on the homelab
-(kyverno, crossplane-cli). But the review question is narrower than "is this release good?"
-— it's which of the assumptions from §3 upstream just invalidated:
+Note breaking changes and security fixes, the more so for a package the user actually runs.
+But the review question is narrower than "is this release good?" — which of §3's assumptions
+did upstream just invalidate?
 
+Most ways a bump breaks a package are **loud**: a migrated build system, a raised toolchain
+minimum, a build that now needs the network, tests that now need a daemon, a required new
+dependency, a `rev` that no longer resolves. Those fail in §6's build. The review is for the
+failures that leave it green:
 
-- **Tag scheme changed** (monorepo `pkg/vX.Y.Z` tags, `v` prefix dropped) → `rev` resolves
-  to nothing.
-- **Lockfile moved but the diff's dep hash didn't** → `vendorHash` and friends are
-  fixed-output derivations addressed *only* by output hash, so Nix substitutes a cached FOD
-  matching the **stale** hash instead of rebuilding. "It built" does not prove the vendored
-  deps match this version.
-- **The target of a version stamp moved** → the stamp silently goes dead. Build-time version
-  injection is the same trap in every ecosystem: the flag names a location in upstream's
-  source, and **a location that no longer exists is ignored rather than diagnosed**. Go
-  `ldflags -X pkg.var=` drops unknown symbols without a word (so a renamed module path or a
-  bumped `/vN` suffix empties it); a `substituteInPlace` writing a version literal is loud
-  if the pattern vanishes but silent if upstream added a second copy; CMake `-DVERSION=`
-  quietly does nothing if the cache variable was renamed. In all of them the build stays
-  green and the program reports an empty or stale version.
+- **A stale dependency hash.** The lockfile moved and the diff's `vendorHash` didn't. These
+  are fixed-output derivations addressed *only* by their output hash, so Nix substitutes a
+  cached FOD matching the **stale** hash instead of rebuilding. "It built" does not prove the
+  vendored deps match this version; §6 route B is what refutes it.
+- **A dead version stamp.** Version injection names a *location* in upstream's source, and a
+  location that no longer exists is ignored rather than diagnosed: Go `ldflags -X pkg.var=`
+  drops unknown symbols silently, so a renamed module path or a bumped `/vN` suffix empties
+  it; CMake `-DVERSION=` does nothing if the cache variable was renamed. The build stays green
+  and the program reports an empty or stale version. `passthru.tests.version` guards only the
+  stamp it asserts on, so grep the new source for every symbol the derivation names, and
+  confirm in §6 that the program prints the new version.
+- **An unpatched new instance**, per §3's asymmetry: upstream added another hardcoded path,
+  another shebang, another call site, and the existing `substituteInPlace` still succeeds on
+  the old ones.
+- **A new external tool.** Upstream shells out to something it did not before; it needs
+  adding to the wrapper PATH, and nothing catches that at build time.
+- **A build target that selects nothing.** Upstream reorganised the tree and `subPackages`,
+  `sourceRoot` or `cargoBuildFlags` point at paths that are gone. Worst case the derivation
+  installs an output with nothing in it, which is why §6 ends on `ls -R`.
+- **`meta` drift.** The license can change at a new tag — upstream's checklist calls this out
+  specifically — so check `meta.license` against the LICENSE file *there*, not at the old
+  version. `meta.changelog` 404s when releases move repo or go independently versioned.
 
-  A `passthru.tests.version` guards the *one* stamp it asserts on. Any other stamped value —
-  build hash, build date, a git describe string — can be dead for releases without anyone
-  noticing, so grep the new source for every symbol or variable the derivation names, and
-  check §6 that the program prints the new version.
-- **Part of the public surface was removed** → nothing in `package.nix` breaks, but the
-  user's usage does. A minor bump can delete a subcommand or drop a module export. What
-  "surface" means depends on what the package *is*: for a CLI, the registered subcommands
-  and their flags; for a library, the exported/public names and the signatures of the ones
-  callers reach for; for a service, its config keys and defaults.
+  > **Resolve a `meta` URL at both versions before calling it a finding.** A `meta.changelog`
+  > that 404s at the new version usually 404s at the old one too — a package fetching one repo
+  > but pointing its changelog at another that has since versioned independently, say. That
+  > makes it a pre-existing bug: a footnote plus a separate one-line PR, not a reason to
+  > hesitate.
 
-  > Clone both tags shallow (`git clone --depth 1 --branch <tag>`) and diff two or three
-  > cheap extractions — the file list of the relevant directory, plus a grep for whatever
-  > declares a surface entry in this language. Which grep depends on the framework, so look
-  > at how the source actually declares things before inventing a pattern: Go CLIs use kong
-  > struct tags or cobra `Use:`; Python exposes `__all__`, `def`/`class` at module level, and
-  > `project.scripts` in `pyproject.toml`; Rust uses `clap` derives or `pub fn`. Additions
-  > are safe — you are looking for the `<` side.
-  >
-  > Cheaper and language-agnostic where it exists: build both versions and diff their
-  > `--help` output, or their installed file lists (`ls -R $out`). That reads the real
-  > artifact instead of guessing at source patterns.
-  >
-  > **A diff of two empty extractions looks exactly like a clean pass.** A grep pattern that
-  > matches nothing on *both* tags prints no output, which is the same output as a genuinely
-  > unchanged surface — the §4 truncation failure in a new costume. `wc -l` both files and
-  > eyeball a few entries before believing the diff; if they are empty, the pattern is wrong,
-  > not the surface.
-- **Source tree reorganised** → whatever selects the build target points at gone paths:
-  `subPackages`, `sourceRoot`, `cargoBuildFlags`, a `pyproject.toml` moved into a subdir, a
-  renamed `src/` layout. Worst case it **silently builds nothing** and still installs an
-  output, so check the output actually contains what it should (§6).
-- **New native dependency or codegen tool** → missing `buildInputs`. Required ones fail at
-  compile time; *optional* ones build fine and fail at runtime.
-- **Build system migrated** (Makefile → CMake/meson) → hooks arrive through
-  `nativeBuildInputs` and rewrite the phases wholesale; the whole derivation is wrong.
-- **Build now fetches or generates over the network** → fails in the Nix sandbox.
-- **Tests now need network, a daemon, or a container** → `checkPhase`, `passthru.tests`.
-- **New hardcoded path or new script** → silently unpatched, per the asymmetry in §3.
-- **Upstream shells out to a new external tool** → needs adding to the wrapper PATH.
-  Nothing catches this at build time.
-- **Output layout moved** — binary renamed, completions or man pages relocated →
-  `meta.mainProgram`, wrappers, `installShellCompletion`.
-- **Toolchain minimum raised** → vs. whatever compiler nixpkgs pins for this package.
-- **Platform support dropped or added** → `meta.platforms`.
-- **License changed at the new tag** → `meta.license` must match upstream's LICENSE *there*,
-  not at the old version.
-- **Releases moved repo or went independently versioned** → `meta.changelog` 404s.
+If the bot picked the wrong version at all — a changed tagging scheme or release cadence —
+fix the cause in `passthru.updateScript` (a version regex, `passthru.skipBulkUpdate = true;`,
+or `# nixpkgs-update: no auto update`), or the next run repeats it. The FAQ lists the full set
+of reasons the bot skips or mis-picks a package.
 
-  > Real example, PR #556556: `crossplane-cli` fetches `crossplane/cli` but points
-  > `meta.changelog` at `crossplane/crossplane` releases. The CLI now versions independently
-  > — `crossplane/crossplane`'s newest tags are `v2.4.0` and `v2.5.0-rc.0` — so after the
-  > 2.5.0 bump that URL 404s. Package builds, binary runs, CI green, metadata wrong.
-  >
-  > **Check the old version's URL too before calling it a finding.** Here `v2.4.1` 404s
-  > as well, so the bump exposes a pre-existing bug rather than introducing one — which
-  > moves it from a reason to hesitate to a footnote plus a separate one-line PR. Same test
-  > for any `meta` wart: resolve it at *both* versions, and report which one broke it.
+An upstream API break also breaks *dependent* packages even when this one builds — §1's
+rebuild counts say how many.
 
-- **Release cadence or tagging changed** → the bot keeps picking wrong versions. Fix the
-  cause in `passthru.updateScript` (a version regex, `passthru.skipBulkUpdate = true;`, or
-  `# nixpkgs-update: no auto update`), or the next run repeats it.
+## 6. Get the build, and exercise it
 
-An upstream API break also breaks *dependent* packages even when this one builds — the
-rebuild counts from §1 say how many.
+The PR body's **"Instructions to test this update"** carries the bot's store path and its
+commit — lift them from there rather than reconstructing. Three routes to *get* the build,
+proving different things; exercising it happens in the VM at the end of this section.
 
-## 6. Build and run it
+### A. Download the bot's build from the cache
 
 ```bash
-cd ~/git/github.com/NixOS/nixpkgs && nix run nixpkgs#nixpkgs-review -- pr <PR>
+nix-store -r /nix/store/<path-from-the-PR-body> \
+  --option binary-caches 'https://cache.nixos.org/ https://nixpkgs-update-cache.nix-community.org/' \
+  --option trusted-public-keys '
+  nixpkgs-update-cache.nix-community.org-1:U8d6wiQecHUPJFSqHN9GSSmNkmdiFW7GW7WNAnHW0SM=
+  cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
+  '
 ```
 
-Not installed on this system, hence `nix run`. It builds the PR and everything that
-rebuilds because of it, reuses ofborg's evaluation, and drops you in a shell with the
-results on `$PATH`. Avoid its `approve`, `merge`, and `--post-result` subcommands — they
-write to the PR, which this token cannot do (§7).
+Run it with the sandbox disabled. No clone and no compile, just the download.
 
-> **It must run from inside a nixpkgs checkout**, and there is usually not one on this
-> machine. `find_nixpkgs_root()` walks up from CWD for `nixos/release.nix` (or accepts a
-> bare repo); with neither it exits `Has to be executed from nixpkgs repository` — **after**
-> `nix run` has spent a minute downloading nixpkgs-review itself, so it reads like a slow
-> build rather than an instant argument error. No flag bypasses it. Clone once, blobless to
-> keep it small, and reuse it for every later review:
->
-> ```bash
-> git clone --filter=blob:none https://github.com/NixOS/nixpkgs ~/git/github.com/NixOS/nixpkgs
-> ```
+Usually enough: it gets you the real artifact to run, which is what the FAQ's test duty asks
+for and what CI never covers, and on a routine patch bump running the program *is* the review.
+It re-derives no hash though — you asked for a store path by name and got the bot's bytes
+back, so "the output path matches" is tautological here. If the bump touched a lockfile, use
+route B.
 
-**Fallback when there's no checkout and the rebuild count is 1–2** (from the §1 Eval
-Summary): build the bot's exact commit straight from the PR body, which needs no clone and
-covers the same ground, since with one rebuild there are no dependents for nixpkgs-review
-to add. Build `passthru.tests` explicitly — nothing else pulls them in.
+### B. Build the bot's commit yourself
 
 ```bash
 nix build --no-link --print-out-paths \
@@ -227,84 +188,112 @@ nix build --no-link --print-out-paths \
   'github:r-ryantm/nixpkgs/<commit>#<pkg>.passthru.tests.<name>'
 ```
 
-Name each `passthru.tests` attribute explicitly — nothing else pulls them in.
+Name each `passthru.tests` attribute explicitly — nothing else pulls them in. Needs no clone,
+and it hands you the output too, so this subsumes route A. Two things in the log are evidence
+in themselves:
 
-Say in the verdict which of the two you ran. Two things in that build log are evidence in
-their own right, so read it rather than just checking the exit code:
-
-- **The dependency FOD built instead of being substituted** — the vendor derivation
-  appearing under `building '...'` rather than `copying path`. It is named for the fetcher:
-  `-go-modules` (buildGoModule), `-vendor` / `-cargo-deps` (Rust), `-npm-deps`, `-composer-vendor`,
-  or the `fetchPnpmDeps`/`fetchYarnDeps` output. This is the one thing that actually refutes
-  §5's stale-hash trap: a substituted FOD proves only that *some* cached path matches the
-  declared hash, while one built from scratch proves the declared hash matches the deps
-  *this source* resolves to. (Packages with no vendored-dep FOD — most Python ones, which
-  take their deps from nixpkgs rather than a lockfile — are simply not exposed to that trap.)
+- **The dependency FOD built instead of being substituted** — the vendor derivation under
+  `building '...'` rather than `copying path` (`-go-modules` for buildGoModule,
+  `-vendor`/`-cargo-deps` for Rust, `-npm-deps`). This is what refutes §5's stale-hash trap:
+  a substituted FOD proves only that *some* cached path matches the declared hash, while one
+  built from scratch proves the hash matches the deps *this source* resolves to. A package
+  whose deps come from nixpkgs rather than a lockfile has no such FOD and is not exposed.
 - **The output path equals the one in the PR body** (`found <version> with grep in
   /nix/store/...`) — same hash means your build reproduced the bot's exactly.
 
-**Then exercise the output — a green build does not cover it.** The dead-version-stamp
-failure from §5 shows up here and nowhere else, so start by making the package state its own
-version and confirm it is the *new* one, not empty and not the old one. How you do that
-depends on the package:
+### C. nixpkgs-review — only if dependents matter
 
-- **A program** — run `$out/bin/<mainProgram> --version` (or `version`, `-V`), then the
-  subcommand or flag §5 flagged as changed, then its primary path.
-- **A library** — there is no binary, so import it and run the test suite:
-  `nix build ...#<pkg>` then check `pythonImportsCheck`/`doCheck` actually ran in the log
-  rather than being skipped, and for a Python bump confirm the new version does not violate
-  a dependent's upper bound.
-- **A service** — start it if it is cheap to, otherwise lean on `passthru.tests` and any
-  NixOS VM test that references it.
+It adds the one thing route B cannot: everything that rebuilds *because* of this change.
+Worth having when the §1 rebuild count is large, worth nothing when it is 1.
 
-Also confirm the output is not *empty of the thing it should contain* — `ls -R $out` catches
-the silently-built-nothing case from §5. The user's own usage of these packages is not
-visible in the nixfiles repo, so if a change looks like it might affect how they run it, ask
-rather than guess. `nixpkgs-review` builds `passthru.tests` too — worth noting in the
-verdict either way.
+It only runs from inside a nixpkgs checkout, and there is none on this machine. Cloning
+nixpkgs is a decision to put to the user, not a step to take mid-review.
+
+### Then exercise the output — in the agent VM
+
+The output never runs on this machine. Every call into it goes through the agent VM
+(`nixos-agent-test-vm` skill); the host store is mounted inside it, so the build is already
+there.
+
+```bash
+socat -t 120 - UNIX-CONNECT:"$vm_socket" <<'PY'
+code, out = sh("<out-path>/bin/<prog> --version")
+assert code == 0, out
+out
+PY
+```
+
+Start with that: the version must be the *new* one, not empty and not the old one — §5's dead
+stamp shows up here and nowhere else, as do a dead build date or git describe string. Then
+the subcommand or flag §5 flagged, and the package's primary path. Where the host config
+wraps the program, run the wrapper on `PATH` too; a divergence from the raw binary is the
+override wiring. A library has nothing to run, so lean on its test suite instead; a service,
+start the unit.
+
+`ls -R <out-path>` catches §5's silently-built-nothing case and only reads the store, so it
+runs anywhere. If a change looks like it might affect how the user runs the package, ask
+rather than guess.
+
+If the VM will not come up, say what blocked it and what you checked instead, rather than
+falling back to running the output here.
 
 ## 7. Report the verdict — post nothing
 
-The GitHub token here has **no approve or comment permissions**. Never issue a write call
-against the PR; posting under the user's account is their step.
+**Never issue a write call against the PR** — no approve, no comment, no merge. Posting under
+the user's account is their step.
 
 Finish with a few lines saying what you'd do:
 
-> **#556556 crossplane-cli: 2.4.1 → 2.5.0 — would approve.**
-> Version-only diff, no downgrade or pre-release. Upstream is dep bumps plus
-> `render`/`projects` fixes, no breaking changes; license unchanged (Apache-2.0).
-> Built the bot's commit locally (x86_64-linux, no nixpkgs checkout for nixpkgs-review);
-> vendor FOD rebuilt from scratch and the output path matches the bot's.
-> `crossplane version --client` prints v2.5.0; `passthru.tests.version` passes.
-> ofborg green on x86_64/aarch64-linux, darwin pending. Note: `meta.changelog` 404s at
-> both 2.4.1 and 2.5.0 — pre-existing, separate fix.
+> **#<pr> <pkg>: <old> → <new> — would approve.**
+> Version-only diff, no downgrade or pre-release. Upstream is dep bumps plus bug fixes, no
+> breaking changes; license unchanged at the new tag. Built the bot's commit on x86_64-linux
+> (route B); vendor FOD rebuilt from scratch and the output path matches the bot's. Ran it in
+> the agent VM: prints the new version, and the wrapped and raw binaries agree;
+> `passthru.tests.version` passes. ofborg green. Note:
+> `meta.changelog` 404s at both versions — pre-existing, separate fix.
 
-That example is a Go CLI; the *shape* is what carries over. Whatever the ecosystem, the
-verdict should state: the verdict itself, whether the diff was version-only, what upstream
-changed that bears on the packaging, how the dependency hash was verified (or that the
-package has no vendored-dep FOD), which build you ran and on what system, what you got when
-you exercised the output, the CI position, and any finding you are explicitly setting aside.
+Always name the route: "downloaded it" and "built it" are different claims. Say the VM run
+happened, or that it didn't.
 
 Or `would request changes`, with the reason and what would need to happen first. Only claim
-checks you actually ran; if you skipped the build, say so rather than implying a clean
-review. If the user wants it posted, hand them the commands to run themselves.
+checks you actually ran; if you skipped the build, say so rather than implying a clean review.
+
+If the user wants it posted, hand them the commands, and use upstream's template for the
+review body, ticking only the boxes actually checked:
+
+```markdown
+##### Reviewed points
+
+- [ ] package name fits guidelines
+- [ ] package version fits guidelines
+- [ ] package builds on ARCHITECTURE
+- [ ] executables tested on ARCHITECTURE
+- [ ] any change of upstream are verified
+- [ ] the motives for any special packaging choices are documented
+- [ ] all depending packages build
+- [ ] patches have a comment describing either the upstream URL or a reason why the patch wasn't upstreamed
+- [ ] patches that are remotely available are fetched rather than vendored
+
+##### Possible improvements
+
+##### Comments
+```
+
+Leave `all depending packages build` unticked unless route C actually ran.
 
 ## 8. Merge-bot eligibility
 
-Worth a line in the verdict. The user is a maintainer, not a committer, so commenting
-`@NixOS/nixpkgs-merge-bot merge` is the only lever. It merges only if **all** hold: the PR
-targets a development branch (`master`, `staging-*`, `release-*`); touches **only**
-`pkgs/by-name/*`; was opened by @r-ryantm or a committer (or approved by one); the commenter
-is in @NixOS/nixpkgs-maintainers **and maintains every package touched**; and no committer
-has an outstanding "changes requested" review.
+Worth a line in the verdict. Without a commit bit, commenting
+`@NixOS/nixpkgs-merge-bot merge` is the only lever.
 
-Green CI → merge queue. CI pending → Auto Merge is enabled and it lands later unattended, so
-a merge comment then is a decision to merge sight-unseen. CI already failing → the bot does
-nothing and the command must be repeated after a fix.
+One constraint varies in practice: the PR must touch **only** `pkgs/by-name/*`. A package
+living anywhere else is not eligible, and an approval there just waits for a committer. The
+rest hold by construction for a bot bump on one's own package (`ci/README.md` lists them).
 
-Packages outside `pkgs/by-name` (the `pkgs/development/python-modules/*` ones) are not
-eligible; an approval there just waits for a committer.
-
+CI state when the comment lands does change the outcome. Green → merge queue. Pending or
+missing → Auto Merge is enabled and it lands later unattended, so commenting then is a
+decision to merge sight-unseen. Already failing → the bot does nothing and the command must be
+repeated after a fix.
 
 ### Backports
 
@@ -317,11 +306,12 @@ The bar there is different: stable branches take bugfixes and security updates, 
 that is fine on master can be wrong on `release-*` if it removes a subcommand, changes
 defaults, or carries anything users on a stable channel wouldn't expect mid-release. That
 judgement is the maintainer's and nobody else will make it.
+
 ## Sources
 
 - [`pkgs/README.md#reviewing-contributions`](https://github.com/NixOS/nixpkgs/blob/master/pkgs/README.md#reviewing-contributions) — official review checklist for package updates, plus versioning, `meta` and commit conventions.
 - [`maintainers/README.md`](https://github.com/NixOS/nixpkgs/blob/master/maintainers/README.md) — what maintainership obliges.
 - [`ci/README.md#merge-bot-constraints`](https://github.com/NixOS/nixpkgs/blob/master/ci/README.md#merge-bot-constraints) — exact merge-bot preconditions.
-- [nixpkgs-update maintainer FAQ](https://nix-community.github.io/nixpkgs-update/nixpkgs-maintainer-faq/) — the duties for a bot PR.
+- [nixpkgs-update maintainer FAQ](https://github.com/NixOS/nixpkgs-update/blob/main/doc/nixpkgs-maintainer-faq.md#r-ryantm-opened-a-pr-for-my-package-what-do-i-do) — the four duties for a bot PR; the link the PR's maintainer ping points at. Also lists why a package stops getting updated or picks a wrong version (§5).
 - [Nixpkgs/Automatic Updates](https://wiki.nixos.org/wiki/Nixpkgs/Automatic_Updates) — how r-ryantm picks versions and its failure modes.
 - [nixpkgs-review README](https://github.com/Mic92/nixpkgs-review) — flags and subcommands.
