@@ -66,6 +66,18 @@ is still a single line. The link on the new version is what marks a bump as read
 - Something to flag: append `: ` and a sentence or two — what changes, and what
   it needs here.
 
+A security fix is not on its own something to flag: shipping them is what a
+version bump is for, and the fix is already in the bump the reader is merging.
+Don't go and find out how bad one is either — no CVE lookups, no advisories, no
+working out whether these hosts are exposed.
+
+What earns a clause is what the notes already say: a step needed beyond
+upgrading, such as a credential to rotate or a setting that is now unsafe, or
+upstream calling the fix severe itself — a high or critical rating, a release
+that exists to carry it, a line telling the reader to update at once. A bare CVE
+number is neither, and resolving one into a severity is the lookup to skip, so
+that bullet stays the two versions and the link.
+
 Name the host when the bump is on one host only and that matters. Keep the diff's
 order.
 
