@@ -28,7 +28,10 @@ python3.pkgs.buildPythonApplication rec {
   # The exporter shells out to `restic` and guards startup with
   # shutil.which("restic"), so the binary must be on PATH at runtime.
   makeWrapperArgs = [
-    "--prefix PATH : ${lib.makeBinPath [ restic ]}"
+    "--prefix"
+    "PATH"
+    ":"
+    (lib.makeBinPath [ restic ])
   ];
 
   # The 2.x rewrite renamed the entry point to `restic-exporter`, but the NixOS
