@@ -10,10 +10,14 @@ The tools are grouped by the thing they act on — `recipe_*`, `shopping_list_*`
 `aisles_*` — and each group pairs one read with one write rather than giving
 every HTTP endpoint underneath a tool of its own. A read is marked
 `readOnlyHint` so a client can let it through without asking.
+
+One route here is not a tool: `/picture/{token}` takes a recipe's picture as an
+ordinary HTTP body, because MCP cannot carry a file. See `pictures.py`.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -29,8 +33,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, BaseModel, Field, model_validator
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
-from . import catalogue, menus
+from . import catalogue, menus, pictures
 from . import cookcli as cook
 from .diagnostics import Diagnostic, DiagnosticsUnavailable, diagnose
 from .importer import fetch_recipe as fetch_recipe_from_url
@@ -40,6 +46,11 @@ WEB_URL = (
     or os.environ.get("COOKLANG_SERVER_URL")
     or "http://127.0.0.1:9080"
 ).rstrip("/")
+
+# The public name and path a reverse proxy serves this server under. Only the
+# upload link is built from it, and nothing can derive it: the process binds
+# loopback and never sees the name it is reached by.
+PUBLIC_URL = (os.environ.get("COOKLANG_MCP_PUBLIC_URL") or "").rstrip("/")
 
 PLAN_PATH = "Meal Plan.menu"
 HISTORY_PATH = "Meal History.menu"
@@ -153,6 +164,28 @@ WebUrl = Annotated[
 ]
 
 
+# Notes are the one part of a recipe that changes an answer about something
+# else: what to buy, and what has to be started the day before. They are in
+# the file and in none of the payloads these tools otherwise build, so the
+# alternative to carrying them is a `recipe_read` per recipe and the whole
+# source back for one line — see `_notes`.
+Notes = Annotated[
+    list[str] | None,
+    Field(
+        default=None,
+        description=(
+            "The recipe's own notes, in file order — its `>` lines, which is "
+            "where it says what its ingredients and steps cannot: an "
+            "ingredient that is optional, a dish it is usually eaten with, a "
+            "variation, preparation to do the day before. Empty when the "
+            "recipe has no notes; `null` when they could not be read, which "
+            "is not the same thing and is not something to report as the "
+            "recipe saying nothing."
+        ),
+    ),
+]
+
+
 class RecipeSummary(BaseModel):
     """Metadata for one recipe or meal plan: a search hit, or a recipe a meal
     plan refers to."""
@@ -166,15 +199,41 @@ class RecipeSummary(BaseModel):
     )
 
 
+class MenuEntry(RecipeSummary):
+    """A recipe a meal plan or history refers to.
+
+    A search hit carries no `notes`, and deliberately: an empty query lists
+    the whole collection, so filling them there would be a request per file
+    to answer a question about none of them. Here the entries are the few
+    recipes one plan holds, and a note on one of them is what says the dough
+    has to be made tonight.
+    """
+
+    notes: Notes
+
+
 MenuEntries = Annotated[
-    list[RecipeSummary],
+    list[MenuEntry],
     Field(
         default_factory=list,
         description=(
             "For a meal plan or history, the recipes it refers to in file "
-            "order, each with its own page — so a name taken from this file "
-            "can be linked. Empty for an ordinary recipe."
+            "order, each with its own page and its own notes — so a name "
+            "taken from this file can be linked, and what it needs done "
+            "ahead of the day can be said. Empty for an ordinary recipe."
         ),
+    ),
+]
+
+
+Picture = Annotated[
+    Literal["metadata", "file", "none"],
+    Field(
+        description=(
+            "Whether the recipe has a picture of the dish: `metadata` for one "
+            "the frontmatter's `image` line links, `file` for one stored "
+            "beside the recipe, and `none` for neither."
+        )
     ),
 ]
 
@@ -187,6 +246,7 @@ class RecipeDocument(BaseModel):
     source: str = Field(
         description="Complete raw Cooklang source, frontmatter included."
     )
+    picture: Picture
     entries: MenuEntries
 
 
@@ -286,6 +346,31 @@ class RecipeWritten(BaseModel):
         ),
     )
     entries: MenuEntries
+
+
+class PictureUpload(BaseModel):
+    """Where to send a recipe's picture."""
+
+    path: str = Field(description="Path of the recipe the picture is for.")
+    web_url: WebUrl
+    upload_url: str = Field(
+        description=(
+            "PUT the picture file here, the file itself as the request body. "
+            "Never read, encode or pass its bytes through a tool call. The "
+            "reply is JSON and is the confirmation: read it rather than "
+            "assuming the upload worked. Good for `expires_in_seconds`, and "
+            "for this recipe only."
+        ),
+        json_schema_extra=URI,
+    )
+    expires_in_seconds: int = Field(
+        description=(
+            "How long `upload_url` stays valid, counted from this reply. "
+            "After that it is refused and this tool has to be called again "
+            "for a fresh link — so send the file now rather than asking the "
+            "user something first and uploading afterwards."
+        )
+    )
 
 
 class MealCooked(BaseModel):
@@ -451,6 +536,18 @@ async def recipe_read(path: Path) -> RecipeDocument:
     each with its own page. Naming one of them in an answer means linking it
     from there: the file's own `web_url` is the plan's page, not theirs.
 
+    Saying what is planned also means saying what has to happen before the
+    day it is cooked, and each entry's `notes` are where its recipe says so.
+    Give each at most one short sentence of what they put ahead of the
+    cooking — a dough or a marinade resting overnight, beans soaked, a joint
+    out of the freezer the day before, something bought fresh that morning.
+    Only what a note says, nothing for an entry whose `notes` are empty, and
+    never preparation you inferred from the dish.
+
+    `picture` says whether the dish already has one: a `file` picture is
+    stored beside the recipe and appears nowhere in the source text. Offer to
+    add one only when it is `none`.
+
     `web_url` is the only page to link. A `source.url` in the frontmatter is
     the web page the recipe was copied from, not its page in the collection,
     and linking a name to it sends the user off to the original site.
@@ -463,6 +560,7 @@ async def recipe_read(path: Path) -> RecipeDocument:
         path=path,
         web_url=recipe_web_url(path),
         source=source,
+        picture=await _picture(path),
         entries=await _menu_entries(path, source),
     )
 
@@ -550,7 +648,60 @@ async def _catalogue_check(ingredients: list[dict[str, Any]]) -> CatalogueCheck:
     )
 
 
-async def _menu_entries(path: str, source: str) -> list[RecipeSummary]:
+async def _picture(path: str) -> Picture:
+    """Whether `path` has a picture of the dish, which its source cannot say.
+
+    A stored picture is a file beside the recipe and leaves no trace in the
+    Cooklang text, so one small request is the only way to tell that recipe
+    from one with no picture at all. Only whether, not where: a linked
+    picture's URL is in the frontmatter already, and a stored one's is a file
+    nothing here reaches.
+
+    Anything but `metadata` behind a picture that exists is reported as a
+    stored file, so a kind of picture added upstream reads as a picture rather
+    than failing the whole read on an unknown word. A failed request does fail
+    the read, unlike the menu entries below: it is the same server answering
+    the line above, so it has already failed by then.
+    """
+    body = await cook.get_recipe_image(path)
+    if not body.get("image"):
+        return "none"
+    return "metadata" if body.get("source") == "metadata" else "file"
+
+
+async def _notes(paths: list[str]) -> dict[str, list[str] | None]:
+    """Each recipe's own notes, fetched together.
+
+    One read per recipe is what a note costs: the recipe tree carries metadata
+    and no body, and the shopping list carries paths and aggregated
+    ingredients. Doing it here rather than leaving it to the caller is the
+    whole point — the caller's only route to the same lines is a `recipe_read`
+    per recipe, which is a round trip each and the complete source back to
+    find one of them, where these run concurrently against the same server the
+    call above just used.
+
+    A read that fails leaves `None` for that path instead of an empty list:
+    a file gone between the two calls 404s, and a recipe whose page shows a
+    parse error in place of the recipe is what `recipe_write` already treats a
+    failed read-back as. "We could not look" must not reach the model as "it
+    says nothing".
+    """
+
+    async def one(path: str) -> list[str] | None:
+        try:
+            parsed = (await cook.request("GET", f"/api/recipes/{path}")).json()
+        except Exception as err:  # noqa: BLE001 - the call being answered succeeded
+            logging.getLogger(__name__).warning(
+                "Reading the notes of %s failed: %s", path, err
+            )
+            return None
+        return cook.recipe_notes(parsed.get("recipe") or {})
+
+    found = await asyncio.gather(*(one(path) for path in paths))
+    return dict(zip(paths, found))
+
+
+async def _menu_entries(path: str, source: str) -> list[MenuEntry]:
     """The recipes a menu file refers to, each with its page.
 
     A menu's source names them and nothing more — the file holds
@@ -563,6 +714,9 @@ async def _menu_entries(path: str, source: str) -> list[RecipeSummary]:
     towels{1}` is a loose ingredient and not a recipe, and the source is still
     there to say what the file really holds. Resolving costs a request, so a
     failure costs the links and not the read.
+
+    Each resolved entry also carries its own notes, because what a plan is
+    read for includes what has to happen before the day: see `_notes`.
     """
     if not path.endswith(".menu"):
         return []
@@ -583,7 +737,12 @@ async def _menu_entries(path: str, source: str) -> list[RecipeSummary]:
     except Exception as err:  # noqa: BLE001 - the read or write itself succeeded
         logging.getLogger(__name__).warning("Resolving menu entries failed: %s", err)
         return []
-    return [_summary(known[name]) for name in referenced if name in known]
+    entries = [known[name] for name in referenced if name in known]
+    notes = await _notes([entry["path"] for entry in entries])
+    return [
+        MenuEntry(**_summary(entry).model_dump(), notes=notes[entry["path"]])
+        for entry in entries
+    ]
 
 
 async def _put_recipe(path: str, source: str) -> None:
@@ -654,6 +813,19 @@ async def recipe_write(
     step still reads "finely diced". The braces go first even when empty —
     `@soy sauce{}(diced)` — because a name without them ends at the first
     space.
+
+    What a recipe says about itself beyond its ingredients and steps belongs
+    in `>` note lines, which is where the shopping and plan answers read it
+    back from: an ingredient that is optional, a dish this one is usually
+    eaten with, a variation worth knowing, preparation that has to happen the
+    day before. Put the notes at the top of the file, above the first step and
+    below the frontmatter: notes are reported in file order, so there they
+    lead, and they are what the user reads before starting. Leave a blank line
+    above a note — a `>` line directly under a step line is taken into that
+    step, where it shows up as a note nowhere and nothing reports it. The web
+    UI's cook mode does not show notes at all, so a note is for deciding —
+    before the shop, before the day — and anything needed at the stove belongs
+    in a step.
 
     A recipe taken from a web page records its origin as `source.url` in the
     frontmatter, holding the full URL: not the site name, not a shortened link,
@@ -763,6 +935,68 @@ async def recipe_delete(path: Path) -> dict[str, Any]:
     return {"path": path, "deleted": True}
 
 
+@mcp.tool(annotations=WRITE)
+async def recipe_image_upload(path: Path) -> PictureUpload:
+    """Get a URL for uploading a picture of a recipe — a photo of the dish, or
+    any picture file to keep with the recipe rather than link to.
+
+    Reach for it when the picture is not a URL to point at: one the user
+    photographed themselves, or one on a site that blocks hotlinking. The
+    ordinary way a recipe carries a picture is the `image` key in its
+    frontmatter, which `recipe_import` fills in from the page already.
+
+    Nothing is uploaded by calling this. Send the file to `upload_url` from
+    wherever the file actually is:
+
+        curl -sS -X PUT --data-binary @photo.jpg "<upload_url>"
+
+    Send the file. Never read it, encode it, or pass its bytes through a tool
+    call: a photo is megabytes, this protocol cannot carry one, and trying
+    spends the context window on an upload that arrives corrupted. If there is
+    no way to make that request from where the file is, say so and point at the
+    recipe's own page in the web UI, which has a file picker — also the way to
+    upload from a phone.
+
+    The reply to the PUT is the confirmation; read it rather than assuming.
+    JPEG, PNG and WebP, and an iPhone's HEIC is refused with a message saying
+    how to convert it.
+
+    This is the recipe's title picture, and the recipe has to exist already.
+    Pictures of individual steps are not reachable from here. A recipe cannot
+    both link and store one — an `image` line in the frontmatter wins — so the
+    reply's `warnings` says when the frontmatter hid the upload, and dropping
+    that line is `recipe_write`'s job. `recipe_read`'s `picture` says whether
+    the recipe has one already.
+
+    Confirm with the recipe's title linked to `web_url`.
+    """
+    if not PUBLIC_URL:
+        raise ValueError(
+            "This server has no public URL configured, so it cannot hand out "
+            "an upload link. The picture can still be added through the "
+            "collection's web UI, on the recipe's own page."
+        )
+    return PictureUpload(
+        path=path,
+        web_url=recipe_web_url(path),
+        upload_url=f"{PUBLIC_URL}/picture/{pictures.mint(path)}",
+        expires_in_seconds=pictures.TTL_SECONDS,
+    )
+
+
+# Not a tool: the whole point is that the picture never passes through the
+# model. Served by the same ASGI app as `/mcp` and carrying no MCP
+# authorization, which is what the signed token is for — see `pictures.py`.
+# POST as well as PUT, because being refused for the verb after sending the
+# file is a poor way to learn that.
+@mcp.custom_route("/picture/{token}", methods=["PUT", "POST"], include_in_schema=False)
+async def upload_picture(request: Request) -> JSONResponse:
+    status, body = await pictures.receive(
+        request.path_params["token"], await request.body()
+    )
+    return JSONResponse(body, status_code=status)
+
+
 @mcp.tool(annotations=WEB_READ)
 async def recipe_import(
     url: Annotated[
@@ -782,18 +1016,30 @@ async def recipe_import(
     where the page is silent — an oven temperature, a resting time — leave it
     out rather than supply a plausible value.
 
+    Read what came back before you write it, the way a cook would: recipe data
+    can parse perfectly and still be wrong — nought minutes of preparation, a
+    yield that contradicts the quantities, a step that breaks off mid-sentence,
+    an ingredient no step ever uses, a quantity off by a factor of ten. Say
+    what looks wrong and let the user decide; do not quietly correct it, and do
+    not quietly write it down as though it were fine.
+
     - `frontmatter` is a finished YAML block, `---` delimiters included,
       carrying `source.url` with the exact URL. Put it at the top of the
       `.cook` file, and never retype or shorten that URL. It carries no `tags`:
       a page's keywords are its SEO surface, so pick tags that match the ones
       already in the collection.
     - `text` is the recipe as the page stated it: ingredients, then the method.
-    - `extraction` is `structured` when the page published machine-readable
-      recipe data. It is `page_text` when it did not — then `text` is the
-      readable text of the whole page, navigation and comments included, and
-      finding the recipe in it is your job. If there is no recipe in it, say so
-      instead of inventing one.
-    - `notes` carries anything else worth knowing about this result.
+    - `extraction` is `structured` when the page's machine-readable recipe
+      data could be read in full. It is `page_text` when it could not — either
+      the page published none, or it published some that would not parse. Then
+      `text` is the readable text of the whole page, navigation and comments
+      included, and finding the recipe in it is your job. If there is no recipe
+      in it, say so instead of inventing one.
+    - `notes` carries anything else worth knowing about this result, including
+      the parser's own message for any recipe field the page published and
+      broke. A field that failed to parse is not a field the page left out: the
+      page states it somewhere, so read it out of `text` instead of leaving it
+      out of the recipe.
 
     An error means the page could not be read at all. Report that; do not
     answer it with a recipe of your own.
@@ -1027,6 +1273,15 @@ async def shopping_list_read() -> dict[str, Any]:
     Ingredients have no page, so their names stay plain; never assemble a URL
     for one.
 
+    Each entry's `notes` are its recipe's own `>` lines, read for you so that
+    walking the user through what to buy costs no further calls. Give each at
+    most one short sentence of what they change about the shopping: an
+    ingredient it marks optional, a side or second recipe it says this one is
+    usually eaten with, a variation that swaps something out. Only what a note
+    says, nothing for a recipe whose `notes` are empty, and never a
+    substitution of your own. `null` there means the notes could not be read,
+    not that the recipe has none.
+
     Copying these recipes into `Meal Plan.menu` is only ever done when the user
     explicitly asks for it. Then read the plan, append the missing recipe paths
     in shopping-list order without disturbing the queue, and preserve a
@@ -1036,8 +1291,10 @@ async def shopping_list_read() -> dict[str, Any]:
     it is still upcoming or was already cooked.
     """
     result = await cook.shopping_list()
+    notes = await _notes([recipe["path"] for recipe in result["recipes"]])
     for recipe in result["recipes"]:
         recipe["web_url"] = recipe_web_url(recipe["path"])
+        recipe["notes"] = notes[recipe["path"]]
     result["extra_items"] = await _extra_items(result["recipes"])
     # The list's own page, alongside the pages of the recipes on it. Present
     # even for an empty list: "nothing on the shopping list yet" is as much an
@@ -1187,6 +1444,12 @@ async def shopping_list_edit(
     from there, and the result's own `web_url` is the list's page — a
     confirmation saying what is now on the shopping list makes those words a
     Markdown link to it.
+
+    An `add` is also the moment for what the recipe's `notes` in the result
+    change about the shopping — an ingredient it marks optional, a dish it
+    says this one is usually eaten with, a variation that swaps something
+    out — in one short sentence, in the note's own words and only when it has
+    any.
 
     `add_item` is for what no recipe calls for — kitchen roll, a carton of
     milk, more of something that ran out. Those are collected in

@@ -37,10 +37,11 @@ Three things about the bridge decide the shape of what is below
   faster, the subprocess is the only thing worth attacking.
 
 The language server parses with every extension enabled, while `cook server`
-parses the collection with its own narrower set, so a diagnostic can in
-principle name something the collection itself accepts — upstream's to
-reconcile (cookcli#643 is one instance), and reporting the parser's own words
-is still better than dropping them.
+parses the collection with its own narrower set, so a diagnostic can name
+something the collection itself accepts — upstream's to reconcile, and
+reporting the parser's own words is still better than dropping them. With one
+exception: `Unknown timer unit` is published for *every* timer in every file,
+and is filtered out below. See `FALSE_TIMER_UNIT_ERROR`.
 """
 
 from __future__ import annotations
@@ -64,6 +65,35 @@ LANGUAGE_ID = "cooklang"
 # subprocess that fails to start or never answers: a write must not hang on its
 # own check.
 TIMEOUT = 15.0
+
+# Temporary, for cookcli#643: every timer that carries a unit is published as an
+# error, so this one diagnostic is dropped.
+#
+# The timer-unit check in cooklang-rs (`analysis/event_consumer.rs`) runs only
+# under the ADVANCED_UNITS extension, and asks the converter what the unit is.
+# The language server parses with `Extensions::all()`, so the check runs; it and
+# cookcli both build `cooklang` without `bundled_units`, so the converter is
+# `Converter::empty()` and knows no unit at all. `~{25%minutes}` therefore comes
+# back as `Unknown timer unit: minutes`, while `cook server` — which builds
+# every parser with `Extensions::empty()`, so the check never runs — stores and
+# serves the same recipe without complaint. The diagnostic says nothing about
+# the file, only that two parses disagree about which extensions are on, and
+# handing it to a model makes it rewrite a timer nothing objects to.
+#
+# This also hides a unit that is genuinely not time (`~{3%grams}`): the same
+# empty converter is what makes it indistinguishable from `minutes`, and the
+# collection accepts it just as quietly. `Timer value is text`, the other
+# ADVANCED_UNITS error, needs no converter and still gets through.
+#
+# Upstream agrees on the shape of the fix — skip the check when the converter
+# holds no units (`converter.unit_count() == 0`) — and is waiting on a
+# maintainer to pick whether it lands in cooklang-rs or in the language server.
+# Turning `bundled_units` back on was tried and rejected in
+# cooklang-language-server#13: those units are English, and would break recipes
+# written in another language (cooklang-language-server#12 is `~{24%heures}`).
+# Drop this constant and the filter below once a cookcli release carries the
+# guard.
+FALSE_TIMER_UNIT_ERROR = "Unknown timer unit: "
 
 
 class DiagnosticsUnavailable(RuntimeError):
@@ -91,7 +121,9 @@ async def diagnose(path: str, source: str) -> list[Diagnostic]:
 
     `path` only names the document to the language server: the text goes with
     it, so nothing has to be on disk and the file need not exist yet. The order
-    is the one the language server published them in — errors, then warnings.
+    is the one the language server published them in — errors, then warnings —
+    less `FALSE_TIMER_UNIT_ERROR`, which is published for every timer and means
+    nothing.
 
     Raises `DiagnosticsUnavailable` if the language server cannot be reached,
     which a caller has to tell apart from a clean file.
@@ -147,6 +179,7 @@ async def diagnose(path: str, source: str) -> list[Diagnostic]:
             message=item["message"],
         )
         for item in published["params"]["diagnostics"]
+        if not item["message"].startswith(FALSE_TIMER_UNIT_ERROR)
     ]
 
 

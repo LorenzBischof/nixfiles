@@ -8,11 +8,16 @@ a remembered recipe to fill.
 
 Extraction is `recipe-scrapers`, which reads the schema.org Recipe data almost
 every recipe site publishes. Pages that publish none get their readable text
-instead — plenty of blogs put the recipe in prose and nowhere else.
+instead — plenty of blogs put the recipe in prose and nowhere else. So do pages
+whose data is there but broken: the library reports a field it could not read by
+leaving it out, so each half of the recipe is asked for again to learn what went
+wrong, and either half missing hands the whole page over as text with the
+parser's own message attached.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 from urllib.parse import urljoin
 
@@ -89,6 +94,7 @@ async def fetch_recipe(url: str) -> dict[str, Any]:
             raise RuntimeError(f"fetching {url}: {err}") from err
         html = response.text
 
+    scraper = None
     try:
         scraper = scrape_html(html, org_url=url, supported_only=False)
         # `to_json` asks for every field and drops the ones the page does not
@@ -96,11 +102,31 @@ async def fetch_recipe(url: str) -> dict[str, Any]:
         data = scraper.to_json()
     except Exception:  # noqa: BLE001 - a page with no recipe data is not an error
         data = {}
-    if not data.get("ingredients") and not data.get("instructions"):
+
+    # Dropping a field also discards the reason it was dropped: `to_json` is a
+    # bare `except: pass`, so a field the page never had and a field that blew
+    # up on the way out look identical from here. For the two fields a recipe
+    # consists of that is not good enough, so each missing one is asked for
+    # again on its own, where the exception is still there to be read.
+    failures: list[str] = []
+    for field in ("ingredients", "instructions"):
+        if scraper is None or data.get(field):
+            continue
+        try:
+            getattr(scraper, field)()
+        except Exception as err:  # noqa: BLE001 - the message is the point
+            failures.append(f"{field}: {type(err).__name__}: {err}")
+
+    # Either half missing sends the whole page to the caller as text. Half a
+    # recipe is the one outcome worth avoiding: a page that published its
+    # ingredients and broke on its steps used to import as a recipe with no
+    # method, which parses, saves and looks finished. The prose states both
+    # halves, so there is somewhere to go.
+    if not data.get("ingredients") or not data.get("instructions"):
         # Not `{}`: a page whose ingredients and steps are unreadable often
         # still names its title, author and picture, and none of that has to be
         # guessed back out of the page text.
-        return _page_text(url, html, data)
+        return _page_text(url, html, data, failures)
 
     # A page can publish a Recipe with no `image` in it and still show the dish
     # off in its social-card tags.
@@ -145,7 +171,9 @@ def _recipe_text(data: dict[str, Any]) -> str:
     return "\n\n".join(blocks)
 
 
-def _page_text(url: str, html: str, data: dict[str, Any]) -> dict[str, Any]:
+def _page_text(
+    url: str, html: str, data: dict[str, Any], failures: Sequence[str] = ()
+) -> dict[str, Any]:
     """Fall back to the readable text of the page.
 
     Returning something the caller can read beats returning an error. The raw
@@ -174,11 +202,22 @@ def _page_text(url: str, html: str, data: dict[str, Any]) -> dict[str, Any]:
         data["image"] = _meta_image(soup, url)
 
     notes = [
-        "This page publishes no readable ingredients or steps, so `text` is "
-        "the readable text of the whole page, navigation and comments "
-        "included. Pick the ingredients and steps out of it and use nothing "
-        "else."
+        "The recipe could not be read from this page's structured data, so "
+        "`text` is the readable text of the whole page, navigation and "
+        "comments included. Pick the ingredients and steps out of it and use "
+        "nothing else."
     ]
+    if failures:
+        # The difference between "the page does not say" and "the page says it
+        # and we could not read it" decides what the caller writes: the first
+        # is a gap to leave alone, the second a gap to go and fill. Saying
+        # which, in the parser's own words, is the whole point of this note.
+        notes.append(
+            "The page does publish recipe data, but these fields of it would "
+            "not parse: " + "; ".join(failures) + ". What they should have "
+            "held is stated in the page's prose as well, so read it out of "
+            "`text` rather than treating it as something the page never said."
+        )
     title = (data.get("title") or "").strip() or None
     if title is None:
         title = soup.title.get_text(strip=True) if soup.title else None

@@ -97,6 +97,10 @@ in
       COOKLANG_WEB_URL = "https://${uiDomain}";
       COOKLANG_MCP_TRANSPORT = "http";
       COOKLANG_MCP_PORT = toString mcpPort;
+      # For the picture-upload link, which it cannot derive: it binds loopback
+      # and never sees the name it is reached by. The public one, because the
+      # thing uploading is an agent sandbox and not on the tailnet.
+      COOKLANG_MCP_PUBLIC_URL = "https://mcp.${domain}/cooklang";
       # No token: it binds loopback only, and the bearer check lives in nginx
       # so it can apply to the public name alone - see mcp.nix.
     };
@@ -133,10 +137,30 @@ in
   # server's path and port are stated. An exact match, so widening the vhost
   # later cannot publish anything else; because `proxyPass` carries a URI, nginx
   # replaces the matched path with the `/mcp` this server actually serves.
-  services.nginx.virtualHosts."mcp.${domain}".locations."= /cooklang" = {
-    proxyPass = "http://127.0.0.1:${toString mcpPort}/mcp";
-    # Streamable HTTP responses are SSE and must not be buffered.
-    extraConfig = "proxy_buffering off;";
+  #
+  # Both locations in one definition: the attribute path holds an interpolated
+  # name, and nix refuses a dynamic attribute defined twice in the same set.
+  services.nginx.virtualHosts."mcp.${domain}".locations = {
+    "= /cooklang" = {
+      proxyPass = "http://127.0.0.1:${toString mcpPort}/mcp";
+      # Streamable HTTP responses are SSE and must not be buffered.
+      extraConfig = "proxy_buffering off;";
+    };
+
+    # Where a recipe's picture is uploaded: MCP cannot carry a file, so the
+    # server hands out a signed link and whatever holds the photo PUTs it here
+    # - see `pictures.py`. `^~` keeps the base64 token out of any regex match.
+    "^~ /cooklang/picture/" = {
+      proxyPass = "http://127.0.0.1:${toString mcpPort}/picture/";
+      extraConfig = ''
+        # The uploader has no bearer token - the signature is what stands in
+        # for one. The vhost's allow/deny still applies, so an upload must come
+        # from the agent egress range too, and it spends the same per-address
+        # budget as a failed token.
+        auth_request off;
+        client_max_body_size 10m;
+      '';
+    };
   };
 
   # Tailnet only: no extra listen address.

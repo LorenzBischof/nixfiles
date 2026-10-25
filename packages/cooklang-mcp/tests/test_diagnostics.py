@@ -124,6 +124,27 @@ def test_diagnostics_keep_the_order_they_were_published_in(monkeypatch):
     assert [item.message for item in found] == ["second", "first"]
 
 
+def test_the_false_timer_unit_error_is_dropped(monkeypatch):
+    """cookcli#643: published for every timer, true of none of them.
+
+    Pinned by the message the parser formats, so it keeps holding once the
+    filter is a prefix match against real text (`Unknown timer unit: minutes`,
+    cooklang-rs `analysis/event_consumer.rs`). The timer errors that do not need
+    the converter stay.
+    """
+    found = diagnose_against(
+        monkeypatch,
+        language_server(
+            [
+                at(0, "Unknown timer unit: minutes"),
+                at(1, "Unknown timer unit: heures"),
+                at(2, "Timer value is text: some"),
+            ]
+        ),
+    )
+    assert [item.message for item in found] == ["Timer value is text: some"]
+
+
 def test_log_messages_and_server_requests_do_not_derail_the_handshake(monkeypatch):
     """Neither a notification nor a request of the server's own is a response."""
     chatter = (

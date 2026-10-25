@@ -13,7 +13,9 @@ shape is unusable on the other end:
 * a quantity is a four-level tagged union that reads as `200 g` and serialises
   as forty characters of JSON;
 * the persistent shopping list stores *recipes*, so the ingredients behind it
-  take a second call — see `shopping_list`.
+  take a second call — see `shopping_list`;
+* a recipe's notes are `text` blocks scattered through its sections, and what a
+  caller wants is the lines — see `recipe_notes`.
 """
 
 from __future__ import annotations
@@ -60,6 +62,59 @@ async def request(method: str, path: str, **kwargs: Any) -> httpx.Response:
     except ValueError:
         pass
     raise CookCliError(f"{method} {path} failed ({response.status_code}): {detail}")
+
+
+async def get_recipe_image(path: str) -> dict[str, Any]:
+    """Whether a recipe has a title picture: `{image, source, ...}`.
+
+    The same endpoint as `put_recipe_image`, read instead of written. `source`
+    is `"metadata"` when the frontmatter links the picture, `"file"` when one
+    is stored beside the recipe, null for neither — the only place the API
+    says which, since `image` is served from `/api/static/` either way.
+
+    Answers for `.menu` files too; 404s for a path the collection does not
+    hold.
+    """
+    return (await request("GET", f"/api/recipe_image/{path}")).json()
+
+
+async def put_recipe_image(path: str, picture: bytes) -> tuple[int, dict[str, Any]]:
+    """Store a recipe's title picture, reporting the server's own answer.
+
+    The one endpoint here whose refusal is a return value and not a
+    `CookCliError`: the others are called by a tool, where a failure is the
+    tool's to raise, and this one answers an upload, where the refusals are the
+    picture's own — a HEIC photo, a file that is not a picture — and their
+    status and message have to reach the sender unchanged.
+
+    No content type: `cook server` decides what a picture is by decoding it, so
+    a claim made here would be ignored at best.
+    """
+    response = await _http.put(f"/api/recipe_image/{path}", content=picture)
+    return response.status_code, response.json()
+
+
+def recipe_notes(recipe: dict[str, Any]) -> list[str]:
+    """A parsed recipe's own notes, in file order.
+
+    A note is a `text` block, which is what the parser makes of a line opening
+    with `>` and of nothing else. Reading them out of the parse rather than
+    scanning the source for `>` is what keeps this honest: a `>` line directly
+    under a step line is taken into that step, so the source can hold a marker
+    the recipe has no note for, and reporting it would show the user something
+    the web UI does not. Consecutive `>` lines are one note, joined by the
+    parser already.
+
+    Answers for a `.menu` file too, which parses as a recipe and normally has
+    no notes at all.
+    """
+    return [
+        note
+        for section in recipe.get("sections") or []
+        for item in section.get("content") or []
+        if item.get("type") == "text"
+        and (note := str(item.get("value") or "").strip())
+    ]
 
 
 async def list_entries() -> list[dict[str, Any]]:

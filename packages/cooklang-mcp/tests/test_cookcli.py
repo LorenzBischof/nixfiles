@@ -8,6 +8,7 @@ from cooklang_mcp.cookcli import (
     _walk,
     aggregate_requests,
     format_quantities,
+    recipe_notes,
 )
 
 
@@ -254,3 +255,119 @@ def test_a_websocket_endpoint_keeps_the_servers_address(monkeypatch):
 def test_a_tls_server_is_reached_over_tls(monkeypatch):
     monkeypatch.setattr(cookcli._http, "base_url", "https://cook.example.test")
     assert cookcli.ws_url("/api/ws/lsp") == "wss://cook.example.test/api/ws/lsp"
+
+
+# -- notes ----------------------------------------------------------------
+#
+# The shapes below are what cookcli 0.38.1 actually returns for the sources in
+# each docstring, checked against a running `cook server`.
+
+
+def test_notes_are_the_text_blocks_a_recipe_holds():
+    """`> …` parses to a `text` block, a step to a `step`, in file order.
+
+        > Serve with the Caprese; the saffron is optional.
+
+        Fry the @onion{1} in @butter{30%g}.
+
+        > Make the stock the day before.
+    """
+    recipe = {
+        "sections": [
+            {
+                "name": None,
+                "content": [
+                    {
+                        "type": "text",
+                        "value": "Serve with the Caprese; the saffron is optional.",
+                    },
+                    {"type": "step", "value": {"items": [], "number": 1}},
+                    {"type": "text", "value": "Make the stock the day before."},
+                ],
+            }
+        ]
+    }
+
+    assert recipe_notes(recipe) == [
+        "Serve with the Caprese; the saffron is optional.",
+        "Make the stock the day before.",
+    ]
+
+
+def test_consecutive_note_lines_arrive_as_one_note():
+    """The parser joins them, so neither does this nor splits them again.
+
+        > one line note
+        > second consecutive note line
+    """
+    recipe = {
+        "sections": [
+            {
+                "content": [
+                    {
+                        "type": "text",
+                        "value": "one line note second consecutive note line",
+                    }
+                ]
+            }
+        ]
+    }
+
+    assert recipe_notes(recipe) == ["one line note second consecutive note line"]
+
+
+def test_a_marker_swallowed_into_a_step_is_not_a_note():
+    """A `>` line directly under a step line belongs to that step.
+
+        Step with @salt{}.
+        > note right after a step
+
+    The parser returns one `step` and no `text`, and the recipe's page shows
+    no note — which is the reason notes are read from the parse and not by
+    scanning the source for `>`: a scan would report this one and the user
+    would be told something their recipe does not say.
+    """
+    recipe = {
+        "sections": [
+            {
+                "content": [
+                    {
+                        "type": "step",
+                        "value": {
+                            "items": [
+                                {"type": "text", "value": "Step with "},
+                                {"index": 0, "type": "ingredient"},
+                                {"type": "text", "value": ". > note right after a step"},
+                            ],
+                            "number": 1,
+                        },
+                    }
+                ]
+            }
+        ]
+    }
+
+    assert recipe_notes(recipe) == []
+
+
+def test_notes_from_every_section_in_order():
+    recipe = {
+        "sections": [
+            {"name": None, "content": [{"type": "text", "value": "first"}]},
+            {"name": "Section", "content": [{"type": "text", "value": "second"}]},
+        ]
+    }
+
+    assert recipe_notes(recipe) == ["first", "second"]
+
+
+def test_a_recipe_with_no_notes_and_a_menu_file_hold_none():
+    """A `.menu` parses as a recipe whose blocks are all references."""
+    assert recipe_notes({"sections": [{"content": []}]}) == []
+    assert recipe_notes({"sections": []}) == []
+    # Absent and null both occur: `/api/recipes/*path` omits what it has none
+    # of, and a caller passing `{}` through must not raise either.
+    assert recipe_notes({}) == []
+    assert recipe_notes({"sections": None}) == []
+    # Whitespace is not a note.
+    assert recipe_notes({"sections": [{"content": [{"type": "text", "value": " "}]}]}) == []

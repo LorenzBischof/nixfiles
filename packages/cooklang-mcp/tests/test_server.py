@@ -2,10 +2,12 @@
 
 import asyncio
 import json
+import time
 
 import httpx
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
+from starlette.testclient import TestClient
 
 from cooklang_mcp import menus, server
 from cooklang_mcp.server import INSTRUCTIONS, mcp
@@ -28,6 +30,7 @@ def test_the_tool_surface_is_grouped_and_annotated():
         "recipe_read",
         "recipe_write",
         "recipe_delete",
+        "recipe_image_upload",
         "recipe_import",
         "mark_cooked",
         "shopping_list_read",
@@ -66,9 +69,13 @@ def test_the_tool_surface_is_grouped_and_annotated():
     # again, which is the distinction a client should gate on.
     assert listed["recipe_delete"].annotations.destructiveHint is True
     assert listed["recipe_write"].annotations.destructiveHint is False
-    # Only the importer reaches outside the collection.
+    # Only the importer reaches outside the collection. Not the picture tool:
+    # it hands out a link, and the upload that follows is not this server's
+    # request to make.
     assert listed["recipe_import"].annotations.openWorldHint is True
-    assert listed["recipe_read"].annotations.openWorldHint is False
+    for name, tool in listed.items():
+        if name != "recipe_import":
+            assert tool.annotations.openWorldHint is False, name
 
 
 def test_recipe_search_advertises_its_result_fields():
@@ -98,6 +105,7 @@ def test_every_tool_that_returns_a_url_asks_for_the_link_itself():
         ("recipe_search", "RecipeSummary"),
         ("recipe_read", "RecipeDocument"),
         ("recipe_write", "RecipeWritten"),
+        ("recipe_image_upload", "PictureUpload"),
         ("mark_cooked", "MealCooked"),
     ):
         # A list result is wrapped and its model moved into `$defs`; a single
@@ -184,6 +192,61 @@ def test_recipe_tools_return_clickable_web_urls(monkeypatch):
     }
 
 
+def _collection_with_picture(monkeypatch, answer, raw="---\ntitle: Kürbiswähe\n---\n"):
+    """A collection that says what picture its one recipe has.
+
+    `answer` is the picture endpoint's own JSON, or an exception to raise.
+    """
+
+    async def request(_method, path, **_kwargs):
+        if path.startswith("/api/recipes/raw/"):
+            return httpx.Response(200, text=raw)
+        if path.startswith("/api/recipe_image/"):
+            if isinstance(answer, Exception):
+                raise answer
+            return httpx.Response(200, json=answer)
+        raise AssertionError(f"unexpected request: {path}")
+
+    monkeypatch.setattr(server.cook, "request", request)
+
+
+def test_a_picture_file_is_reported_because_the_source_cannot_be(monkeypatch):
+    """The point of the field: a stored picture is a file beside the recipe,
+    and the source a read returns never mentions it."""
+    _collection_with_picture(
+        monkeypatch, {"image": "/api/static/K%C3%BCrbisw%C3%A4he.png", "source": "file"}
+    )
+
+    assert asyncio.run(server.recipe_read("Kürbiswähe.cook")).picture == "file"
+
+
+def test_a_picture_the_frontmatter_links_is_reported_as_metadata(monkeypatch):
+    """The API's own word for it, and the word `pictures.py` already uses."""
+    _collection_with_picture(
+        monkeypatch, {"image": "https://example.test/dish.jpg", "source": "metadata"}
+    )
+
+    assert asyncio.run(server.recipe_read("Kürbiswähe.cook")).picture == "metadata"
+
+
+def test_a_recipe_with_no_picture_says_none(monkeypatch):
+    """`none` is what makes offering to add one right, so only a collection
+    reporting nothing may produce it."""
+    _collection_with_picture(monkeypatch, {"image": None, "source": None})
+
+    assert asyncio.run(server.recipe_read("Kürbiswähe.cook")).picture == "none"
+
+
+def test_a_kind_of_picture_this_server_does_not_know_is_still_a_picture(monkeypatch):
+    """Whether there is one comes off `image`, so a kind of picture added
+    upstream reads as a stored file rather than failing the read."""
+    _collection_with_picture(
+        monkeypatch, {"image": "/api/static/dish.png", "source": "sync"}
+    )
+
+    assert asyncio.run(server.recipe_read("Kürbiswähe.cook")).picture == "file"
+
+
 PLAN = """\
 ---
 title: Meal Plan
@@ -214,7 +277,22 @@ def _plan_collection(monkeypatch):
             return httpx.Response(200, json={"configured": False, "aisles": []})
         if path.startswith("/api/recipes/raw/"):
             return httpx.Response(200, text=PLAN)
-        return httpx.Response(200, json={"recipe": {"ingredients": []}})
+        return httpx.Response(
+            200,
+            json={
+                "recipe": {
+                    "ingredients": [],
+                    "sections": [
+                        {
+                            "name": None,
+                            "content": [
+                                {"type": "text", "value": "Soak the beans overnight."}
+                            ],
+                        }
+                    ],
+                }
+            },
+        )
 
     monkeypatch.setattr(server.cook, "list_entries", list_entries)
     monkeypatch.setattr(server.cook, "request", request)
@@ -243,6 +321,9 @@ def test_menu_results_carry_each_recipe_s_own_page(monkeypatch, tool):
             "web_url": "https://cook.example.test/recipe/K%C3%BCrbisw%C3%A4he.cook",
             "tags": ["dinner"],
             "is_menu": False,
+            # Read for the caller, so an answer about the plan needs no
+            # further call to say what has to be started the night before.
+            "notes": ["Soak the beans overnight."],
         }
     ]
 
@@ -426,6 +507,112 @@ def test_a_parser_that_cannot_be_asked_does_not_pass_as_a_clean_file(monkeypatch
     assert "could not be asked" in warning
 
 
+# -- a recipe's picture ---------------------------------------------------
+
+
+def test_an_upload_link_is_minted_for_the_recipe_that_was_asked_for(monkeypatch):
+    monkeypatch.setattr(server, "WEB_URL", "https://cook.example.test")
+    monkeypatch.setattr(server, "PUBLIC_URL", "https://mcp.example.test/cooklang")
+
+    upload = asyncio.run(server.recipe_image_upload("Risotto.cook"))
+
+    assert upload.web_url == "https://cook.example.test/recipe/Risotto.cook"
+    assert upload.upload_url.startswith("https://mcp.example.test/cooklang/picture/")
+    token = upload.upload_url.rsplit("/", 1)[1]
+    assert server.pictures.verify(token) == "Risotto.cook"
+
+
+def test_the_link_says_how_long_it_is_good_for(monkeypatch):
+    """Read off the signer rather than stated again here: a second copy of the
+    number would go on being reported after the real one changed."""
+    monkeypatch.setattr(server, "PUBLIC_URL", "https://mcp.example.test")
+
+    upload = asyncio.run(server.recipe_image_upload("Risotto.cook"))
+
+    assert upload.expires_in_seconds == server.pictures.TTL_SECONDS
+    token = upload.upload_url.rsplit("/", 1)[1]
+    with pytest.raises(server.pictures.BadToken, match="expired"):
+        server.pictures.verify(token, now=time.time() + upload.expires_in_seconds + 2)
+
+
+def test_a_server_with_no_public_name_says_so_instead_of_linking_to_itself(
+    monkeypatch,
+):
+    """It binds loopback, so a minted link would name a host nothing can reach."""
+    monkeypatch.setattr(server, "PUBLIC_URL", "")
+
+    with pytest.raises(ValueError, match="no public URL"):
+        asyncio.run(server.recipe_image_upload("Risotto.cook"))
+
+
+def test_the_picture_must_not_travel_as_a_tool_argument():
+    """Which is the one thing a model holding a photo will try. The rule is in
+    the description because that is what a client cannot drop."""
+    # Rewrapped, so a sentence worth asserting on is split at a column that has
+    # nothing to do with what it says.
+    description = " ".join(tools()["recipe_image_upload"].description.split())
+
+    assert "curl -sS -X PUT --data-binary" in description
+    assert "Never read it, encode it, or pass its bytes through a tool call" in (
+        description
+    )
+    assert "Pictures of individual steps are not reachable" in description
+    # And the ordinary way a recipe carries one, so this reads as the exception.
+    assert "`image` key in its frontmatter" in description
+
+
+def upload_client():
+    """A client for the ASGI app, with no lifespan run.
+
+    Deliberately not `with TestClient(...)`: the lifespan starts the MCP
+    session manager, which refuses to start twice per server instance. The
+    upload route needs none of it, which is rather the point of it being a
+    plain HTTP route.
+    """
+    return TestClient(server.mcp.streamable_http_app())
+
+
+def test_the_upload_route_stores_what_was_sent_to_it(monkeypatch):
+    """Through the ASGI app, so the signed path and the status both count."""
+    sent = []
+
+    async def put_recipe_image(path, picture):
+        sent.append((path, picture))
+        return 200, {"source": "file"}
+
+    monkeypatch.setattr(server.pictures.cook, "put_recipe_image", put_recipe_image)
+
+    token = server.pictures.mint("Risotto.cook")
+    response = upload_client().put(f"/picture/{token}", content=b"\xff\xd8jpeg")
+
+    assert sent == [("Risotto.cook", b"\xff\xd8jpeg")]
+    assert response.status_code == 200
+    assert response.json() == {
+        "path": "Risotto.cook",
+        "stored": True,
+        "source": "file",
+        "warnings": [],
+    }
+
+
+def test_the_upload_route_refuses_an_unsigned_path_without_asking_anything(
+    monkeypatch,
+):
+    """The signature is its only credential: nginx cannot check one, and the
+    bearer token the protocol endpoint wants is not available to whatever holds
+    the photo."""
+
+    async def never(_path, _picture):  # pragma: no cover - must not be reached
+        raise AssertionError("an unsigned upload reached the collection")
+
+    monkeypatch.setattr(server.pictures.cook, "put_recipe_image", never)
+
+    response = upload_client().put("/picture/forged.0.token", content=b"\xff\xd8x")
+
+    assert response.status_code == 403
+    assert "error" in response.json()
+
+
 # -- shopping list --------------------------------------------------------
 
 
@@ -503,6 +690,112 @@ def test_the_shopping_list_carries_its_own_page(monkeypatch):
     for name in ("shopping_list_read", "shopping_list_edit"):
         assert "shopping list" in listed[name].description
         assert "Markdown link" in listed[name].description, name
+
+
+def _parsed(*blocks):
+    """A parsed-recipe response whose one section holds `blocks`."""
+    return httpx.Response(
+        200, json={"recipe": {"ingredients": [], "sections": [{"content": blocks}]}}
+    )
+
+
+def test_a_recipes_notes_come_back_with_the_shopping_list(monkeypatch):
+    """The list says what to buy; the notes say what to buy differently.
+
+    Both in one call: the aggregated list carries paths and ingredients and no
+    recipe text at all, so the alternative is a `recipe_read` per recipe and
+    the whole source back to find one `>` line.
+    """
+    monkeypatch.setattr(server, "WEB_URL", "https://cook.example.test")
+
+    async def shopping_list():
+        return {
+            "recipes": [
+                {"path": "Risotto.cook", "scale": 2.0},
+                {"path": "Caprese.cook", "scale": 1.0},
+            ],
+            "categories": [],
+            "pantry_items": [],
+        }
+
+    read = []
+
+    async def request(_method, path, **_kwargs):
+        read.append(path)
+        if path == "/api/recipes/Risotto.cook":
+            return _parsed(
+                {"type": "text", "value": "The saffron is optional."},
+                {"type": "step", "value": {"items": [], "number": 1}},
+                {"type": "text", "value": "Usually eaten with the Caprese."},
+            )
+        return _parsed({"type": "step", "value": {"items": [], "number": 1}})
+
+    monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
+    monkeypatch.setattr(server.cook, "request", request)
+
+    recipes = asyncio.run(server.shopping_list_read())["recipes"]
+
+    assert [recipe["notes"] for recipe in recipes] == [
+        ["The saffron is optional.", "Usually eaten with the Caprese."],
+        # Read and found to have none, which is not the same as unread.
+        [],
+    ]
+    # One read each, and nothing beyond the recipes actually on the list.
+    assert read == ["/api/recipes/Risotto.cook", "/api/recipes/Caprese.cook"]
+
+
+def test_notes_that_cannot_be_read_are_not_a_recipe_without_notes(monkeypatch):
+    """A recipe with a syntax error in it answers that read with a 500.
+
+    `null` says the notes were not readable; `[]` would tell the model the
+    recipe says nothing about itself, and it would pass that on.
+    """
+
+    async def shopping_list():
+        return {
+            "recipes": [{"path": "Broken.cook", "scale": 1.0}],
+            "categories": [],
+            "pantry_items": [],
+        }
+
+    async def request(_method, _path, **_kwargs):
+        raise httpx.HTTPError("boom")
+
+    monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
+    monkeypatch.setattr(server.cook, "request", request)
+
+    result = asyncio.run(server.shopping_list_read())
+
+    # The list itself survives: the notes are an extra, not the answer.
+    assert result["recipes"][0]["notes"] is None
+    assert "categories" in result
+
+
+def test_search_hits_carry_no_notes_field_at_all(monkeypatch):
+    """An empty query lists the whole collection.
+
+    Filling notes there would be a request per file to answer a question
+    about none of them, and an empty list would then mean both "no notes" and
+    "not looked at". The field is absent from a summary instead.
+    """
+
+    async def search_entries(_query):
+        return [
+            {
+                "path": "Risotto.cook",
+                "title": "Risotto",
+                "tags": [],
+                "is_menu": False,
+            }
+        ]
+
+    async def unexpected(*_args, **_kwargs):
+        raise AssertionError("a search read the recipes behind its hits")
+
+    monkeypatch.setattr(server.cook, "search_entries", search_entries)
+    monkeypatch.setattr(server.cook, "request", unexpected)
+
+    assert "notes" not in asyncio.run(server.recipe_search(""))[0].model_dump()
 
 
 @pytest.mark.parametrize(
@@ -811,6 +1104,54 @@ def test_the_meal_plan_file_format_stays_with_the_tool_that_writes_it():
     assert "mark_cooked" in write_description
 
 
+def test_a_recipes_own_notes_are_carried_where_they_change_a_decision():
+    """A note in a recipe is read at the moment it matters, not in general.
+
+    The two moments are shopping and planning, and they want different
+    halves of the same note: what to buy is changed by an optional
+    ingredient, a dish usually eaten alongside or a variation, while what is
+    queued is changed by preparation that has to happen the day before. Both
+    are capped at one short sentence and both are the recipe's words — an
+    invented substitution or an inferred resting time is worse than silence.
+    """
+    # A description keeps the docstring's line breaks, so a phrase that spans
+    # one is only findable in the text as one line.
+    listed = {
+        name: " ".join(tool.description.split()) for name, tool in tools().items()
+    }
+
+    for name in ("shopping_list_read", "shopping_list_edit"):
+        description = listed[name]
+        assert "marks optional" in description, name
+        assert "usually eaten with" in description, name
+        assert "variation" in description, name
+    assert "substitution of your own" in listed["shopping_list_read"]
+
+    plan = listed["recipe_read"]
+    assert "before the day it is cooked" in plan
+    assert "overnight" in plan
+    assert "never preparation you" in plan
+
+    # One sentence per recipe, not a second recipe pasted into the answer.
+    for name in ("shopping_list_read", "shopping_list_edit", "recipe_read"):
+        assert "one short sentence" in listed[name], name
+
+    # The write side says where a note goes, so the read side has one to find,
+    # and warns about the one way of writing one that silently produces none.
+    write = listed["recipe_write"]
+    assert "`>` note lines" in write
+    assert "notes at the top of the file" in write
+    assert "blank line above a note" in write
+    assert "taken into that step" in write
+    # A note is read before the cooking or not at all, which is what decides
+    # whether something belongs in one or in a step.
+    assert "cook mode does not show notes" in write
+
+    # Read at the moment of use, so it stays out of the standing instructions.
+    for phrase in ("marks optional", "one short sentence", "overnight"):
+        assert phrase not in INSTRUCTIONS, phrase
+
+
 def test_every_tool_description_is_json_serialisable_and_non_empty():
     for name, tool in tools().items():
         assert tool.description and tool.description.strip(), name
@@ -1002,10 +1343,14 @@ def test_the_list_says_which_names_were_added_by_hand(monkeypatch):
         }
 
     async def request(method, path, **_options):
-        assert (method, path) == ("GET", "/api/recipes/raw/Extra Items.menu")
-        return httpx.Response(
-            200, text="---\ntitle: Extra Items\n---\n@butter{250%g}\n\n@Milch{1%l}\n"
-        )
+        if path.startswith("/api/recipes/raw/"):
+            assert (method, path) == ("GET", "/api/recipes/raw/Extra Items.menu")
+            return httpx.Response(
+                200,
+                text="---\ntitle: Extra Items\n---\n@butter{250%g}\n\n@Milch{1%l}\n",
+            )
+        # Every recipe on the list is also read for its notes.
+        return _parsed()
 
     monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
     monkeypatch.setattr(server.cook, "request", request)
@@ -1024,8 +1369,10 @@ def test_a_list_without_loose_items_does_not_go_looking_for_them(monkeypatch):
             "pantry_items": [],
         }
 
-    async def request(*_args, **_kwargs):
-        pytest.fail("the loose-items file was read when nothing pointed at it")
+    async def request(_method, path, **_kwargs):
+        if path.startswith("/api/recipes/raw/"):
+            pytest.fail("the loose-items file was read when nothing pointed at it")
+        return _parsed()
 
     monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
     monkeypatch.setattr(server.cook, "request", request)
