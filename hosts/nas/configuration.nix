@@ -3,8 +3,17 @@
   pkgs,
   lib,
   secrets,
+  inputs,
   ...
 }:
+let
+  inherit (config.boot.kernelPackages) callPackage;
+  # Packaged here rather than via the upstream flake's nixosModule, which does
+  # not produce the .ko.cer files aggregateModules needs - see the package.
+  asustor-platform-driver = callPackage ../../packages/asustor-platform-driver.nix {
+    src = inputs.asustor-platform-driver;
+  };
+in
 {
   imports = [
     ./hardware-configuration.nix
@@ -44,9 +53,8 @@
     "100.91.84.39" = [ "webhook.${secrets.vps-domain}" ];
   };
 
-  hardware.asustor.enable = true;
-
   boot = {
+    extraModulePackages = [ asustor-platform-driver ];
     loader.systemd-boot.enable = true;
     loader.efi.canTouchEfiVariables = true;
     kernelModules = [
@@ -72,7 +80,6 @@
           '';
         in
         {
-          enable = true;
           storePaths = [ unlockShell ];
           users.root.shell = unlockShell;
           # Fast-blink the front LED while zfs-import-tank waits for the SSH

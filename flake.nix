@@ -229,7 +229,6 @@
                 })
               ];
             })
-            inputs.asustor-platform-driver.nixosModules.default
           ];
           specialArgs = {
             secrets = import nix-secrets;

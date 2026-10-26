@@ -82,7 +82,6 @@
         efiSysMountPoint = "/boot";
       };
     };
-    initrd.systemd.enable = true;
     binfmt.emulatedSystems = [ "aarch64-linux" ];
   };
 
