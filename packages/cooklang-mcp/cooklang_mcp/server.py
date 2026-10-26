@@ -18,6 +18,7 @@ ordinary HTTP body, because MCP cannot carry a file. See `pictures.py`.
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import os
 import re
@@ -29,7 +30,8 @@ from urllib.parse import quote
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import AnyHttpUrl, BaseModel, Field, model_validator
@@ -463,11 +465,12 @@ def _token() -> str | None:
 
 
 _secret = _token()
-mcp = FastMCP(
+# mcp 2 renamed FastMCP to MCPServer and moved every transport-shaped argument
+# off the constructor and onto run(), so host, port and transport_security now
+# live in main() instead of here.
+mcp = MCPServer(
     "Recipes, Meal Plans & Groceries",
     instructions=INSTRUCTIONS,
-    host=os.environ.get("COOKLANG_MCP_HOST", "127.0.0.1"),
-    port=int(os.environ.get("COOKLANG_MCP_PORT", "3001")),
     token_verifier=SharedSecret(_secret) if _secret else None,
     auth=(
         AuthSettings(
@@ -479,18 +482,55 @@ mcp = FastMCP(
         if _secret
         else None
     ),
-    # Off, because the guard is aimed at a browser reaching a loopback server
-    # and the only thing that reaches this one is the reverse proxy in front of
-    # it. On, it rejects every proxied request: the `Host` header is the public
-    # name, not `localhost`.
-    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
+
+
+# The exception types this package raises on purpose, as opposed to the ones
+# that mean it has a bug. ValueError covers the domain errors and the pydantic
+# validators (which have to raise ValueError), plus pictures.BadToken; RuntimeError
+# covers cookcli.CookCliError, diagnostics.DiagnosticsUnavailable and the
+# importer's fetch failures. A TypeError or KeyError is deliberately absent.
+AGENT_FACING = (ValueError, RuntimeError)
+
+
+def tool(**kwargs):
+    """`mcp.tool`, but a deliberate exception reaches the agent as its message.
+
+    mcp 1 turned any exception a tool raised into a ToolError carrying its
+    message. mcp 2 does that only for ToolError itself; everything else becomes
+    `UnexpectedToolError("Error executing tool <name>")`, which keeps the
+    original only on `__cause__` and so tells the agent nothing it can act on.
+
+    The errors worth forwarding — "Aisle not found", "the aisle file changed",
+    "not on the list as a single item" — are raised from modules that know
+    nothing about MCP, so translate at the boundary instead of rewriting every
+    raise. Anything outside `AGENT_FACING` is left alone, so a genuine bug
+    still surfaces as UnexpectedToolError rather than being dressed up as
+    advice; that part of mcp 2's change is an improvement worth keeping.
+
+    Registers the wrapper but returns `fn`, so the module-level name stays the
+    plain function: calling a tool directly (as the tests do) keeps raising the
+    original exception, and only the MCP surface sees ToolError.
+    """
+
+    def decorate(fn):
+        @functools.wraps(fn)
+        async def wrapper(*args, **kw):
+            try:
+                return await fn(*args, **kw)
+            except AGENT_FACING as err:
+                raise ToolError(str(err)) from err
+
+        mcp.tool(**kwargs)(wrapper)
+        return fn
+
+    return decorate
 
 
 # -- recipes and menus ----------------------------------------------------
 
 
-@mcp.tool(annotations=READ)
+@tool(annotations=READ)
 async def recipe_search(
     query: Annotated[
         str,
@@ -522,7 +562,7 @@ async def recipe_search(
     return [_summary(entry) for entry in await cook.search_entries(query)]
 
 
-@mcp.tool(annotations=READ)
+@tool(annotations=READ)
 async def recipe_read(path: Path) -> RecipeDocument:
     """Read one recipe or meal plan already in the user's collection: its raw
     Cooklang source, frontmatter included, and its clickable Cook web page.
@@ -764,7 +804,7 @@ async def _put_recipe(path: str, source: str) -> None:
 # (`diagnostics`) and what it made of it (`ingredients`), so a syntax mistake
 # surfaces either as a reported line or as a missing ingredient, never as
 # silence.
-@mcp.tool(annotations=WRITE)
+@tool(annotations=WRITE)
 async def recipe_write(
     path: Path,
     source: Annotated[
@@ -927,7 +967,7 @@ async def recipe_write(
     )
 
 
-@mcp.tool(annotations=DELETE)
+@tool(annotations=DELETE)
 async def recipe_delete(path: Path) -> dict[str, Any]:
     """Permanently delete a recipe or meal plan. There is no undo and no
     trash."""
@@ -935,7 +975,7 @@ async def recipe_delete(path: Path) -> dict[str, Any]:
     return {"path": path, "deleted": True}
 
 
-@mcp.tool(annotations=WRITE)
+@tool(annotations=WRITE)
 async def recipe_image_upload(path: Path) -> PictureUpload:
     """Get a URL for uploading a picture of a recipe — a photo of the dish, or
     any picture file to keep with the recipe rather than link to.
@@ -997,7 +1037,7 @@ async def upload_picture(request: Request) -> JSONResponse:
     return JSONResponse(body, status_code=status)
 
 
-@mcp.tool(annotations=WEB_READ)
+@tool(annotations=WEB_READ)
 async def recipe_import(
     url: Annotated[
         str, Field(description="The recipe web page, exactly as the user gave it.")
@@ -1054,7 +1094,7 @@ async def _read_menu(path: str, existing: set[str]) -> str | None:
     return (await cook.request("GET", f"/api/recipes/raw/{path}")).text
 
 
-@mcp.tool(annotations=WRITE)
+@tool(annotations=WRITE)
 async def mark_cooked(
     path: Path,
     cooked_on: Annotated[
@@ -1233,7 +1273,7 @@ class ShoppingChange(BaseModel):
         return self
 
 
-@mcp.tool(annotations=READ)
+@tool(annotations=READ)
 async def shopping_list_read() -> dict[str, Any]:
     """Read the user's shopping list, including the recipes or meal plans that
     were added and the resulting ingredients.
@@ -1402,7 +1442,7 @@ async def _edit_extras(change: ShoppingChange) -> None:
         )
 
 
-@mcp.tool(annotations=WRITE)
+@tool(annotations=WRITE)
 async def shopping_list_edit(
     changes: Annotated[
         list[ShoppingChange],
@@ -1488,7 +1528,7 @@ async def shopping_list_edit(
 # state, and never a second copy of the field list.
 
 
-@mcp.tool(annotations=READ)
+@tool(annotations=READ)
 async def aisles_read(
     query: str | list[str] = "", uncategorized: bool = False
 ) -> dict[str, Any]:
@@ -1542,7 +1582,7 @@ async def aisles_read(
     return result
 
 
-@mcp.tool(annotations=WRITE)
+@tool(annotations=WRITE)
 async def aisles_edit(
     changes: Annotated[list[catalogue.AisleChange], Field(min_length=1)],
 ) -> dict[str, Any]:
@@ -1560,7 +1600,7 @@ async def aisles_edit(
     return await _edit_catalogue(changes)
 
 
-@mcp.tool(annotations=WRITE)
+@tool(annotations=WRITE)
 async def ingredients_edit(
     changes: Annotated[list[catalogue.IngredientChange], Field(min_length=1)],
 ) -> dict[str, Any]:
@@ -1616,7 +1656,18 @@ def main() -> None:
         logging.getLogger(__name__).warning(
             "no token configured - serving HTTP without auth"
         )
-    mcp.run("streamable-http")
+    mcp.run(
+        "streamable-http",
+        host=os.environ.get("COOKLANG_MCP_HOST", "127.0.0.1"),
+        port=int(os.environ.get("COOKLANG_MCP_PORT", "3001")),
+        # Off, because the guard is aimed at a browser reaching a loopback
+        # server and the only thing that reaches this one is the reverse proxy
+        # in front of it. On, it rejects every proxied request: the `Host`
+        # header is the public name, not `localhost`.
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        ),
+    )
 
 
 if __name__ == "__main__":

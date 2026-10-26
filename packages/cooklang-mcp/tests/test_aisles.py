@@ -7,11 +7,11 @@ import httpx
 import pytest
 from cooklang_mcp import cookcli
 from cooklang_mcp.server import mcp
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 
 def call(name, arguments):
-    return asyncio.run(mcp.call_tool(name, arguments))[1]
+    return asyncio.run(mcp.call_tool(name, arguments)).structured_content
 
 
 def serve(monkeypatch, respond):
@@ -478,7 +478,7 @@ def test_invalid_action_fields_fail_before_reading(monkeypatch, tool, changes):
 def test_edit_schemas_require_only_changes_and_explain_actions():
     listed = {tool.name: tool for tool in asyncio.run(mcp.list_tools())}
     for name in ("aisles_edit", "ingredients_edit"):
-        schema = listed[name].inputSchema
+        schema = listed[name].input_schema
         assert set(schema["properties"]) == {"changes"}
         assert schema["required"] == ["changes"]
         assert len(schema["properties"]["changes"]["items"]["oneOf"]) == 4

@@ -6,7 +6,7 @@ import time
 
 import httpx
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 from starlette.testclient import TestClient
 
 from cooklang_mcp import menus, server
@@ -64,18 +64,18 @@ def test_the_tool_surface_is_grouped_and_annotated():
     }
     for name, tool in listed.items():
         assert tool.annotations is not None, name
-        assert tool.annotations.readOnlyHint is (name in reads), name
+        assert tool.annotations.read_only_hint is (name in reads), name
     # Only deletion is destructive; every other write can be undone by writing
     # again, which is the distinction a client should gate on.
-    assert listed["recipe_delete"].annotations.destructiveHint is True
-    assert listed["recipe_write"].annotations.destructiveHint is False
+    assert listed["recipe_delete"].annotations.destructive_hint is True
+    assert listed["recipe_write"].annotations.destructive_hint is False
     # Only the importer reaches outside the collection. Not the picture tool:
     # it hands out a link, and the upload that follows is not this server's
     # request to make.
-    assert listed["recipe_import"].annotations.openWorldHint is True
+    assert listed["recipe_import"].annotations.open_world_hint is True
     for name, tool in listed.items():
         if name != "recipe_import":
-            assert tool.annotations.openWorldHint is False, name
+            assert tool.annotations.open_world_hint is False, name
 
 
 def test_recipe_search_advertises_its_result_fields():
@@ -633,7 +633,9 @@ def shopping_calls(monkeypatch, changes):
 
     monkeypatch.setattr(server.cook, "request", request)
     monkeypatch.setattr(server.cook, "shopping_list", shopping_list)
-    result = asyncio.run(mcp.call_tool("shopping_list_edit", {"changes": changes}))[1]
+    result = asyncio.run(
+        mcp.call_tool("shopping_list_edit", {"changes": changes})
+    ).structured_content
     return sent, result
 
 
