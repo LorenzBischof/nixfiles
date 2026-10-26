@@ -317,8 +317,6 @@ in
     export MCP_BASE_URL=https://mcp-tnet.${secrets.vps-domain}
   '';
 
-  services.etesync-dav.enable = true;
-
   home = {
     # Home Manager needs a bit of information about you and the paths it should
     # manage.
