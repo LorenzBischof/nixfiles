@@ -5,6 +5,42 @@
   ...
 }:
 let
+  palette = config.my.theme.palette;
+
+  # Recolours adw-gtk3 and libadwaita through their named colours
+  gtkCss = with palette; ''
+    @define-color accent_color #${base0D};
+    @define-color accent_bg_color #${base0D};
+    @define-color accent_fg_color #${base00};
+    @define-color destructive_color #${base08};
+    @define-color destructive_bg_color #${base08};
+    @define-color destructive_fg_color #${base00};
+    @define-color success_color #${base0B};
+    @define-color success_bg_color #${base0B};
+    @define-color success_fg_color #${base00};
+    @define-color warning_color #${base0E};
+    @define-color warning_bg_color #${base0E};
+    @define-color warning_fg_color #${base00};
+    @define-color error_color #${base08};
+    @define-color error_bg_color #${base08};
+    @define-color error_fg_color #${base00};
+    @define-color window_bg_color #${base00};
+    @define-color window_fg_color #${base05};
+    @define-color view_bg_color #${base00};
+    @define-color view_fg_color #${base05};
+    @define-color headerbar_bg_color #${base01};
+    @define-color headerbar_fg_color #${base05};
+    @define-color sidebar_bg_color #${base01};
+    @define-color sidebar_fg_color #${base05};
+    @define-color card_bg_color #${base01};
+    @define-color card_fg_color #${base05};
+    @define-color dialog_bg_color #${base01};
+    @define-color dialog_fg_color #${base05};
+    @define-color popover_bg_color #${base01};
+    @define-color popover_fg_color #${base05};
+    @define-color scrollbar_outline_color #${base02};
+  '';
+
   sway-terminal = pkgs.writeShellApplication {
     name = "sway-terminal";
     runtimeInputs = [ pkgs.jq ];
@@ -40,16 +76,49 @@ in
     export-display-config
   ];
 
-  # https://github.com/nix-community/home-manager/pull/7817
-  # mkForce overrides stylix, which now sets gtk4.theme explicitly (stylix#2330)
-  gtk.gtk4.theme = lib.mkForce null;
+  gtk = {
+    enable = true;
+    font = {
+      name = "DejaVu Sans";
+      size = 12;
+    };
+    theme = {
+      name = "adw-gtk3-dark";
+      package = pkgs.adw-gtk3;
+    };
+    # https://github.com/nix-community/home-manager/pull/7817
+    gtk4.theme = null;
+    gtk3.extraCss = gtkCss;
+    gtk4.extraCss = gtkCss;
+  };
+  # Read by libadwaita apps and, through the settings portal, by browsers
+  dconf.settings."org/gnome/desktop/interface".color-scheme = "prefer-dark";
 
-  stylix.targets.swaylock.image.enable = false;
+  qt = {
+    enable = true;
+    platformTheme.name = "adwaita";
+    style.name = "adwaita-dark";
+  };
+
   programs = {
     fuzzel = {
       enable = true;
       settings = {
+        colors = with palette; {
+          background = "${base00}ff";
+          text = "${base05}ff";
+          placeholder = "${base03}ff";
+          prompt = "${base05}ff";
+          input = "${base05}ff";
+          match = "${base0A}ff";
+          selection = "${base02}ff";
+          selection-text = "${base05}ff";
+          selection-match = "${base0A}ff";
+          counter = "${base06}ff";
+          border = "${base0D}ff";
+        };
         main = {
+          font = "DejaVu Sans:size=18";
           width = 15;
           lines = 9;
           horizontal-pad = 18;
@@ -65,8 +134,29 @@ in
     };
     swaylock = {
       enable = true;
-      settings = {
-        color = lib.mkForce "000000";
+      settings = with palette; {
+        color = "000000";
+        inside-color = base00;
+        inside-clear-color = base00;
+        inside-caps-lock-color = base00;
+        inside-ver-color = base00;
+        inside-wrong-color = base00;
+        key-hl-color = base0B;
+        layout-bg-color = base00;
+        layout-border-color = base01;
+        layout-text-color = base05;
+        line-uses-inside = true;
+        ring-color = base01;
+        ring-clear-color = base08;
+        ring-caps-lock-color = base01;
+        ring-ver-color = base0B;
+        ring-wrong-color = base08;
+        separator-color = "00000000";
+        text-color = base05;
+        text-clear-color = base05;
+        text-caps-lock-color = base05;
+        text-ver-color = base05;
+        text-wrong-color = base05;
         hide-keyboard-layout = true;
         show-failed-attempts = true;
         indicator-idle-visible = true;
@@ -125,6 +215,35 @@ in
         border = 5;
         titlebar = false;
       };
+      fonts = {
+        names = [ "DejaVu Sans" ];
+        size = 14.0;
+      };
+      colors =
+        with palette;
+        let
+          unfocused = {
+            border = "#${base03}";
+            background = "#${base00}";
+            text = "#${base05}";
+            indicator = "#${base0B}";
+            childBorder = "#${base03}";
+          };
+        in
+        {
+          background = "#${base00}";
+          focused = unfocused // {
+            border = "#${base0D}";
+            childBorder = "#${base0D}";
+          };
+          focusedInactive = unfocused;
+          inherit unfocused;
+          placeholder = unfocused;
+          urgent = unfocused // {
+            border = "#${base08}";
+            childBorder = "#${base08}";
+          };
+        };
       bars = [ ];
       up = "k";
       down = "j";

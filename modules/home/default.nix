@@ -11,5 +11,6 @@
     ./git
     ./firefox.nix
     ./ai
+    ./theme.nix
   ];
 }

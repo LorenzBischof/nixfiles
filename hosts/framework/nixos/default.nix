@@ -35,26 +35,6 @@
     noPollBatteries = true;
   };
 
-  stylix = {
-    enable = true;
-    #image = ../home/sway/wallpaper_cropped_1.png;
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/eighties.yaml";
-    autoEnable = true;
-    # Stylix's kmscon target still sets services.kmscon.{extraConfig,fonts},
-    # which nixpkgs removed (use services.kmscon.config now). We don't run
-    # kmscon, so disable the target until stylix catches up upstream.
-    targets.kmscon.enable = false;
-    fonts.sizes = {
-      popups = 18;
-      desktop = 14;
-    };
-    cursor = {
-      size = 28;
-      name = "Adwaita";
-      package = pkgs.adwaita-icon-theme;
-    };
-  };
-
   services.tailscale.enable = true;
 
   boot = {

@@ -9,10 +9,6 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    stylix = {
-      url = "github:danth/stylix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     nix-index-database = {
       url = "github:nix-community/nix-index-database";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -113,7 +109,6 @@
       nixpkgs-citrix-workspace,
       nixos-hardware,
       home-manager,
-      stylix,
       nix-index-database,
       nix-secrets,
       pre-commit-hooks,
@@ -191,7 +186,6 @@
             nix-amd-ai.nixosModules.default
             ./modules/nixos
             ./hosts/framework/nixos
-            stylix.nixosModules.stylix
             home-manager.nixosModules.home-manager
             nix-secrets.nixosModules.laptop
             lanzaboote.nixosModules.lanzaboote

@@ -5,7 +5,7 @@
   ...
 }:
 let
-  colors = config.lib.stylix.colors.withHashtag;
+  colors = lib.mapAttrs (_: c: "#${c}") config.my.theme.palette;
 
   idleInhibitUnit = "idle-inhibit.service";
 
@@ -201,7 +201,7 @@ let
     '';
   };
 
-  # Everything the QML needs from Nix: the stylix theme, and absolute paths to
+  # Everything the QML needs from Nix: the colour palette, and absolute paths to
   # the helpers the bar shells out to.
   configQml = pkgs.writeText "Config.qml" ''
     pragma Singleton
@@ -212,8 +212,8 @@ let
     Singleton {
         id: root
 
-        readonly property string fontFamily: ${builtins.toJSON config.stylix.fonts.monospace.name}
-        readonly property int fontPointSize: ${toString config.stylix.fonts.sizes.desktop}
+        readonly property string fontFamily: "DejaVu Sans Mono"
+        readonly property int fontPointSize: 14
 
         readonly property int modulePadding: 8
         readonly property int moduleSpacing: 4
