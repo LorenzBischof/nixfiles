@@ -123,7 +123,12 @@
   # Containers
   virtualisation = {
     docker.enable = true;
-    libvirtd.enable = true;
+    libvirtd = {
+      enable = true;
+      # The default "suspend" saves guests to disk on host shutdown and restores
+      # them at boot; the restored Talos VMs came back with a frozen clock.
+      onShutdown = "shutdown";
+    };
   };
 
   hardware = {

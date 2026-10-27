@@ -51,6 +51,7 @@ in
   my.programs.firefox.enable = true;
   my.programs.git.enable = true;
   my.profiles.ai.enable = true;
+  my.programs.foot.urgentNtfyTopic = secrets.ntfy-alertmanager;
 
   services.kanshi = {
     enable = true;
