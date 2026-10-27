@@ -14,7 +14,6 @@ let
     lib.replaceStrings [ "~" ] [ config.home.homeDirectory ]
       config.programs.jujutsu.settings.signing.key;
   signingKey = lib.removeSuffix ".pub" signingPubKey;
-  codexNotifyConfigArg = "notify=[\"${lib.getExe codexNotify}\"]";
   codexNotify = pkgs.writeShellScriptBin "codex-notify" ''
     set -eu
     payload="''${1:-}"
@@ -29,7 +28,7 @@ let
   '';
   wrappedCodex =
     (pkgs.writeShellScriptBin "codex" ''
-      exec ${lib.getExe baseCodex} -c ${lib.escapeShellArg codexNotifyConfigArg} ${lib.escapeShellArgs cfg.codexArgs} "$@"
+      exec ${lib.getExe baseCodex} ${lib.escapeShellArgs cfg.codexArgs} "$@"
     '').overrideAttrs
       {
         # Home Manager uses this to select config.toml instead of legacy YAML.
@@ -329,13 +328,7 @@ let
     name = "codex-bwrap";
     executable = lib.getExe baseCodex;
     configDirName = ".codex";
-    extraArgs = [
-      "-c"
-      codexNotifyConfigArg
-      "-c"
-      "tui.animations=false"
-      "--dangerously-bypass-approvals-and-sandbox"
-    ];
+    extraArgs = [ "--dangerously-bypass-approvals-and-sandbox" ];
   };
   claudeBwrap = mkBwrapTool {
     name = "claude-bwrap";
@@ -344,17 +337,7 @@ let
     extraArgs = [
       "--dangerously-skip-permissions"
       "--settings"
-      (builtins.toJSON {
-        sandbox.enabled = false;
-        spinnerVerbs = {
-          mode = "replace";
-          verbs = [ "Working" ];
-        };
-        spinnerTipsEnabled = false;
-        prefersReducedMotion = true;
-        feedbackSurveyRate = 0;
-        preferredNotifChannel = "terminal_bell";
-      })
+      (builtins.toJSON { sandbox.enabled = false; })
     ];
   };
   piBwrap = mkBwrapTool {
@@ -381,8 +364,6 @@ in
         "on-request"
         "-c"
         "sandbox_workspace_write.network_access=true"
-        "-c"
-        "tui.animations=false"
       ];
     };
     agentsFile = lib.mkOption {
@@ -414,6 +395,18 @@ in
       inputs.llm-agents.packages.${system}.pi
       #inputs.nix-ai-tools.packages.${system}.openclaw
     ];
+
+    # Ring the idle bell after 10s instead of 60s. Undocumented: Claude Code
+    # reads this key only from ~/.claude.json, its own state file, so it is
+    # merged in rather than declared in settings.json.
+    home.activation.claudeIdleNotifThreshold = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      claude_json="$HOME/.claude.json"
+      if [ -f "$claude_json" ] && [ -z "''${DRY_RUN:-}" ]; then
+        tmp="$(mktemp "$claude_json.XXXXXX")"
+        ${lib.getExe pkgs.jq} '.messageIdleNotifThresholdMs = 10000' "$claude_json" > "$tmp"
+        mv "$tmp" "$claude_json"
+      fi
+    '';
 
     # Created ahead of first use so the bubblewrap wrappers have something to
     # bind: basic-memory creates them lazily otherwise, and inside a sandbox
@@ -485,6 +478,16 @@ in
         # placement overrides it in its own .claude/settings.local.json.
         basicMemory = basicMemorySettings;
         outputStyle = "basic-memory";
+        spinnerVerbs = {
+          mode = "replace";
+          verbs = [ "Working" ];
+        };
+        spinnerTipsEnabled = false;
+        prefersReducedMotion = true;
+        feedbackSurveyRate = 0;
+        # The default "auto" only knows iTerm2, kitty, Ghostty and Apple
+        # Terminal; in foot it resolves to no channel at all.
+        preferredNotifChannel = "terminal_bell";
       };
       # Required, because the rest of ~/.claude/settings.json is hand-maintained:
       # the default merges nothing and would replace that file with a read-only
@@ -516,6 +519,10 @@ in
       package = wrappedCodex;
       # Preserve Codex's user-managed configuration when enabling the plugin.
       mutableSettings = true;
+      settings = {
+        notify = [ (lib.getExe codexNotify) ];
+        tui.animations = false;
+      };
       plugins = [ basicMemoryCodexPlugin ];
     };
 
