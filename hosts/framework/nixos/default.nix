@@ -70,6 +70,10 @@
     pkiBundle = "/var/lib/sbctl";
   };
 
+  # The tpm2 module ships the unit but never enables it, so the
+  # tpm2-measure-pcr=yes extend in disko.nix fails with ENOENT.
+  boot.initrd.systemd.sockets.systemd-pcrextend.wantedBy = [ "sockets.target" ];
+
   environment.sessionVariables.NIXOS_OZONE_WL = "1";
 
   systemd.sleep.settings.Sleep = {
