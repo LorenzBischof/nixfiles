@@ -53,7 +53,10 @@
     plymouth = {
       enable = true;
     };
-    kernelPackages = pkgs.linuxPackages_latest;
+    # 7.3 oopses in mt7925e_mac_reset (napi_disable on the never-allocated WM2
+    # queue) when hibernation thaws devices, so the image is never written.
+    # Fixed upstream by c182bfe944eb; back to _latest once a 7.3.y/7.4 has it.
+    kernelPackages = pkgs.linuxPackages_7_2;
     loader = {
       timeout = 0;
       systemd-boot.enable = false; # disable when using lanzaboote
