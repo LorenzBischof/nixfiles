@@ -259,6 +259,16 @@ let
 
         ro_bind_existing "$HOME/.config/jj/config.toml"
 
+        # The repo is writable, but git config (core.fsmonitor, core.hooksPath,
+        # aliases) and hooks would run in the next unsandboxed git call. The rest
+        # of .git stays writable because jj exports refs and objects there.
+        if [ -d "$repo_root/.git" ]; then
+          mkdir -p "$repo_root/.git/hooks"
+          ro_bind_existing "$repo_root/.git/config"
+          ro_bind_existing "$repo_root/.git/config.worktree"
+          ro_bind_existing "$repo_root/.git/hooks"
+        fi
+
         # basic-memory's MCP server writes the knowledge graph and its SQLite
         # index. The sandbox home is a tmpdir wiped on exit, so without these
         # binds every note the agent writes is lost silently.
@@ -314,7 +324,7 @@ let
         fi
 
         if [ -d /run/opengl-driver ]; then
-          bwrap_args+=(--bind /run/opengl-driver /run/opengl-driver)
+          bwrap_args+=(--ro-bind /run/opengl-driver /run/opengl-driver)
         fi
 
         exec systemd-inhibit \
