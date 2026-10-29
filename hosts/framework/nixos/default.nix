@@ -158,6 +158,9 @@
 
     opentabletdriver.enable = true;
 
+    # numen types through dotool, which writes to /dev/uinput
+    uinput.enable = true;
+
     # The EC's built-in fan curve lets the chassis get hot before spinning up.
     # Strategies ship with the package; "medium" starts ramping at 40°C.
     fw-fanctrl = {
@@ -219,6 +222,7 @@
       "libvirtd"
       "docker"
       "kvm"
+      "uinput"
     ];
     shell = pkgs.zsh;
   };

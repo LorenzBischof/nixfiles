@@ -260,8 +260,7 @@ let
         ro_bind_existing "$HOME/.config/jj/config.toml"
 
         # The repo is writable, but git config (core.fsmonitor, core.hooksPath,
-        # aliases) and hooks would run in the next unsandboxed git call. The rest
-        # of .git stays writable because jj exports refs and objects there.
+        # aliases) and hooks would run in the next unsandboxed git call.
         if [ -d "$repo_root/.git" ]; then
           mkdir -p "$repo_root/.git/hooks"
           ro_bind_existing "$repo_root/.git/config"

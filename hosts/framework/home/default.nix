@@ -46,7 +46,17 @@ in
   imports = [
     ../../../modules/home
     inputs.nix-secrets.homeManagerModule
+    inputs.numen.homeManagerModule
+    ./dictation.nix
   ];
+
+  services.numen = {
+    enable = true;
+    # dotool's virtual keyboard gets sway's "*" input layout, de(adnw)
+    xkbLayout = "de";
+    xkbVariant = "adnw";
+    subtitles.enable = true;
+  };
 
   my.programs.firefox.enable = true;
   my.programs.git.enable = true;
