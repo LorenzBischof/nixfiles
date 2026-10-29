@@ -165,14 +165,13 @@ proving different things; exercising it happens in the VM at the end of this sec
 
 ```bash
 nix-store -r /nix/store/<path-from-the-PR-body> \
-  --option binary-caches 'https://cache.nixos.org/ https://nixpkgs-update-cache.nix-community.org/' \
-  --option trusted-public-keys '
-  nixpkgs-update-cache.nix-community.org-1:U8d6wiQecHUPJFSqHN9GSSmNkmdiFW7GW7WNAnHW0SM=
-  cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
-  '
+  --option extra-substituters https://nixpkgs-update-cache.nix-community.org
 ```
 
-Run it with the sandbox disabled. No clone and no compile, just the download.
+Run it with the sandbox disabled. You are not a trusted nix user, so this only works
+because framework lists the cache in `trusted-substituters` and its key in
+`trusted-public-keys`; the daemon silently ignores (with a warning) any cache or key
+passed on the command line that the system config doesn't already allow. No clone and no compile, just the download.
 
 Usually enough: it gets you the real artifact to run, which is what the FAQ's test duty asks
 for and what CI never covers, and on a routine patch bump running the program *is* the review.

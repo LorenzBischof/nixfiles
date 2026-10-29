@@ -176,6 +176,9 @@ in
     ];
   };
   security.sudo.wheelNeedsPassword = false;
+  # wheel is root already through passwordless sudo, so trusting it costs
+  # nothing; `just switch` copies unsigned locally-built paths in as lbischof.
+  nix.settings.trusted-users = [ "@wheel" ];
 
   environment.systemPackages = with pkgs; [
     vim

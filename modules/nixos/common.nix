@@ -48,9 +48,9 @@
       auto-optimise-store = true;
       http-connections = 128;
       max-substitution-jobs = 128;
-      trusted-users = [
-        "@wheel"
-      ];
+      # No `trusted-users` here: a trusted user can pass unsigned paths, extra
+      # signing keys or `sandbox = false` to the root daemon, which is root
+      # without a password. Hosts with passwordless sudo add @wheel themselves.
       substituters = [
         # Our own binary cache. The URL lives in nix-secrets to keep it out of
         # this public repo, unencrypted there because nix needs it at eval time;

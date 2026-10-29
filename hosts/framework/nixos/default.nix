@@ -123,6 +123,16 @@
   # Temporary fix for Swaylock issue TODO: what issue?
   security.pam.services.swaylock = { };
 
+  # Lets an untrusted user opt into the nixpkgs-update cache with
+  # `--option extra-substituters`, for the nixpkgs-bump-review skill. The key
+  # has to be system-wide, since only trusted users can pass keys.
+  nix.settings = {
+    trusted-substituters = [ "https://nixpkgs-update-cache.nix-community.org" ];
+    trusted-public-keys = [
+      "nixpkgs-update-cache.nix-community.org-1:U8d6wiQecHUPJFSqHN9GSSmNkmdiFW7GW7WNAnHW0SM="
+    ];
+  };
+
   # Containers
   virtualisation = {
     docker.enable = true;
