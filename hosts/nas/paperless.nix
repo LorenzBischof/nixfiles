@@ -1,6 +1,5 @@
 {
   config,
-  pkgs,
   lib,
   secrets,
   ...
@@ -12,10 +11,6 @@ let
 in
 {
   services.paperless = {
-    # https://github.com/NixOS/nixpkgs/issues/421393
-    package = pkgs.paperless-ngx.overrideAttrs (oldAttrs: {
-      doCheck = false;
-    });
     enable = true;
     passwordFile = config.age.secrets.paperless-password.path;
     settings = {
