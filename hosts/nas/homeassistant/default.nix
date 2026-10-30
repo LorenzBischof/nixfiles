@@ -1,6 +1,5 @@
 {
   config,
-  pkgs,
   lib,
   secrets,
   ...
@@ -145,27 +144,21 @@ in
     ];
   };
 
-  # ESPHome dropped the built-in dashboard in 2026.8, so services.esphome would
-  # only add a unit that crash-loops. Inline the rest of that module -- user,
-  # group, state dir and the CLI -- and flash from the command line instead.
-  #
-  # https://github.com/NixOS/nixpkgs/issues/563986 tracks this; the module is
-  # being converted to ESPHome Device Builder in
-  # https://github.com/NixOS/nixpkgs/pull/550245. Once that is merged, drop this
-  # block and go back to services.esphome.enable (plus the esphome.${domain}
-  # nginx vhost proxying to config.services.esphome.port).
-  users.users.esphome = {
-    isSystemUser = true;
-    home = "/var/lib/esphome";
-    group = "esphome";
+  services.esphome = {
+    enable = true;
+    # Only reachable through nginx; both default to 0.0.0.0.
+    address = "127.0.0.1";
+    remoteBuildAddress = "127.0.0.1";
   };
-  users.groups.esphome = { };
-  systemd.tmpfiles.settings."10-esphome"."/var/lib/esphome".d = {
-    user = "esphome";
-    group = "esphome";
-    mode = "0750";
+
+  services.nginx.virtualHosts."esphome.${domain}" = {
+    forceSSL = true;
+    useACMEHost = domain;
+    locations."/" = {
+      proxyPass = "http://127.0.0.1:${toString config.services.esphome.port}";
+      proxyWebsockets = true;
+    };
   };
-  environment.systemPackages = [ pkgs.esphome ];
 
   services.nginx.virtualHosts."homeassistant.${domain}" = {
     forceSSL = true;
