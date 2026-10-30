@@ -24,11 +24,6 @@
       url = "github:cachix/pre-commit-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    talon = {
-      # https://github.com/nix-community/talon-nix/pull/21
-      url = "github:LorenzBischof/talon-nix/pango";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     numen = {
       url = "github:LorenzBischof/numen-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -136,7 +131,6 @@
       nix-index-database,
       nix-secrets,
       pre-commit-hooks,
-      talon,
       numen,
       nixos-generators,
       treefmt-nix,
