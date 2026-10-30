@@ -47,7 +47,7 @@
   # 0.19.0: restic now prints a progress line to stdout even with --json, so the
   # exporter's json.loads() fails (ngosang/restic-exporter#60). Upstream fixed it
   # in 2.1.0, but the nixpkgs package has not been bumped (still 1.7.0 on
-  # nixos-unstable as of 2026-06, no PR open). Override with our own 2.1.2 build.
+  # nixos-unstable as of 2026-11, no PR open). Override with our own 2.1.2 build.
   nixpkgs.overlays = [
     (final: _prev: {
       prometheus-restic-exporter = final.callPackage ../../packages/prometheus-restic-exporter.nix { };

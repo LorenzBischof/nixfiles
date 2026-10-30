@@ -9,7 +9,9 @@ let
   domain = config.my.homelab.domain;
   umapDomain = "umap.${domain}";
 
-  # https://github.com/umap-project/umap/pull/3499
+  # The OIDC provider logo is missing from 3.8.x. Fixed upstream in
+  # https://github.com/umap-project/umap/pull/3499 (in 4.0.0a0); drop this once
+  # the umap package is on 4.0.
   oidcProviderLogo = pkgs.fetchurl {
     name = "oidc.png";
     url = "https://raw.githubusercontent.com/LorenzBischof/umap/af79689bed7e475573a81881eb631c92d9eab5ba/umap/static/umap/img/providers/oidc.png";
