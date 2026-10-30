@@ -293,4 +293,7 @@
 
   system.stateVersion = "23.05"; # Did you read the comment?
   nixpkgs.config.allowUnfree = true;
+  # logseq 0.10.x (the file-based version) still runs on electron_39, which is
+  # EOL. Being insecure, it is not cached on cache.nixos.org and builds locally.
+  nixpkgs.config.permittedInsecurePackages = [ "electron-39.8.10" ];
 }
