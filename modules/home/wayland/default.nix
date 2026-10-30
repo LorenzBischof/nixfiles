@@ -94,6 +94,8 @@ in
       name = "adw-gtk3-dark";
       package = pkgs.adw-gtk3;
     };
+    # Below home.stateVersion 26.05, gtk4.theme still inherits gtk.theme; keep
+    # the GTK 3 theme off libadwaita apps.
     # https://github.com/nix-community/home-manager/pull/7817
     gtk4.theme = null;
     gtk3.extraCss = gtkCss;
