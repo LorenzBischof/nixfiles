@@ -7,6 +7,14 @@
 let
   palette = config.my.theme.palette;
 
+  # Locks through the bar's own shell (quickshell/qml/LockScreen.qml). It returns
+  # once the shell has asked sway for the lock, not once sway has confirmed it,
+  # but sway blanks every output as soon as the request arrives.
+  lockSession = "${lib.getExe' config.programs.quickshell.package "qs"} -c bar ipc call lock lock";
+
+  # Sets the bar and lock-screen clocks right on wake (quickshell/qml/ClockState.qml).
+  refreshClock = "${lib.getExe' config.programs.quickshell.package "qs"} -c bar ipc call clock refresh";
+
   # Recolours adw-gtk3 and libadwaita through their named colours
   gtkCss = with palette; ''
     @define-color accent_color #${base0D};
@@ -132,36 +140,6 @@ in
         };
       };
     };
-    swaylock = {
-      enable = true;
-      settings = with palette; {
-        color = "000000";
-        inside-color = base00;
-        inside-clear-color = base00;
-        inside-caps-lock-color = base00;
-        inside-ver-color = base00;
-        inside-wrong-color = base00;
-        key-hl-color = base0B;
-        layout-bg-color = base00;
-        layout-border-color = base01;
-        layout-text-color = base05;
-        line-uses-inside = true;
-        ring-color = base01;
-        ring-clear-color = base08;
-        ring-caps-lock-color = base01;
-        ring-ver-color = base0B;
-        ring-wrong-color = base08;
-        separator-color = "00000000";
-        text-color = base05;
-        text-clear-color = base05;
-        text-caps-lock-color = base05;
-        text-ver-color = base05;
-        text-wrong-color = base05;
-        hide-keyboard-layout = true;
-        show-failed-attempts = true;
-        indicator-idle-visible = true;
-      };
-    };
   };
 
   services.gammastep = {
@@ -171,7 +149,8 @@ in
   };
   services.swayidle = {
     enable = true;
-    events.before-sleep = "${pkgs.swaylock}/bin/swaylock -f";
+    events.before-sleep = lockSession;
+    events.after-resume = refreshClock;
     timeouts = [
       {
         timeout = 300;
@@ -180,7 +159,7 @@ in
       }
       {
         timeout = 330;
-        command = "${pkgs.swaylock}/bin/swaylock -f";
+        command = lockSession;
       }
       {
         timeout = 340;
@@ -266,7 +245,7 @@ in
             [con_id="__focused__" app_id="^(?!foot|org.keepassxc.KeePassXC|Logseq).*$"] kill; [con_id="__focused__" app_id="foot"] exec wtype -M ctrl d -m ctrl; [con_id=__focused__ app_id="org.keepassxc.KeePassXC" tiling] move scratchpad; [con_id=__focused__ app_id="Logseq" tiling] move scratchpad; [con_id=__focused__ floating] floating disable
           '';
           "${mod}+a" = "exec ${pkgs.fuzzel}/bin/fuzzel";
-          "${mod}+n" = "exec ${pkgs.swaylock}/bin/swaylock";
+          "${mod}+n" = "exec ${lockSession}";
           "${mod}+p" = "split h";
           "${mod}+w" = "split v";
           "${mod}+z" = "fullscreen";

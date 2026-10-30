@@ -120,8 +120,10 @@
     address=/talos/${config._module.args.talosIngressVip}
   '';
 
-  # Temporary fix for Swaylock issue TODO: what issue?
-  security.pam.services.swaylock = { };
+  # The PAM service the quickshell lock screen authenticates against
+  # (modules/home/wayland/quickshell/qml/LockScreen.qml). home-manager cannot
+  # create one, so it has to come from the system config.
+  security.pam.services.quickshell = { };
 
   # Lets an untrusted user opt into the nixpkgs-update cache with
   # `--option extra-substituters`, for the nixpkgs-bump-review skill. The key

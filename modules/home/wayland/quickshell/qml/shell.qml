@@ -18,4 +18,6 @@ ShellRoot {
     // Likewise. Also the notification daemon itself, so it lives here rather
     // than under a module: the bar draws nothing for it.
     NotificationPopups {}
+
+    LockScreen {}
 }
