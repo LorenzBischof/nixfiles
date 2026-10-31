@@ -81,14 +81,14 @@
       url = "github:peteonrails/voxtype";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # Ryzen AI NPU stack (XRT + xdna plugin + FastFlowLM). Upstream asks
-    # consumers not to follow their nixpkgs, but that warning is only about
-    # hitting their Cachix, which we don't use: CI builds the framework closure
-    # and pushes it to our own cache, so these land there like everything else.
-    nix-amd-ai = {
-      url = "github:noamsto/nix-amd-ai";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # Ryzen AI NPU stack (XRT + xdna plugin + FastFlowLM). Deliberately not
+    # following our nixpkgs, as upstream asks: its overlay also replaces
+    # llama-cpp(-vulkan), pinning llama.cpp's source under nixpkgs' recipe, and
+    # that pin is only tested against upstream's own nixpkgs. Following ours
+    # broke the build when nixpkgs moved to llama.cpp 0.7.0 and dropped a test
+    # patch the older pinned source still needed. The second nixpkgs only
+    # costs closure/eval size; CI pushes it to our cache like everything else.
+    nix-amd-ai.url = "github:noamsto/nix-amd-ai";
     nixos-agent-test-vm.url = "github:lorenzbischof/nixos-agent-test-vm";
     # Galaxus/Digitec product search, for the MCP server on vps. Upstream ships no
     # flake.nix, so this is a plain source pin - of the TypeScript only. The
