@@ -43,7 +43,8 @@ in
   services.open-webui.enable = false;
   services.llama-cpp = {
     enable = true;
-    package = pkgs.llama-cpp-vulkan;
+    # The bumped package's test suite downloads models, which the sandbox forbids.
+    package = pkgs.llama-cpp-vulkan.overrideAttrs { doCheck = false; };
     settings = {
       flash-attn = "on";
       # No split-mode: this host has a single Vulkan device, so "row" (which
