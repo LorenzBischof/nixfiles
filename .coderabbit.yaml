@@ -23,35 +23,24 @@ reviews:
     - "!flake.lock"
     - "!**/*.lock"
 
-  # CodeRabbit has no Nix linter (no statix, deadnix or nixfmt), so the Nix
-  # specifics are review instructions instead. Formatting is nixfmt via treefmt
-  # and isn't worth a comment.
+  # CodeRabbit has no Nix linter (no statix, deadnix or nixfmt). CI already
+  # evaluates and builds every host, and AGENTS.md (read as a guideline) covers
+  # the repo conventions, so this only points at what neither catches: things
+  # that build fine and break at runtime.
   path_instructions:
     - path: "**/*.nix"
       instructions: |
-        This is a NixOS/home-manager flake configuration. Review for:
-        - Evaluation errors: wrong option paths or types, `mkIf` on a value that
-          isn't a bool, options set outside `config` in a module that declares
-          `options`, missing `lib.` prefixes, infinite recursion from reading
-          `config` inside `imports` or option defaults.
-        - Shell inside Nix strings (writeShellScript, writeShellApplication,
-          systemd `script`): Nix interpolates `${...}` first, so a runtime Bash
-          expansion must be written `''${var}`. Flag unescaped Bash expansions and
-          missing quoting.
-        - Store paths: prefer `lib.getExe`/`lib.getExe'` or `${pkgs.foo}/bin/foo`
-          over relying on PATH in systemd units and scripts.
-        - Secrets: nothing secret may end up in the world-readable Nix store or
-          in a log. Values from the private `secrets` flake must not be echoed,
-          and file-based secret options should be used where the module has one.
-        - systemd services: hardening options, `after`/`wants` on
-          network-online.target when the service needs the network, and
-          oneshot + atomic tmp+mv for node-exporter textfile metrics (never
-          activation scripts).
-        - Dead code: unused `let` bindings and unused function arguments
-          (what deadnix and statix would report).
-        - Workarounds for upstream bugs must carry a `TODO:` comment linking the
-          upstream issue and saying when it can be dropped.
-        Don't comment on formatting.
+        CI runs `nix flake check` and builds every host, so skip anything that
+        would fail evaluation or the build, and skip formatting. Focus on what
+        builds but misbehaves at runtime:
+        - Scripts and systemd units relying on PATH instead of `lib.getExe` or a
+          store path; missing runtimeInputs.
+        - systemd ordering and dependencies: `after`/`wants` on
+          network-online.target, mounts, or other services the unit needs.
+        - Option values that are valid but wrong: ports, users and groups,
+          file permissions, firewall openings, paths that differ between hosts.
+        - Secret values that would end up in the world-readable Nix store.
+        - Unused `let` bindings and function arguments.
     - path: ".github/workflows/**"
       instructions: |
         This repo and its Actions logs are public. Flag any step that could print
