@@ -488,6 +488,10 @@ in
         # The default "auto" only knows iTerm2, kitty, Ghostty and Apple
         # Terminal; in foot it resolves to no channel at all.
         preferredNotifChannel = "terminal_bell";
+        # Start the Remote Control bridge in every session, so any of them can
+        # be picked up from claude.ai or the app. Only honoured from user
+        # settings: project and local settings cannot turn it on.
+        remoteControlAtStartup = true;
       };
       # Required, because the rest of ~/.claude/settings.json is hand-maintained:
       # the default merges nothing and would replace that file with a read-only
