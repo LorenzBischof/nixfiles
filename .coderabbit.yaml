@@ -1,0 +1,81 @@
+# CodeRabbit review config: https://docs.coderabbit.ai/reference/configuration
+#
+# AGENTS.md is picked up as a code guideline by default (knowledge_base.
+# code_guidelines), so repo conventions live there, not here. Don't list it in
+# path_instructions: that makes CodeRabbit review the file instead of applying it.
+language: en-US
+
+reviews:
+  profile: chill
+  poem: false
+  high_level_summary: true
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+    # Dependabot flake.lock bumps already get the analyze-claude job in
+    # build.yaml, and the plan's hourly review allowance is small: spend it on
+    # human-written changes.
+    ignore_usernames:
+      - "dependabot[bot]"
+
+  path_filters:
+    - "!flake.lock"
+    - "!**/*.lock"
+
+  # CodeRabbit has no Nix linter (no statix, deadnix or nixfmt), so the Nix
+  # specifics are review instructions instead. Formatting is nixfmt via treefmt
+  # and isn't worth a comment.
+  path_instructions:
+    - path: "**/*.nix"
+      instructions: |
+        This is a NixOS/home-manager flake configuration. Review for:
+        - Evaluation errors: wrong option paths or types, `mkIf` on a value that
+          isn't a bool, options set outside `config` in a module that declares
+          `options`, missing `lib.` prefixes, infinite recursion from reading
+          `config` inside `imports` or option defaults.
+        - Shell inside Nix strings (writeShellScript, writeShellApplication,
+          systemd `script`): Nix interpolates `${...}` first, so a runtime Bash
+          expansion must be written `''${var}`. Flag unescaped Bash expansions and
+          missing quoting.
+        - Store paths: prefer `lib.getExe`/`lib.getExe'` or `${pkgs.foo}/bin/foo`
+          over relying on PATH in systemd units and scripts.
+        - Secrets: nothing secret may end up in the world-readable Nix store or
+          in a log. Values from the private `secrets` flake must not be echoed,
+          and file-based secret options should be used where the module has one.
+        - systemd services: hardening options, `after`/`wants` on
+          network-online.target when the service needs the network, and
+          oneshot + atomic tmp+mv for node-exporter textfile metrics (never
+          activation scripts).
+        - Dead code: unused `let` bindings and unused function arguments
+          (what deadnix and statix would report).
+        - Workarounds for upstream bugs must carry a `TODO:` comment linking the
+          upstream issue and saying when it can be dropped.
+        Don't comment on formatting.
+    - path: ".github/workflows/**"
+      instructions: |
+        This repo and its Actions logs are public. Flag any step that could print
+        a secret or an evaluated `secrets.*` Nix value, untrusted PR input
+        (titles, branch names, bodies) interpolated straight into `run:`, and
+        jobs with broader `permissions` than they use.
+
+  tools:
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
+    zizmor:
+      enabled: true
+    yamllint:
+      enabled: true
+    markdownlint:
+      enabled: true
+    ruff:
+      enabled: true
+    gitleaks:
+      enabled: true
+    github-checks:
+      enabled: true
+
+chat:
+  auto_reply: true
