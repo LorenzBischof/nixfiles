@@ -5,10 +5,11 @@
   restic,
 }:
 
-# nixpkgs still ships restic-exporter 1.7.0, which is incompatible with restic
-# 0.19.0 (ngosang/restic-exporter#60). Upstream fixed it in 2.1.0, but 2.0.0 was
-# a full rewrite into a real Python package, so we repackage 2.1.2 here instead
-# of patching 1.7.0. Drop this once nixpkgs bumps the package past 2.1.0.
+# TODO: nixpkgs still ships restic-exporter 1.7.0, which is incompatible with
+# restic 0.19.0 (ngosang/restic-exporter#60). Upstream fixed it in 2.1.0, but
+# 2.0.0 was a full rewrite into a real Python package, so we repackage 2.1.2
+# here instead of patching 1.7.0. Drop this once nixpkgs bumps the package past
+# 2.1.0.
 python3.pkgs.buildPythonApplication rec {
   pname = "prometheus-restic-exporter";
   version = "2.1.2";

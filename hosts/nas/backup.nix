@@ -43,7 +43,7 @@
     environmentFile = config.age.secrets.restic-env.path;
     refreshInterval = 3600;
   };
-  # nixpkgs still ships restic-exporter 1.7.0, which crash-loops against restic
+  # TODO: nixpkgs still ships restic-exporter 1.7.0, which crash-loops against restic
   # 0.19.0: restic now prints a progress line to stdout even with --json, so the
   # exporter's json.loads() fails (ngosang/restic-exporter#60). Upstream fixed it
   # in 2.1.0, but the nixpkgs package has not been bumped (still 1.7.0 on

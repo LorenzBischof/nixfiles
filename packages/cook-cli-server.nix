@@ -1,5 +1,5 @@
-# Temporary until https://github.com/NixOS/nixpkgs/pull/552347 reaches the
-# pinned nixpkgs revision. Keep this as a minimal override so it can then be
+# TODO: Temporary until https://github.com/NixOS/nixpkgs/pull/552347 (still open
+# as of 2026-11) reaches the pinned nixpkgs revision. Keep this as a minimal override so it can then be
 # replaced directly with `pkgs.cook-cli` — that PR turns on both features
 # below, among others.
 { cook-cli }:

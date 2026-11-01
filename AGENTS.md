@@ -44,6 +44,19 @@ Prometheus node-exporter textfile metrics are written by a systemd oneshot with 
 atomic tmp+mv, never by `system.activationScripts`; add a refresh timer only if the
 value actually drifts at runtime.
 
+## Workarounds waiting on upstream
+
+When code works around something upstream could fix (a bug, a missing option, a
+package nixpkgs hasn't bumped), start its comment with `TODO:` so `rg 'TODO:'`
+finds it. The comment says what is wrong, links the upstream issue, PR or commit
+— or says that none exists — and names what lets us drop the workaround ("drop
+once nixpkgs ships umap 4.0"). Date any upstream state that will change: "still
+1.7.0 on nixos-unstable as of 2026-11".
+
+When reviewing these, check each one against upstream's current state rather
+than trusting the comment. Rewrite a comment that is no longer accurate, and
+remove the workaround once its condition holds.
+
 ## Secrets
 
 The `secrets.*` values the host configs read come from the private `nix-secrets`

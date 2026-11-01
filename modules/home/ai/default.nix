@@ -456,9 +456,11 @@ in
     };
 
     systemd.user.services.voxtype = lib.mkIf config.programs.voxtype.service.enable {
-      # The voxtype flake's wrapper only puts its typing/clipboard tools on PATH,
-      # not `which`, which the daemon shells out to. voxtype#253 was closed by
-      # fixing the nixpkgs package (NixOS/nixpkgs#520520), not this flake's.
+      # TODO: The voxtype flake's wrapper only puts its typing/clipboard tools on
+      # PATH, not `which`, which the daemon shells out to. voxtype#253 was closed
+      # by fixing the nixpkgs package (NixOS/nixpkgs#520520), not this flake's,
+      # and no upstream issue is open for the flake as of 2026-11. Drop this once
+      # the flake's runtimeDeps include `which`.
       Service.Environment = [ "PATH=/run/current-system/sw/bin" ];
       # The daemon reads config.toml once at startup and never re-reads it,
       # and upstream's unit doesn't name the file — so a settings-only change

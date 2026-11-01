@@ -9,9 +9,10 @@ let
   domain = config.my.homelab.domain;
   umapDomain = "umap.${domain}";
 
-  # The OIDC provider logo is missing from 3.8.x. Fixed upstream in
-  # https://github.com/umap-project/umap/pull/3499 (in 4.0.0a0); drop this once
-  # the umap package is on 4.0.
+  # TODO: The OIDC provider logo is missing from 3.8.x. Fixed upstream in
+  # https://github.com/umap-project/umap/pull/3499 (in the 4.0.0a0 pre-release;
+  # 3.8.1 is still the latest stable as of 2026-11); drop this once the umap
+  # package is on 4.0.
   oidcProviderLogo = pkgs.fetchurl {
     name = "oidc.png";
     url = "https://raw.githubusercontent.com/LorenzBischof/umap/af79689bed7e475573a81881eb631c92d9eab5ba/umap/static/umap/img/providers/oidc.png";
@@ -24,6 +25,10 @@ let
   });
 in
 {
+  # TODO: The NixOS module isn't in nixpkgs yet; it comes from the branch for
+  # https://github.com/NixOS/nixpkgs/pull/462231 (still open as of 2026-11).
+  # Once it is merged, drop the nixpkgs-umap input, this import and the osmic
+  # overlay below.
   imports = [
     "${inputs.nixpkgs-umap}/nixos/modules/services/web-apps/umap.nix"
   ];
