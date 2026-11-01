@@ -55,16 +55,34 @@ jobs:
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= s3:g+tSfjDOsI+PlY7ZGs981O+IIAYadMSzSz4NMm/kwIk=
       - name: Build
         id: build
+        # Retried when the attempt failed on binary-cache downloads: a dropped
+        # connection makes nix disable cache.nixos.org for 60 seconds, and every
+        # path still needed in that window fails at once with "no substituter
+        # that can build it" — download-attempts never comes into play. Paths
+        # already downloaded stay in the store, so a retry only fetches the
+        # rest. Any failure without those messages is a real one and is not
+        # retried, so a broken build still fails after a single attempt.
         run: |
           set +e
           if [ "${{ matrix.target }}" = "flake-check" ]; then
-            nix flake check -L 2>&1 | tee build.log
-            exit_code=${PIPESTATUS[0]}
+            cmd=(nix flake check -L)
           else
-            nix build -L .#nixosConfigurations.${{ matrix.target }}.config.system.build.toplevel 2>&1 | tee build.log
-            exit_code=${PIPESTATUS[0]}
+            cmd=(nix build -L ".#nixosConfigurations.${{ matrix.target }}.config.system.build.toplevel")
           fi
-          exit $exit_code
+          : > build.log
+          for attempt in 1 2 3; do
+            "${cmd[@]}" 2>&1 | tee attempt.log
+            exit_code=${PIPESTATUS[0]}
+            cat attempt.log >> build.log
+            [ "$exit_code" -eq 0 ] && exit 0
+            if [ "$attempt" -eq 3 ] || ! grep -qE \
+              "no substituter that can build it|disabling binary cache" attempt.log; then
+              exit "$exit_code"
+            fi
+            # Past the 60-second window, so the cache is back in use.
+            echo "::warning::attempt $attempt failed on binary-cache downloads, retrying in 70s"
+            sleep 70
+          done
       - name: Push to S3 cache
         if: ${{ success() && matrix.target != 'flake-check' }}
         env:
