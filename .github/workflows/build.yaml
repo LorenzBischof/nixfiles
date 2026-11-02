@@ -88,8 +88,15 @@ jobs:
           # uses root's credentials file instead (see above).
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_ACCESS_KEY }}
+          S3_CACHE_BUCKET: ${{ secrets.S3_CACHE_BUCKET }}
+          S3_CACHE_ENDPOINT: ${{ secrets.S3_CACHE_ENDPOINT }}
         run: |
           set +e
+          # GitHub masks secrets in step output, not in uploaded files, and nix
+          # names the bucket in substituter warnings. A trap covers every exit
+          # below. Guarded: secrets are empty on fork PRs, and sed rejects an
+          # empty pattern.
+          trap '[ -z "$S3_CACHE_BUCKET" ] || sed -i -e "s|$S3_CACHE_ENDPOINT|***|g" -e "s|$S3_CACHE_BUCKET|***|g" build.log' EXIT
           if [ "$TARGET" = "flake-check" ]; then
             nix flake check -L 2>&1 | tee build.log
             exit "${PIPESTATUS[0]}"
@@ -174,14 +181,14 @@ jobs:
         with:
           path: ${{ env.GHA_CACHE_DIR }}
           key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
+      # Public artifact, so only on the runs analyze-claude reads it from.
       - name: Upload build log
-        # Upload on success too: a clean build's log still carries the
-        # deprecation warnings the analyze job scans for.
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.sender.login == 'dependabot[bot]' }}
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ matrix.target }}
           path: build.log
+          retention-days: 1
 
   analyze-claude:
     needs: build
