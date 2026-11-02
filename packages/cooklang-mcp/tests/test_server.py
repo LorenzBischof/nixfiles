@@ -247,6 +247,45 @@ def test_a_kind_of_picture_this_server_does_not_know_is_still_a_picture(monkeypa
     assert asyncio.run(server.recipe_read("Kürbiswähe.cook")).picture == "file"
 
 
+def test_reading_a_recipe_brings_its_history_but_not_the_history_file(monkeypatch):
+    files = {
+        "Risotto.cook": "Cook @rice{}.\n",
+        "Meal History.menu": (
+            "= Friday (2026-10-16)\n@./Chili{}\n\n"
+            "= Wednesday (2026-10-14)\n@./Risotto{}\n\n"
+            "Feedback: Too salty.\n"
+        ),
+    }
+
+    async def request(_method, path, **_kwargs):
+        if path.startswith("/api/recipes/raw/"):
+            return httpx.Response(200, text=files[path[len("/api/recipes/raw/") :]])
+        if path.startswith("/api/recipe_image/"):
+            return httpx.Response(200, json={"image": None})
+        raise AssertionError(path)
+
+    monkeypatch.setattr(server.cook, "request", request)
+    document = asyncio.run(server.recipe_read("Risotto.cook"))
+
+    assert [entry.model_dump() for entry in document.cooked] == [
+        {"cooked_on": "2026-10-14", "feedback": ["Too salty."]}
+    ]
+    assert "Chili" not in document.model_dump_json()
+
+
+def test_a_missing_history_leaves_a_recipe_readable(monkeypatch):
+    async def request(_method, path, **_kwargs):
+        if path == "/api/recipes/raw/Meal History.menu":
+            raise server.cook.CookCliError("404")
+        if path.startswith("/api/recipes/raw/"):
+            return httpx.Response(200, text="Cook @rice{}.\n")
+        return httpx.Response(200, json={"image": None})
+
+    monkeypatch.setattr(server.cook, "request", request)
+
+    assert asyncio.run(server.recipe_read("Risotto.cook")).cooked == []
+
+
 PLAN = """\
 ---
 title: Meal Plan
@@ -929,25 +968,6 @@ def test_an_emptied_or_absent_plan_leaves_nothing_to_link(monkeypatch):
     assert no_plan.remaining_plan == []
 
 
-def test_an_estimated_date_is_marked_and_reuses_a_matching_section(monkeypatch):
-    written, result = cook_run(
-        monkeypatch,
-        {
-            "Meal Plan.menu": "= Meals\n@./Risotto{}\n",
-            "Meal History.menu": "= Wednesday (2026-10-14)\n@./Soup{}\n",
-        },
-        path="./Risotto",
-        cooked_on="2026-10-14",
-        date_estimated=True,
-    )
-
-    assert written["Meal History.menu"] == (
-        "= Wednesday (2026-10-14)\n@./Risotto{} — date estimated\n\n@./Soup{}\n"
-    )
-    assert result.date_estimated is True
-    assert result.removed_from_plan is True
-
-
 def test_a_missing_history_is_created_and_a_missing_plan_is_not_required(monkeypatch):
     written, result = cook_run(
         monkeypatch,
@@ -977,6 +997,28 @@ def test_a_recipe_absent_from_the_plan_leaves_it_untouched(monkeypatch):
     assert "Meal Plan.menu" not in written
     assert result.removed_from_plan is False
     assert "only the history changed" in result.note
+
+
+def test_late_feedback_is_appended_and_leaves_the_plan_alone(monkeypatch):
+    """The recipe on the plan now is a later cooking of the same dish."""
+    written, result = cook_run(
+        monkeypatch,
+        {
+            "Meal Plan.menu": "= Meals\n@./Risotto{}\n",
+            "Meal History.menu": "= Wednesday (2026-10-14)\n@./Risotto{}\n",
+        },
+        path="Risotto.cook",
+        cooked_on="2026-10-14",
+        feedback="Double the stock.",
+    )
+
+    assert written == {
+        "Meal History.menu": (
+            "= Wednesday (2026-10-14)\n@./Risotto{}\n\nFeedback: Double the stock.\n"
+        )
+    }
+    assert result.already_recorded is True
+    assert result.removed_from_plan is False
 
 
 def test_a_date_that_is_not_a_date_is_refused_before_anything_is_written(monkeypatch):
@@ -1032,7 +1074,6 @@ def test_the_instructions_keep_only_what_is_cross_cutting():
 
     # Relocated, and gone from the block that used to carry them.
     for moved, home in (
-        ("date_estimated", "mark_cooked"),
         ("optional", "mark_cooked"),
         ("plausible past date", "mark_cooked"),
         ("explicitly asks", "shopping_list_read"),
@@ -1041,11 +1082,6 @@ def test_the_instructions_keep_only_what_is_cross_cutting():
     ):
         assert moved not in INSTRUCTIONS, moved
         assert moved in listed[home].description, (moved, home)
-
-    # The marker's exact wording went further than a description: it is written
-    # by code now, so no instruction has to spell it out at all.
-    assert "date estimated" not in INSTRUCTIONS
-    assert menus.ESTIMATED == "— date estimated"
 
     # Shorter than the file-format guidance it used to compete with.
     assert len(INSTRUCTIONS) < len(listed["recipe_write"].description)
@@ -1104,6 +1140,22 @@ def test_the_meal_plan_file_format_stays_with_the_tool_that_writes_it():
     assert "source.url" in write_description
     # History is mark_cooked's to write, so this only points at it.
     assert "mark_cooked" in write_description
+
+
+def test_an_archived_recipe_is_kept_off_the_plan_but_still_found():
+    """`archived` is a tag, so it needs no code: it is in every hit and plan
+    entry already. What it means is said where each decision is made — and on
+    the `tags` field itself, which reaches a client that drops instructions."""
+    listed = tools()
+    tags = server.RecipeSummary.model_fields["tags"].description
+
+    assert "(archived)" in tags
+    assert "(archived)" in INSTRUCTIONS
+    assert "suggestions" in listed["recipe_search"].description
+    assert "by name" in listed["recipe_search"].description
+    plan_rule = "Never queue a recipe tagged `archived`"
+    assert plan_rule in listed["recipe_write"].description
+    assert "suggest archiving" in listed["mark_cooked"].description
 
 
 def test_a_recipes_own_notes_are_carried_where_they_change_a_decision():

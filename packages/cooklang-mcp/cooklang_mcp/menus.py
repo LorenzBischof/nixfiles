@@ -43,7 +43,6 @@ _AMOUNT = re.compile(
     r"(?:\s*([^\s\d].*))?$"
 )
 
-ESTIMATED = "— date estimated"
 HISTORY_FRONTMATTER = (_FENCE, "title: Meal History", _FENCE)
 EXTRAS_FRONTMATTER = (_FENCE, "title: Extra Items", _FENCE)
 
@@ -157,27 +156,39 @@ def add_to_history(
     source: str,
     path: str,
     cooked: Date,
-    estimated: bool = False,
     feedback: str | None = None,
-) -> str:
-    """`source` with `path` recorded as cooked on `cooked`.
+) -> tuple[str, bool]:
+    """`source` with `path` recorded as cooked on `cooked`, and whether that
+    day already held it.
 
     The recipe joins an existing section for that date or opens a new one, kept
     in newest-first order among the sections that carry a date. Feedback
-    becomes its own block directly below the reference it describes.
+    becomes its own block directly below the reference it describes. A recipe
+    already recorded that day is not added again: feedback for it goes below
+    the notes it already has, so a note that arrives later never needs the
+    file rewritten by hand.
     """
     menu = parse(source) if source.strip() else _new_history()
+    # One line: a line break could start a line read as a heading or reference.
+    text = " ".join((feedback or "").split())
+    note = [[f"Feedback: {text}"]] if text else []
+
     entry = f"@{reference(path)}{{}}"
-    if estimated:
-        entry = f"{entry} {ESTIMATED}"
-    blocks = [[entry]]
-    if feedback and feedback.strip():
-        blocks.append([f"Feedback: {feedback.strip()}"])
 
     for section in menu.sections:
-        if section.heading and heading_date(section.heading) == cooked:
-            section.blocks[:0] = blocks
-            return render(menu)
+        if not section.heading or heading_date(section.heading) != cooked:
+            continue
+        blocks = section.blocks
+        for index, block in enumerate(blocks):
+            name = component(block[0])
+            if name is not None and same_recipe(name, path):
+                at = index + 1
+                while at < len(blocks) and blocks[at][0].startswith("Feedback:"):
+                    at += 1
+                blocks[at:at] = note
+                return render(menu), True
+        blocks[:0] = [[entry], *note]
+        return render(menu), False
 
     index = len(menu.sections)
     for position, section in enumerate(menu.sections):
@@ -188,8 +199,29 @@ def add_to_history(
             index = position
             break
     heading = f"{cooked.strftime('%A')} ({cooked.isoformat()})"
-    menu.sections.insert(index, Section(heading=heading, blocks=blocks))
-    return render(menu)
+    menu.sections.insert(index, Section(heading=heading, blocks=[[entry], *note]))
+    return render(menu), False
+
+
+def cooked(source: str, path: str) -> list[tuple[Date, list[str]]]:
+    """Each time the history records `path`: the day and the feedback noted
+    under it, in file order — newest first."""
+    found = []
+    for section in parse(source).sections:
+        day = heading_date(section.heading) if section.heading else None
+        if day is None:
+            continue
+        for index, block in enumerate(section.blocks):
+            name = component(block[0])
+            if name is None or not same_recipe(name, path):
+                continue
+            notes = []
+            for after in section.blocks[index + 1 :]:
+                if not after[0].startswith("Feedback:"):
+                    break
+                notes.append(" ".join(after).removeprefix("Feedback:").strip())
+            found.append((day, notes))
+    return found
 
 
 def remove_from_plan(source: str, path: str) -> tuple[str, bool]:

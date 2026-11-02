@@ -108,11 +108,14 @@ rather than creating one.
 under `Meals`. `{HISTORY_PATH}` is the record of cooked ones. Both are \
 ordinary recipe files, so `recipe_read` and `recipe_write` work on them — but \
 when the user says a recipe was cooked, use `mark_cooked`, which moves it from \
-the one to the other. Do not create weekly or date-named plan files. When adding \
-a meal plan to the shopping list, read it and add its individual recipes with \
-their scales, never the whole menu file. This is a temporary workaround until \
-CookCLI handles menu updates and removing individual recipes correctly: editing \
-the plan must not be assumed to update the shopping list.\
+the one to the other. A recipe tagged `archived` is one they chose not to cook \
+again: never suggest it or put it on the plan unasked, and write (archived) \
+after its name wherever it appears. Do not create weekly or date-named plan \
+files. When adding a meal plan to the shopping list, read it and add its \
+individual recipes with their scales, never the whole menu file. This is a \
+temporary workaround until CookCLI handles menu updates and removing \
+individual recipes correctly: editing the plan must not be assumed to update \
+the shopping list.\
 """
 
 # All four hints are advisory, and a client is free to ignore them. Only
@@ -195,7 +198,13 @@ class RecipeSummary(BaseModel):
     path: str = Field(description="Path used with the other recipe tools.")
     title: str = Field(description="The user-facing recipe or meal-plan name.")
     web_url: WebUrl
-    tags: list[str] = Field(description="Tags stored in the file's metadata.")
+    tags: list[str] = Field(
+        description=(
+            "Tags stored in the file's metadata. `archived` marks a recipe "
+            "they chose not to cook again: write (archived) after its name "
+            "wherever you name it."
+        )
+    )
     is_menu: bool = Field(
         description="Whether this is a meal plan instead of a recipe."
     )
@@ -240,6 +249,13 @@ Picture = Annotated[
 ]
 
 
+class Cooked(BaseModel):
+    """One time the recipe was cooked, from `Meal History.menu`."""
+
+    cooked_on: str = Field(description="The day, as `YYYY-MM-DD`.")
+    feedback: list[str] = Field(description="What they said about it then.")
+
+
 class RecipeDocument(BaseModel):
     """A stored recipe or meal plan and its Cook web page."""
 
@@ -250,6 +266,13 @@ class RecipeDocument(BaseModel):
     )
     picture: Picture
     entries: MenuEntries
+    cooked: list[Cooked] = Field(
+        default_factory=list,
+        description=(
+            "Each time this recipe was cooked, newest first, with the "
+            "feedback given then. Empty for a meal plan or history."
+        ),
+    )
 
 
 class SimilarIngredient(BaseModel):
@@ -381,15 +404,18 @@ class MealCooked(BaseModel):
     path: str = Field(description="Path of the recipe that was cooked.")
     web_url: WebUrl
     cooked_on: str = Field(description="The date it was recorded under.")
-    date_estimated: bool = Field(
-        description="Whether that date was inferred rather than given."
-    )
     recorded_in: str = Field(
         description="Page of the history file the entry was written to.",
         json_schema_extra=URI,
     )
     history_created: bool = Field(
         description="Whether the history file had to be created first."
+    )
+    already_recorded: bool = Field(
+        description=(
+            "Whether that day already held this recipe, so only its feedback "
+            "was added and the plan was left alone."
+        )
     )
     removed_from_plan: bool = Field(
         description="Whether the recipe was taken off the meal plan."
@@ -552,6 +578,11 @@ async def recipe_search(
     never hand them an invented dish as though it were one of theirs — no
     hits is itself the answer that they have nothing for it.
 
+    A recipe tagged `archived` is one they decided not to cook again. Leave
+    it out of suggestions — what to eat, ideas for the week, anything headed
+    for the meal plan — but still return it when they ask for it by name or
+    are looking something up, marked (archived).
+
     An empty query matches everything. Results contain metadata only; use
     `recipe_read` for the complete recipe or meal plan.
 
@@ -584,6 +615,11 @@ async def recipe_read(path: Path) -> RecipeDocument:
     Only what a note says, nothing for an entry whose `notes` are empty, and
     never preparation you inferred from the dish.
 
+    `cooked` is when they made it before and what they said about it. When
+    they are about to make it again, pass on feedback that changes how to
+    cook it — "last time: too salty". The history file itself never needs
+    reading for this.
+
     `picture` says whether the dish already has one: a `file` picture is
     stored beside the recipe and appears nowhere in the source text. Offer to
     add one only when it is `none`.
@@ -602,7 +638,26 @@ async def recipe_read(path: Path) -> RecipeDocument:
         source=source,
         picture=await _picture(path),
         entries=await _menu_entries(path, source),
+        cooked=await _cooked(path),
     )
+
+
+async def _cooked(path: str) -> list[Cooked]:
+    """When `path` was cooked, read from the history.
+
+    A collection with no history has nothing to say, so a failed read costs
+    this field and not the recipe.
+    """
+    if not path.endswith(".cook"):
+        return []
+    try:
+        history = await cook.request("GET", f"/api/recipes/raw/{HISTORY_PATH}")
+    except cook.CookCliError:
+        return []
+    return [
+        Cooked(cooked_on=day.isoformat(), feedback=notes)
+        for day, notes in menus.cooked(history.text, path)
+    ]
 
 
 def _words(name: str) -> tuple[str, ...]:
@@ -882,12 +937,14 @@ async def recipe_write(
 
         @./Caprese{2%servings}
 
+    Never queue a recipe tagged `archived` unless they ask for it by name.
+
     `Meal History.menu` is the record, under `Weekday (YYYY-MM-DD)` headings,
-    but `mark_cooked` writes it — reach for this tool only to correct an entry
-    already there. Those two root files are the whole of the plan and the
-    record: do not create weekly or date-named plan files, which the web UI
-    never shows as the plan and `mark_cooked` cannot drain. A single
-    ingredient to buy is not part of the plan either — it goes through
+    but `mark_cooked` writes it, feedback included — reach for this tool only
+    to correct an entry already there. Those two root files are the whole of
+    the plan and the record: do not create weekly or date-named plan files,
+    which the web UI never shows as the plan and `mark_cooked` cannot drain. A
+    single ingredient to buy is not part of the plan either — it goes through
     `shopping_list_edit`'s `add_item`, which writes `Extra Items.menu` itself.
 
     Writing the plan does not synchronize the shopping list. When asked to
@@ -1104,15 +1161,6 @@ async def mark_cooked(
             pattern=r"^\d{4}-\d{2}-\d{2}$",
         ),
     ],
-    date_estimated: Annotated[
-        bool,
-        Field(
-            description=(
-                "True when the date was inferred rather than told, which marks "
-                "the entry accordingly."
-            )
-        ),
-    ] = False,
     feedback: Annotated[
         str | None,
         Field(
@@ -1143,31 +1191,38 @@ async def mark_cooked(
 
     Ask the user when it was cooked, then record it straight away. Pass the
     exact date when they know it. When the answer is vague or they do not
-    remember, pick a plausible past date from the dates already in the history
-    — normally avoid putting two recipes on one inferred day, though treat
-    that as a soft rule — and pass `date_estimated`.
+    remember, pick a plausible past date from what they said — no need to
+    read the history for it.
 
-    Ask for brief feedback afterwards, saying it is optional, and add what
-    they say by editing `Meal History.menu` with `recipe_write`: a
-    `Feedback: ...` block directly below the recipe's reference. Never wait on
+    Ask for brief feedback afterwards, saying it is optional, but never wait on
     that answer before calling this — a question left open while nothing is
-    recorded reads to the user as already done.
+    recorded reads to the user as already done. To add their answer, call this
+    again with the same `path` and `cooked_on` plus `feedback`: a recipe
+    already recorded that day gets the note appended, not a second entry.
+
+    When the feedback is bad — it did not work, they did not like it, they
+    would not make it again — suggest archiving the recipe, so it stops being
+    suggested for the plan. On their yes, add `archived` to the `tags` in its
+    frontmatter with `recipe_write`; nothing else in the recipe changes.
     """
     cooked = Date.fromisoformat(cooked_on)
     existing = {entry["path"] for entry in await cook.list_entries()}
     history = await _read_menu(HISTORY_PATH, existing)
-    await _put_recipe(
-        HISTORY_PATH,
-        menus.add_to_history(
-            history or "",
-            path,
-            cooked,
-            estimated=date_estimated,
-            feedback=feedback,
-        ),
+    written, already = menus.add_to_history(
+        history or "",
+        path,
+        cooked,
+        feedback=feedback,
     )
+    await _put_recipe(HISTORY_PATH, written)
     plan = await _read_menu(PLAN_PATH, existing)
-    if plan is None:
+    if already:
+        # Feedback arriving late. The plan was drained the first time; the
+        # recipe on it now, if any, is a later cooking that stays queued.
+        removed = False
+        remaining = plan or ""
+        note = "Already recorded that day, so the plan was left alone."
+    elif plan is None:
         removed = False
         remaining = ""
         note = f"The collection has no {PLAN_PATH}, so nothing was removed."
@@ -1187,9 +1242,9 @@ async def mark_cooked(
         path=path,
         web_url=recipe_web_url(path),
         cooked_on=cooked.isoformat(),
-        date_estimated=date_estimated,
         recorded_in=recipe_web_url(HISTORY_PATH),
         history_created=history is None,
+        already_recorded=already,
         removed_from_plan=removed,
         note=note,
         remaining_plan=await _menu_entries(PLAN_PATH, remaining),
