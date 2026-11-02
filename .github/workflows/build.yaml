@@ -110,52 +110,48 @@ jobs:
           key="$RUNNER_TEMP/nix-cache-signing-key"
           printenv NIX_CACHE_SIGNING_KEY > "$key"
           nix store sign --recursive --key-file "$key" "$out"
-          # `nix copy` can't upload the filtered subset directly: a binary-cache
+          # The cache directory doubles as the staging area for the upload.
+          # `nix copy` can't write the filtered subset directly: a binary-cache
           # destination rejects paths whose references it doesn't already hold,
           # and --no-recursive doesn't exempt it (NixOS/nix#12835). So nix writes
-          # the complete closure locally and the filter moves to the upload. An
-          # incomplete bucket only hurts `nix copy` *from* it; hosts substitute
-          # the rest from cache.nixos.org. zstd: this staging copy is discarded.
-          # Both on /nix: the btrfs volume nothing-but-nix mounts there is the
-          # only filesystem with room. $RUNNER_TEMP and the TMPDIR it hands us
+          # the complete closure, skipping whatever the restore brought back, and
+          # the filter becomes a prune. An incomplete bucket only hurts `nix copy`
+          # *from* it; hosts substitute the rest from cache.nixos.org.
+          # TMPDIR on /nix: $RUNNER_TEMP and the TMPDIR the runner hands us
           # (/mnt/tmp.*) are both on /, which the runner image leaves at ~1GB
-          # free — and nix buffers each compressed NAR in TMPDIR before writing
-          # it to the cache, so a multi-GB path overflows that on its own.
-          staging=/nix/.cache-staging
+          # free, and nix buffers each compressed NAR in TMPDIR before writing it
+          # to the cache, so a multi-GB path overflows that on its own.
           export TMPDIR=/nix/.cache-tmp
-          sudo install -d -o "$(id -u)" -g "$(id -g)" "$staging" "$TMPDIR"
-          nix copy --to "file://$staging?compression=zstd" "$out"
-          # Everything cache.nixos.org doesn't serve (locally built paths are
-          # unsigned, so they pass too). One awk, not grep|awk, so an empty
-          # result can't trip `pipefail`.
+          sudo install -d -o "$(id -u)" -g "$(id -g)" "$TMPDIR"
+          # The daemon creates root-owned subdirectories (nar/, realisations/)
+          # when it first opens the cache during the build.
+          sudo chown -R "$(id -u):$(id -g)" "$GHA_CACHE_DIR"
+          nix copy --to "file://$GHA_CACHE_DIR?compression=zstd" "$out"
+          # Everything cache.nixos.org doesn't serve. One awk, not grep|awk, so
+          # an empty result can't trip `pipefail`.
           nix path-info --recursive --sigs "$out" \
             | awk '!/cache\.nixos\.org-1:/ { print $1 }' > "$RUNNER_TEMP/paths"
-          # Each path contributes its .narinfo plus the NAR that narinfo names.
-          files=(nix-cache-info)
+          # Each path keeps its .narinfo plus the NAR that narinfo names.
+          keep=$RUNNER_TEMP/keep
+          echo nix-cache-info > "$keep"
           while read -r path; do
             hash=${path#/nix/store/}
             hash=${hash%%-*}
-            files+=("$hash.narinfo")
-            files+=("$(awk '/^URL: / { print $2 }' "$staging/$hash.narinfo")")
-          done < "$RUNNER_TEMP/paths"
-          includes=()
-          for f in "${files[@]}"; do includes+=(--include "$f"); done
-          # The same subset becomes the GitHub Actions cache entry. Rebuilt from
-          # scratch rather than added to, so it holds this closure only and
-          # paths the host dropped age out with it. Hard links: same volume, so
-          # no second copy. Saved by the next step, on main only. sudo: /nix is
-          # root's, and the daemon creates root-owned subdirectories (nar/,
-          # realisations/) when it first opens an empty cache.
-          sudo rm -rf "$GHA_CACHE_DIR"
-          sudo install -d -o "$(id -u)" -g "$(id -g)" "$GHA_CACHE_DIR"
-          (cd "$staging" && cp -l --parents "${files[@]}" "$GHA_CACHE_DIR")
-          du -sh "$GHA_CACHE_DIR"
+            echo "$hash.narinfo"
+            awk '/^URL: / { print $2 }' "$GHA_CACHE_DIR/$hash.narinfo"
+          done < "$RUNNER_TEMP/paths" >> "$keep"
+          # Drop the rest: the cache.nixos.org closure just written, and any
+          # restored path this host no longer uses, so the entry doesn't grow
+          # without bound.
+          cd "$GHA_CACHE_DIR"
+          comm -23 <(find . -type f -printf '%P\n' | sort) <(sort -u "$keep") \
+            | xargs -r -d '\n' rm --
+          du -sh .
           # --size-only: these names are content-addressed, so a key already
           # there at the same size needs no re-upload — a plain sync compares
           # mtimes and would re-send everything. No --delete, so this never
-          # prunes.
-          aws s3 sync "$staging" "s3://$S3_CACHE_BUCKET" \
-            --size-only --no-progress --exclude '*' "${includes[@]}"
+          # prunes the bucket.
+          aws s3 sync . "s3://$S3_CACHE_BUCKET" --size-only --no-progress
       - name: Save GitHub Actions binary cache
         if: ${{ success() && matrix.target != 'flake-check' && github.event_name == 'push' }}
         uses: actions/cache/save@v4
