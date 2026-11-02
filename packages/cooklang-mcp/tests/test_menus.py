@@ -14,6 +14,11 @@ HISTORY = (
 )
 
 
+def added(*args, **kwargs):
+    """The history `add_to_history` writes, without its flag."""
+    return menus.add_to_history(*args, **kwargs)[0]
+
+
 @pytest.mark.parametrize(
     ("left", "right"),
     [
@@ -67,7 +72,7 @@ def test_a_round_trip_keeps_the_file_and_normalises_its_spacing():
 
 
 def test_a_new_date_opens_a_section_in_newest_first_order():
-    assert menus.add_to_history(HISTORY, "Risotto.cook", date(2026, 10, 14)) == (
+    assert added(HISTORY, "Risotto.cook", date(2026, 10, 14)) == (
         "---\ntitle: Meal History\n---\n"
         "= Saturday (2026-10-17)\n@./Chili{}\n\n"
         "Feedback: Too hot.\n\n"
@@ -77,14 +82,14 @@ def test_a_new_date_opens_a_section_in_newest_first_order():
 
 
 def test_the_newest_and_oldest_dates_land_at_the_ends():
-    newest = menus.add_to_history(HISTORY, "Risotto.cook", date(2026, 10, 20))
+    newest = added(HISTORY, "Risotto.cook", date(2026, 10, 20))
     assert newest.index("Risotto") < newest.index("Chili")
-    oldest = menus.add_to_history(HISTORY, "Risotto.cook", date(2026, 1, 1))
+    oldest = added(HISTORY, "Risotto.cook", date(2026, 1, 1))
     assert oldest.index("Risotto") > oldest.index("Soup")
 
 
 def test_a_matching_date_is_reused_and_feedback_follows_its_recipe():
-    assert menus.add_to_history(
+    assert added(
         HISTORY,
         "Risotto.cook",
         date(2026, 10, 12),
@@ -99,25 +104,46 @@ def test_a_matching_date_is_reused_and_feedback_follows_its_recipe():
     )
 
 
-def test_an_estimated_date_is_marked_on_the_recipe_only():
-    written = menus.add_to_history(
-        HISTORY, "Risotto.cook", date(2026, 10, 14), estimated=True
-    )
-
-    assert "@./Risotto{} — date estimated" in written
-    assert "@./Chili{}\n" in written
-
-
 def test_blank_feedback_is_not_recorded():
     for blank in (None, "", "   "):
-        written = menus.add_to_history(
+        written = added(
             "", "Risotto.cook", date(2026, 10, 14), feedback=blank
         )
         assert "Feedback" not in written
 
 
+def test_feedback_for_a_recipe_already_recorded_that_day_is_appended():
+    written, already = menus.add_to_history(
+        HISTORY, "./Chili", date(2026, 10, 17), feedback="Better\nwith less."
+    )
+
+    assert already is True
+    assert written.count("@./Chili{}") == 1
+    assert (
+        "@./Chili{}\n\nFeedback: Too hot.\n\nFeedback: Better with less.\n\n= Monday"
+    ) in written
+
+
+def test_the_same_recipe_on_another_day_is_a_new_entry():
+    written, already = menus.add_to_history(HISTORY, "Chili.cook", date(2026, 10, 12))
+
+    assert already is False
+    assert written.count("@./Chili{}") == 2
+
+
+def test_cooked_lists_each_time_with_its_feedback():
+    history = added(HISTORY, "Chili.cook", date(2026, 10, 12))
+    history = added(history, "Chili.cook", date(2026, 10, 17), feedback="Again!")
+
+    assert menus.cooked(history, "./Chili") == [
+        (date(2026, 10, 17), ["Too hot.", "Again!"]),
+        (date(2026, 10, 12), []),
+    ]
+    assert menus.cooked(history, "Risotto.cook") == []
+
+
 def test_an_empty_history_gets_frontmatter():
-    assert menus.add_to_history("", "Risotto.cook", date(2026, 10, 14)) == (
+    assert added("", "Risotto.cook", date(2026, 10, 14)) == (
         "---\ntitle: Meal History\n---\n= Wednesday (2026-10-14)\n@./Risotto{}\n"
     )
 
@@ -165,7 +191,7 @@ def test_a_reference_written_either_way_is_found():
 
 def test_a_heading_without_a_date_is_left_in_place():
     source = "= Meals\n@./Soup{}\n"
-    written = menus.add_to_history(source, "Risotto.cook", date(2026, 10, 14))
+    written = added(source, "Risotto.cook", date(2026, 10, 14))
 
     assert "= Meals" in written
     assert "= Wednesday (2026-10-14)" in written

@@ -121,11 +121,31 @@ history written before the plan is touched were five paragraphs of instructions,
 each of which a client could drop. `menus.py` does it as code and leaves the
 model only the judgement that is genuinely its — which day the meal was eaten.
 
+Feedback usually arrives after the meal is recorded, so a second call for a
+recipe already recorded that day appends a `Feedback:` line under it instead of
+adding an entry, and leaves the plan alone. Append-only means a note can never
+be lost to a client rewriting the file.
+
+Reading the history back is per recipe: `recipe_read` on a recipe returns
+`cooked`, each time it was made with the feedback noted then, so the note from
+last time is there when it is about to be made again and the history file never
+has to be read whole.
+
 A menu file parses as optional frontmatter, then `= Heading` sections holding
 blocks separated by blank lines. The block is the unit that moves, which is what
 lets a reference be removed without taking the `Feedback:` note under it.
 Rendering normalises to one blank line between blocks, so a round trip tidies
 spacing rather than preserving it byte for byte.
+
+## Archiving a recipe
+
+A recipe they would rather not cook again is tagged `archived` in its
+frontmatter rather than deleted, so its history and feedback stay. It needs no
+code: tags already travel with every search hit and plan entry. The
+descriptions carry the rule — still found when looked for, never suggested or
+queued unasked, always named with (archived) — and `mark_cooked` asks for it
+to be suggested when the feedback is bad. The naming rule sits on the `tags`
+field itself, which reaches a client that drops the server instructions.
 
 ## Ingredient names and the aisles
 
