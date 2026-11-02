@@ -49,6 +49,9 @@ jobs:
       - uses: wimpysworld/nothing-but-nix@main
         with:
           hatchet-protocol: holster
+          # actions/cache stages its archive in $RUNNER_TEMP, on /, and the
+          # framework entry (~2GB) overflowed the default 2GB left there.
+          root-safe-haven: 6144
       - uses: cachix/install-nix-action@v31
         with:
           # We set our custom GitHub token for any private flake inputs we might have
