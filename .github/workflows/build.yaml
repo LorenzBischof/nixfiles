@@ -58,10 +58,12 @@ jobs:
             http-connections = 128
             max-substitution-jobs = 128
             extra-platforms = aarch64-linux i686-linux
-            # The GHA cache goes first (priority 10, ahead of cache.nixos.org's
-            # 40), so S3 only gets asked for what it doesn't have. Its narinfos
-            # carry the same s3 signature the bucket's do.
-            substituters = file://${{ env.GHA_CACHE_DIR }}?priority=10 https://cache.nixos.org/ ${{ env.S3_CACHE_STORE_URL }}
+            # Asked in priority order: the GHA cache (10), cache.nixos.org (40),
+            # then S3 (50), so S3 only gets the paths neither has. S3's priority
+            # is set here because without one nix takes the bucket's
+            # nix-cache-info value, which put it ahead of both. The GHA cache's
+            # narinfos carry the same s3 signature the bucket's do.
+            substituters = file://${{ env.GHA_CACHE_DIR }}?priority=10 https://cache.nixos.org/ ${{ env.S3_CACHE_STORE_URL }}&priority=50
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= s3:g+tSfjDOsI+PlY7ZGs981O+IIAYadMSzSz4NMm/kwIk=
       # After the Nix install, not before, so the installer finds /nix as
       # nothing-but-nix left it. The runner user extracts the archive, hence the
