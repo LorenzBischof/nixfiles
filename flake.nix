@@ -259,6 +259,9 @@
             inherit self nixpkgs;
           };
         };
+        rpi3 = nixpkgs.lib.nixosSystem {
+          modules = [ ./hosts/rpi3/configuration.nix ];
+        };
         #  rpi2 = nixpkgs.lib.nixosSystem {
         #    modules = [
         #      "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-raspberrypi.nix"
@@ -269,34 +272,6 @@
         #          buildPlatform.system = "x86_64-linux"; # If you build on x86 other wise changes this.
         #          # ... extra configs as above
         #        };
-        #      }
-        #    ];
-        #  };
-        #  rpi3 = nixpkgs.lib.nixosSystem {
-        #    system = "aarch64-linux";
-        #    modules = [
-        #      "${nixpkgs}/nixos/modules/installer/sd-card/sd-image-aarch64.nix"
-        #      {
-        #        environment.systemPackages = [ pkgs.git ];
-        #        users.users.nixos = {
-        #          isNormalUser = true;
-        #          extraGroups = [
-        #            "wheel"
-        #            "networkmanager"
-        #          ];
-        #          openssh.authorizedKeys.keys = [
-        #            "sk-ssh-ed25519@openssh.com AAAAGnNrLXNzaC1lZDI1NTE5QG9wZW5zc2guY29tAAAAIDSKZEtyhueGqUow/G2ewR5TuccLqhrgwWd5VUnd6ImqAAAAC3NzaDpob21lbGFi"
-        #          ];
-        #        };
-        #        services.openssh.enable = true;
-        #        security.sudo.wheelNeedsPassword = false;
-        #        nix.settings.trusted-users = [
-        #          "nixos"
-        #          "root"
-        #        ];
-
-        #        # bzip2 compression takes loads of time with emulation, skip it.
-        #        sdImage.compressImage = false;
         #      }
         #    ];
         #  };
@@ -313,14 +288,17 @@
           ];
         };
       };
-      # Commented out with the rpi2/rpi3 configurations above, to bring back when
-      # those do. `images` is not a flake output nix knows, so leaving it in place
+      # Commented out with the rpi2 configuration above, to bring back when it
+      # does. `images` is not a flake output nix knows, so leaving it in place
       # put a standing `warning: unknown flake output` in every flake-check log —
-      # expose the sdImages under `packages.<system>` instead when reviving this.
+      # expose the sdImage under `packages.<system>` instead when reviving this,
+      # like rpi3-sd-image below.
       #images = {
       #  rpi2 = self.nixosConfigurations.rpi2.config.system.build.sdImage;
-      #  rpi3 = self.nixosConfigurations.rpi3.config.system.build.sdImage;
       #};
+      # Build on an aarch64 machine (vps natively, framework through binfmt):
+      #   nix build .#packages.aarch64-linux.rpi3-sd-image
+      packages.aarch64-linux.rpi3-sd-image = self.nixosConfigurations.rpi3.config.system.build.sdImage;
       formatter.${system} = treefmtEval.config.build.wrapper;
       packages.${system} = {
         basic-memory = pkgs.callPackage ./packages/basic-memory { inherit inputs; };
