@@ -22,6 +22,13 @@ jobs:
         target: [flake-check, framework, nas, vps]
     env:
       S3_CACHE_STORE_URL: s3://${{ secrets.S3_CACHE_BUCKET }}?endpoint=${{ secrets.S3_CACHE_ENDPOINT }}&region=${{ secrets.S3_CACHE_REGION }}
+      # A per-target copy of the bucket's contents for this host, kept in the
+      # GitHub Actions cache so a run substitutes from there instead of
+      # downloading the same NARs from S3 every time (S3 egress and request
+      # charges). On /nix: nothing-but-nix mounts the only volume with room
+      # there. Holds only what cache.nixos.org doesn't serve, the same subset the
+      # push step uploads, so it stays far below the full closure.
+      GHA_CACHE_DIR: /nix/.gha-cache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,8 +58,28 @@ jobs:
             http-connections = 128
             max-substitution-jobs = 128
             extra-platforms = aarch64-linux i686-linux
-            substituters = https://cache.nixos.org/ ${{ env.S3_CACHE_STORE_URL }}
+            # The GHA cache goes first (priority 10, ahead of cache.nixos.org's
+            # 40), so S3 only gets asked for what it doesn't have. Its narinfos
+            # carry the same s3 signature the bucket's do.
+            substituters = file://${{ env.GHA_CACHE_DIR }}?priority=10 https://cache.nixos.org/ ${{ env.S3_CACHE_STORE_URL }}
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= s3:g+tSfjDOsI+PlY7ZGs981O+IIAYadMSzSz4NMm/kwIk=
+      # After the Nix install, not before, so the installer finds /nix as
+      # nothing-but-nix left it. The runner user extracts the archive, hence the
+      # chown. On a miss the empty directory is a valid, empty binary cache.
+      - name: Prepare GitHub Actions binary cache
+        if: ${{ matrix.target != 'flake-check' }}
+        run: sudo install -d -o "$(id -u)" -g "$(id -g)" "$GHA_CACHE_DIR"
+      # Each main push saves a fresh entry; a PR reads the newest one from main
+      # (PRs can read their base branch's caches). Only main saves, so PR builds
+      # don't spend the 10GB repository quota evicting the entries every other
+      # run restores from.
+      - name: Restore GitHub Actions binary cache
+        if: ${{ matrix.target != 'flake-check' }}
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.GHA_CACHE_DIR }}
+          key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: nix-binary-cache-${{ matrix.target }}-
       - name: Build
         id: build
         run: |
@@ -104,19 +131,37 @@ jobs:
           nix path-info --recursive --sigs "$out" \
             | awk '!/cache\.nixos\.org-1:/ { print $1 }' > "$RUNNER_TEMP/paths"
           # Each path contributes its .narinfo plus the NAR that narinfo names.
-          includes=(--include nix-cache-info)
+          files=(nix-cache-info)
           while read -r path; do
             hash=${path#/nix/store/}
             hash=${hash%%-*}
-            includes+=(--include "$hash.narinfo")
-            includes+=(--include "$(awk '/^URL: / { print $2 }' "$staging/$hash.narinfo")")
+            files+=("$hash.narinfo")
+            files+=("$(awk '/^URL: / { print $2 }' "$staging/$hash.narinfo")")
           done < "$RUNNER_TEMP/paths"
+          includes=()
+          for f in "${files[@]}"; do includes+=(--include "$f"); done
+          # The same subset becomes the GitHub Actions cache entry. Rebuilt from
+          # scratch rather than added to, so it holds this closure only and
+          # paths the host dropped age out with it. Hard links: same volume, so
+          # no second copy. Saved by the next step, on main only. sudo: /nix is
+          # root's, and the daemon creates root-owned subdirectories (nar/,
+          # realisations/) when it first opens an empty cache.
+          sudo rm -rf "$GHA_CACHE_DIR"
+          sudo install -d -o "$(id -u)" -g "$(id -g)" "$GHA_CACHE_DIR"
+          (cd "$staging" && cp -l --parents "${files[@]}" "$GHA_CACHE_DIR")
+          du -sh "$GHA_CACHE_DIR"
           # --size-only: these names are content-addressed, so a key already
           # there at the same size needs no re-upload — a plain sync compares
           # mtimes and would re-send everything. No --delete, so this never
           # prunes.
           aws s3 sync "$staging" "s3://$S3_CACHE_BUCKET" \
             --size-only --no-progress --exclude '*' "${includes[@]}"
+      - name: Save GitHub Actions binary cache
+        if: ${{ success() && matrix.target != 'flake-check' && github.event_name == 'push' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.GHA_CACHE_DIR }}
+          key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
       - name: Upload build log
         # Upload on success too: a clean build's log still carries the
         # deprecation warnings the analyze job scans for.
