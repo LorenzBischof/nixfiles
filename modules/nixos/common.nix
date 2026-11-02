@@ -4,10 +4,18 @@
   config,
   inputs,
   secrets,
+  extendModules,
   ...
 }:
 {
   system.configurationRevision = inputs.self.rev or inputs.self.dirtyRev or null;
+  # What CI builds and caches: the same system with the commit left out, so a
+  # host a change doesn't touch keeps one output across commits. Only the few
+  # small derivations the revision feeds differ, which a host builds itself.
+  system.build.toplevelWithoutRevision =
+    (extendModules {
+      modules = [ { system.configurationRevision = lib.mkForce null; } ];
+    }).config.system.build.toplevel;
 
   networking.nameservers = [
     "1.1.1.1"
