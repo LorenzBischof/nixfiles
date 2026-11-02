@@ -101,7 +101,7 @@ jobs:
           # pushes a fix, every host that already passed. Anything else (an
           # eval error included) builds and reports as before.
           if out=$(nix eval --raw "$attr.outPath") \
-            && nix path-info --store "$S3_CACHE_STORE_URL" "$out" > /dev/null 2>&1; then
+            && nix store verify --store "$S3_CACHE_STORE_URL" --no-contents "$out" > /dev/null 2>&1; then
             echo "$out already in the binary cache, nothing to build" | tee build.log
             echo "cached=true" >> "$GITHUB_OUTPUT"
             exit 0
