@@ -82,18 +82,39 @@ jobs:
           restore-keys: nix-binary-cache-${{ matrix.target }}-
       - name: Build
         id: build
+        env:
+          TARGET: ${{ matrix.target }}
+          # For the client-side cache lookup below; the daemon's substitution
+          # uses root's credentials file instead (see above).
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_ACCESS_KEY }}
         run: |
           set +e
-          if [ "${{ matrix.target }}" = "flake-check" ]; then
+          if [ "$TARGET" = "flake-check" ]; then
             nix flake check -L 2>&1 | tee build.log
-            exit_code=${PIPESTATUS[0]}
-          else
-            nix build -L .#nixosConfigurations.${{ matrix.target }}.config.system.build.toplevel 2>&1 | tee build.log
-            exit_code=${PIPESTATUS[0]}
+            exit "${PIPESTATUS[0]}"
           fi
-          exit $exit_code
+          attr=".#nixosConfigurations.$TARGET.config.system.build.toplevel"
+          # A host whose toplevel is already in the bucket is byte-for-byte the
+          # build that put it there, so building it again proves nothing — and
+          # still pulls the whole closure from S3 just to realise it. That is
+          # every host a PR doesn't touch (a docs or CI change, or a package
+          # only one host uses). Evaluating is seconds; flake-check still
+          # evaluates every host on every run. An eval failure falls through
+          # to the build, which reports it. Eval warnings go into build.log, so
+          # analyze-claude still sees deprecations on a skipped host.
+          out=$(nix eval --raw "$attr.outPath" 2> eval.log)
+          cat eval.log >&2
+          cp eval.log build.log
+          if [ -n "$out" ] && nix path-info --store "$S3_CACHE_STORE_URL" "$out" > /dev/null 2>&1; then
+            echo "$out is already in the binary cache, nothing to build" | tee -a build.log
+            echo "cached=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          nix build -L "$attr" 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
       - name: Push to S3 cache
-        if: ${{ success() && matrix.target != 'flake-check' }}
+        if: ${{ success() && matrix.target != 'flake-check' && steps.build.outputs.cached != 'true' }}
         env:
           S3_CACHE_BUCKET: ${{ secrets.S3_CACHE_BUCKET }}
           AWS_ENDPOINT_URL: https://${{ secrets.S3_CACHE_ENDPOINT }}
