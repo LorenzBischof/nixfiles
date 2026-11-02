@@ -59,6 +59,10 @@ jobs:
           # comes from nixpkgs below.
           hatchet-protocol: cleave
           root-safe-haven: 6144
+          # Purge before Nix starts: in the background, uninstalling docker
+          # mid-build cut every open download (HTTP2 framing errors) and nix
+          # disabled cache.nixos.org.
+          witness-carnage: true
       - uses: cachix/install-nix-action@v31
         with:
           # We set our custom GitHub token for any private flake inputs we might have
