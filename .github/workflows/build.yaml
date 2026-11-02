@@ -106,7 +106,7 @@ jobs:
             nix flake check -L 2>&1 | tee build.log
             exit "${PIPESTATUS[0]}"
           fi
-          attr=".#nixosConfigurations.$TARGET.config.system.build.toplevel"
+          attr=".#nixosConfigurations.$TARGET.config.system.build.toplevelWithoutRevision"
           # A toplevel already in the bucket is the very build that passed
           # before, so skip it instead of pulling its closure back from S3: a
           # host the change doesn't touch, or on the re-run after analyze-claude

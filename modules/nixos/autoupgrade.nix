@@ -7,6 +7,9 @@
 }:
 let
   cfg = config.my.system.autoUpgrade;
+  # Through the option rather than inputs.self.rev, so CI can blank it in one
+  # place and build the same output on every commit.
+  rev = toString config.system.configurationRevision;
   # Shared, single-owner textfile path (created by my.monitoring.client).
   textfileDir = config.my.monitoring.client.textfileDirectory;
 
@@ -238,17 +241,17 @@ in
           # ConditionACPower below, which stops the unit before it ever runs, so
           # it does not reach this script or a host's on-skip notification.)
           ExecCondition = pkgs.writeShellScript "check-upgrade-conditions" ''
-            status="$(${pkgs.curl}/bin/curl -s "https://api.github.com/repos/lorenzbischof/nixfiles/compare/HEAD...${inputs.self.rev or ""}" | ${pkgs.jq}/bin/jq -r .status)"
+            status="$(${pkgs.curl}/bin/curl -s "https://api.github.com/repos/lorenzbischof/nixfiles/compare/HEAD...${rev}" | ${pkgs.jq}/bin/jq -r .status)"
             if [ "$status" = "behind" ] || [ "$status" = "diverged" ]; then
-                echo "Commit ${inputs.self.rev or ""} is $status relative to the default branch. Updating..."
+                echo "Commit ${rev} is $status relative to the default branch. Updating..."
             elif [ "$status" = "ahead" ]; then
-                echo "Commit ${inputs.self.rev or ""} is ahead of the default branch. Did you merge your PR?"
+                echo "Commit ${rev} is ahead of the default branch. Did you merge your PR?"
                 exit 2
             elif [ "$status" = "identical" ]; then
                 echo "Already up to date. Skipping."
                 exit 1
             elif [ "$status" = "404" ]; then
-                echo "Commit ${inputs.self.rev or ""} does not exist on remote. Did you push your changes?"
+                echo "Commit ${rev} does not exist on remote. Did you push your changes?"
                 exit 3
             else
                 echo "Did not receive a response. Maybe you are rate-limited?"
