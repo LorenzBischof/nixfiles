@@ -29,15 +29,15 @@ jobs:
       # there. Holds only what cache.nixos.org doesn't serve, the same subset the
       # push step uploads, so it stays far below the full closure.
       GHA_CACHE_DIR: /nix/.gha-cache
+      # actions/cache builds and downloads its archive in $RUNNER_TEMP, which
+      # is on /, where the runner image leaves ~1GB: the framework entry (~2GB)
+      # never fit. The cache steps point it here instead.
+      GHA_CACHE_ARCHIVE_DIR: /nix/.gha-cache-archive
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 20
       - uses: docker/setup-qemu-action@v3
-        with:
-          # Its post step saves the binfmt image with docker, which cleave
-          # removes. The binfmt registration itself lives in the kernel.
-          cache-image: false
       # Substitution runs in the daemon, which never sees a step's environment:
       # a client-side `nix copy` reads AWS_* from the env, a daemon-side read
       # only consults root's credentials file (NixOS/nix#5723).
@@ -52,17 +52,7 @@ jobs:
           sudo -i aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
       - uses: wimpysworld/nothing-but-nix@main
         with:
-          # actions/cache stages its archive in $RUNNER_TEMP, on /, which the
-          # runner image leaves at ~1GB free: the framework entry (~2GB)
-          # overflowed it. Only cleave frees space on /, and the safe haven is
-          # what it leaves there. It also deletes /usr/local, so the aws CLI
-          # comes from nixpkgs below.
-          hatchet-protocol: cleave
-          root-safe-haven: 6144
-          # Purge before Nix starts: in the background, uninstalling docker
-          # mid-build cut every open download (HTTP2 framing errors) and nix
-          # disabled cache.nixos.org.
-          witness-carnage: true
+          hatchet-protocol: holster
       - uses: cachix/install-nix-action@v31
         with:
           # We set our custom GitHub token for any private flake inputs we might have
@@ -84,7 +74,7 @@ jobs:
       # chown. On a miss the empty directory is a valid, empty binary cache.
       - name: Prepare GitHub Actions binary cache
         if: ${{ matrix.target != 'flake-check' }}
-        run: sudo install -d -o "$(id -u)" -g "$(id -g)" "$GHA_CACHE_DIR"
+        run: sudo install -d -o "$(id -u)" -g "$(id -g)" "$GHA_CACHE_DIR" "$GHA_CACHE_ARCHIVE_DIR"
       # Each main push saves a fresh entry; a PR reads the newest one from main
       # (PRs can read their base branch's caches). Only main saves, so PR builds
       # don't spend the 10GB repository quota evicting the entries every other
@@ -92,6 +82,8 @@ jobs:
       - name: Restore GitHub Actions binary cache
         if: ${{ matrix.target != 'flake-check' }}
         uses: actions/cache/restore@v4
+        env:
+          RUNNER_TEMP: ${{ env.GHA_CACHE_ARCHIVE_DIR }}
         with:
           path: ${{ env.GHA_CACHE_DIR }}
           key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
@@ -190,11 +182,12 @@ jobs:
           # there at the same size needs no re-upload — a plain sync compares
           # mtimes and would re-send everything. No --delete, so this never
           # prunes the bucket.
-          nix shell --inputs-from "$GITHUB_WORKSPACE" nixpkgs#awscli2 -c \
-            aws s3 sync . "s3://$S3_CACHE_BUCKET" --size-only --no-progress
+          aws s3 sync . "s3://$S3_CACHE_BUCKET" --size-only --no-progress
       - name: Save GitHub Actions binary cache
         if: ${{ success() && matrix.target != 'flake-check' && github.event_name == 'push' }}
         uses: actions/cache/save@v4
+        env:
+          RUNNER_TEMP: ${{ env.GHA_CACHE_ARCHIVE_DIR }}
         with:
           path: ${{ env.GHA_CACHE_DIR }}
           key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
