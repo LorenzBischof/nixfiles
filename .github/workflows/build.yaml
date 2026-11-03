@@ -192,8 +192,11 @@ jobs:
           # prunes the bucket.
           nix shell --inputs-from "$GITHUB_WORKSPACE" nixpkgs#awscli2 -c \
             aws s3 sync . "s3://$S3_CACHE_BUCKET" --size-only --no-progress
+      # Not for a host the Build step skipped as already cached: the push step
+      # never filled the directory, so it would save the restored entry again
+      # under a new key, or after a miss an empty one that later runs restore.
       - name: Save GitHub Actions binary cache
-        if: ${{ success() && matrix.target != 'flake-check' && github.event_name == 'push' }}
+        if: ${{ success() && matrix.target != 'flake-check' && github.event_name == 'push' && steps.build.outputs.cached != 'true' }}
         uses: actions/cache/save@v4
         with:
           path: ${{ env.GHA_CACHE_DIR }}
