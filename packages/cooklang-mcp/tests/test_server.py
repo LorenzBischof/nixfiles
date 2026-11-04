@@ -131,7 +131,7 @@ def test_recipe_tools_return_clickable_web_urls(monkeypatch):
 
     async def shopping_list():
         return {
-            "recipes": [{"path": "Weeknight meals/Chili & Rice.cook", "scale": 1.0}],
+            "recipes": [{"path": "Weeknight meals/Chili & Rice.cook"}],
             "categories": [],
             "pantry_items": [],
         }
@@ -794,7 +794,7 @@ def test_notes_that_cannot_be_read_are_not_a_recipe_without_notes(monkeypatch):
 
     async def shopping_list():
         return {
-            "recipes": [{"path": "Broken.cook", "scale": 1.0}],
+            "recipes": [{"path": "Broken.cook"}],
             "categories": [],
             "pantry_items": [],
         }
@@ -1418,7 +1418,7 @@ def test_the_list_says_which_names_were_added_by_hand(monkeypatch):
 def test_a_list_without_loose_items_does_not_go_looking_for_them(monkeypatch):
     async def shopping_list():
         return {
-            "recipes": [{"path": "Risotto.cook", "scale": 1.0}],
+            "recipes": [{"path": "Risotto.cook"}],
             "categories": [],
             "pantry_items": [],
         }
@@ -1440,7 +1440,7 @@ def test_a_loose_items_file_that_cannot_be_read_costs_the_field_only(monkeypatch
 
     async def shopping_list():
         return {
-            "recipes": [{"path": "Extra Items.menu", "scale": 1.0}],
+            "recipes": [{"path": "Extra Items.menu"}],
             "categories": [],
             "pantry_items": [],
         }
