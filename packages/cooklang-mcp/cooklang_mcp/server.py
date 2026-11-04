@@ -933,9 +933,9 @@ async def recipe_write(
     one step, and the web UI then prints both paths on one line.
 
         = Meals
-        @./Risotto{2%servings}
+        @./Risotto{}
 
-        @./Caprese{2%servings}
+        @./Caprese{}
 
     Never queue a recipe tagged `archived` unless they ask for it by name.
 
@@ -1380,8 +1380,7 @@ async def shopping_list_read() -> dict[str, Any]:
 
     Copying these recipes into `Meal Plan.menu` is only ever done when the user
     explicitly asks for it. Then read the plan, append the missing recipe paths
-    in shopping-list order without disturbing the queue, writing a `scale`
-    into the braces as `{2}` and leaving them empty otherwise. Say which already-planned
+    in shopping-list order without disturbing the queue. Say which already-planned
     paths you skipped; `Risotto.cook` and `./Risotto` are the same path. A
     recipe in the plan but absent from this list may be stale, so ask whether
     it is still upcoming or was already cooked.
@@ -1512,11 +1511,8 @@ async def shopping_list_edit(
     end of a trip: anything that changes what the user is going to buy.
 
     Actions, with the fields they take (? optional): `add`(path, scale?) puts a
-    recipe on the list, `scale` multiplying its quantities, as for a double
-    batch. From a plan entry, `{}` takes no scale and a bare `{2}` is `scale`
-    2, but `{2%servings}` asks for 2 servings: divide by the `servings` in the
-    recipe's frontmatter, and leave `scale` out and say so when it has none.
-    `remove`(path) takes
+    recipe on the list; `scale` is only for when the user asks for more or less
+    than the recipe makes. `remove`(path) takes
     one back off; `add_item`(name, quantity?) puts a single ingredient on it
     and `remove_item`(name) takes that back off; `check`(name) ticks an
     ingredient off and `uncheck`(name) puts it back; `clear` empties the list
