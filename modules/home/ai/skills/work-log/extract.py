@@ -21,7 +21,11 @@ DEFAULT_MAX_CHARS = 600
 CODEX_BOILERPLATE_PREFIXES = ("# AGENTS.md instructions", "<environment_context>")
 
 # Claude Code slash-command/local-command plumbing, not something the user said.
-CLAUDE_BOILERPLATE_PREFIXES = ("<local-command-caveat>", "<local-command-stdout>", "<command-name>")
+CLAUDE_BOILERPLATE_PREFIXES = (
+    "<local-command-caveat>",
+    "<local-command-stdout>",
+    "<command-name>",
+)
 
 
 def parse_ts(s: str) -> datetime:
@@ -141,7 +145,9 @@ def claude_sessions(day: date) -> list[Session]:
                 ):
                     session.add(ts, "You", content)
             elif entry["type"] == "assistant":
-                text = "".join(b.get("text", "") for b in content or [] if b.get("type") == "text")
+                text = "".join(
+                    b.get("text", "") for b in content or [] if b.get("type") == "text"
+                )
                 session.add(ts, "Agent", text)
         if session.turns:
             sessions.append(session)
@@ -189,7 +195,11 @@ def codex_sessions(day: date) -> list[Session]:
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--date", default=date.today().isoformat(), help="YYYY-MM-DD, local time (default: today)")
+    p.add_argument(
+        "--date",
+        default=date.today().isoformat(),
+        help="YYYY-MM-DD, local time (default: today)",
+    )
     p.add_argument(
         "--max-chars",
         type=int,
@@ -205,7 +215,11 @@ def main():
     # Flatten to blocks and sort globally: a session's blocks can be hours
     # apart, and different projects/sources interleave across the day.
     rendered = sorted(
-        ((block[0][0], s.render_block(block, args.max_chars)) for s in sessions for block in s.blocks()),
+        (
+            (block[0][0], s.render_block(block, args.max_chars))
+            for s in sessions
+            for block in s.blocks()
+        ),
         key=lambda pair: pair[0],
     )
 

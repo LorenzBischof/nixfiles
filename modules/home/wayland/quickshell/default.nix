@@ -445,9 +445,7 @@ let
         readonly property int waveformHeight: Math.ceil(metrics.height)
 
         readonly property string voxtype: ${builtins.toJSON (lib.getExe config.programs.voxtype.package)}
-        readonly property string voxtypeAudioBridge: ${
-          builtins.toJSON (lib.getExe' config.programs.voxtype.package "voxtype-audio-bridge")
-        }
+        readonly property string voxtypeAudioBridge: ${builtins.toJSON (lib.getExe' config.programs.voxtype.package "voxtype-audio-bridge")}
         readonly property string pavucontrol: ${builtins.toJSON (lib.getExe pkgs.pavucontrol)}
         readonly property string idleInhibitStatus: ${builtins.toJSON (lib.getExe idleInhibitStatus)}
         readonly property string idleInhibitToggle: ${builtins.toJSON (lib.getExe idleInhibitToggle)}

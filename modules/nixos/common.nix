@@ -88,8 +88,7 @@
   systemd.services.nix-daemon.serviceConfig.Slice = "-.slice";
   # Builds using the daemon get the S3 cache's read-only key from its
   # environment (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY).
-  systemd.services.nix-daemon.serviceConfig.EnvironmentFile =
-    config.age.secrets.nix-daemon-env.path;
+  systemd.services.nix-daemon.serviceConfig.EnvironmentFile = config.age.secrets.nix-daemon-env.path;
   # Prefer the daemon in login sessions. Rebuilds must evaluate and build as
   # the user (nixos-rebuild --elevate sudo), not under sudo: sudo strips this
   # and root would then bypass the daemon, losing the cache credentials.

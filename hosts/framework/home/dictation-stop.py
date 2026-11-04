@@ -107,8 +107,17 @@ class Session:
         hiss.reset()
         self.pending = b""
         self.rec = subprocess.Popen(
-            ["pw-record", "--raw", "--rate", str(RATE), "--channels", "1",
-             "--format", "f32", "-"],
+            [
+                "pw-record",
+                "--raw",
+                "--rate",
+                str(RATE),
+                "--channels",
+                "1",
+                "--format",
+                "f32",
+                "-",
+            ],
             stdout=subprocess.PIPE,
         )
         sel.register(self.rec.stdout, selectors.EVENT_READ, self.on_audio)

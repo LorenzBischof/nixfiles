@@ -266,11 +266,11 @@ def test_a_tls_server_is_reached_over_tls(monkeypatch):
 def test_notes_are_the_text_blocks_a_recipe_holds():
     """`> …` parses to a `text` block, a step to a `step`, in file order.
 
-        > Serve with the Caprese; the saffron is optional.
+    > Serve with the Caprese; the saffron is optional.
 
-        Fry the @onion{1} in @butter{30%g}.
+    Fry the @onion{1} in @butter{30%g}.
 
-        > Make the stock the day before.
+    > Make the stock the day before.
     """
     recipe = {
         "sections": [
@@ -297,8 +297,8 @@ def test_notes_are_the_text_blocks_a_recipe_holds():
 def test_consecutive_note_lines_arrive_as_one_note():
     """The parser joins them, so neither does this nor splits them again.
 
-        > one line note
-        > second consecutive note line
+    > one line note
+    > second consecutive note line
     """
     recipe = {
         "sections": [
@@ -337,7 +337,10 @@ def test_a_marker_swallowed_into_a_step_is_not_a_note():
                             "items": [
                                 {"type": "text", "value": "Step with "},
                                 {"index": 0, "type": "ingredient"},
-                                {"type": "text", "value": ". > note right after a step"},
+                                {
+                                    "type": "text",
+                                    "value": ". > note right after a step",
+                                },
                             ],
                             "number": 1,
                         },
@@ -370,4 +373,7 @@ def test_a_recipe_with_no_notes_and_a_menu_file_hold_none():
     assert recipe_notes({}) == []
     assert recipe_notes({"sections": None}) == []
     # Whitespace is not a note.
-    assert recipe_notes({"sections": [{"content": [{"type": "text", "value": " "}]}]}) == []
+    assert (
+        recipe_notes({"sections": [{"content": [{"type": "text", "value": " "}]}]})
+        == []
+    )
