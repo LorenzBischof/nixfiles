@@ -106,9 +106,7 @@ def test_a_matching_date_is_reused_and_feedback_follows_its_recipe():
 
 def test_blank_feedback_is_not_recorded():
     for blank in (None, "", "   "):
-        written = added(
-            "", "Risotto.cook", date(2026, 10, 14), feedback=blank
-        )
+        written = added("", "Risotto.cook", date(2026, 10, 14), feedback=blank)
         assert "Feedback" not in written
 
 

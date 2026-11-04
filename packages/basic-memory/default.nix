@@ -44,17 +44,17 @@ let
       })
     )
     // {
-    basic-memory = prev.basic-memory.overrideAttrs (old: {
-      # uv2nix reports a dynamic version as 0.0.0; mkApplication takes it from here.
-      inherit version;
-      # The source is already this release; only the reported version was wrong.
-      __intentionallyOverridingVersion = true;
-      # uv-dynamic-versioning reads this instead of asking git.
-      env = (old.env or { }) // {
-        UV_DYNAMIC_VERSIONING_BYPASS = version;
-      };
-    });
-  };
+      basic-memory = prev.basic-memory.overrideAttrs (old: {
+        # uv2nix reports a dynamic version as 0.0.0; mkApplication takes it from here.
+        inherit version;
+        # The source is already this release; only the reported version was wrong.
+        __intentionallyOverridingVersion = true;
+        # uv-dynamic-versioning reads this instead of asking git.
+        env = (old.env or { }) // {
+          UV_DYNAMIC_VERSIONING_BYPASS = version;
+        };
+      });
+    };
 
   pythonSet = (callPackage inputs.pyproject-nix.build.packages { python = python3; }).overrideScope (
     lib.composeManyExtensions [

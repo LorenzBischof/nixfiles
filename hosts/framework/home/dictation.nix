@@ -29,16 +29,13 @@ let
     ]
     ++ [ dictatePhrases ];
 
-  dictationStop =
-    pkgs.writers.writePython3Bin "dictation-stop"
-      {
-        libraries = [ pkgs.python3Packages.numpy ];
-        flakeIgnore = [
-          "E501"
-          "W503" # black-style line breaks before binary operators
-        ];
-      }
-      (builtins.readFile ./dictation-stop.py);
+  dictationStop = pkgs.writers.writePython3Bin "dictation-stop" {
+    libraries = [ pkgs.python3Packages.numpy ];
+    flakeIgnore = [
+      "E501"
+      "W503" # black-style line breaks before binary operators
+    ];
+  } (builtins.readFile ./dictation-stop.py);
 in
 {
   services.numen.phrases = phrases;

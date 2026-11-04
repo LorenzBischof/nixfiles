@@ -112,8 +112,7 @@ def recipe_notes(recipe: dict[str, Any]) -> list[str]:
         note
         for section in recipe.get("sections") or []
         for item in section.get("content") or []
-        if item.get("type") == "text"
-        and (note := str(item.get("value") or "").strip())
+        if item.get("type") == "text" and (note := str(item.get("value") or "").strip())
     ]
 
 
