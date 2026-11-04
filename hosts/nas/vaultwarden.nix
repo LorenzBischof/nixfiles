@@ -13,7 +13,6 @@ in
 {
   services.vaultwarden = {
     enable = true;
-    # TODO: this sets up a timer at 23:00, however it might make sense to run it before the backup service
     backupDir = backupDir;
     config = {
       DOMAIN = "https://${vaultwardenDomain}";
