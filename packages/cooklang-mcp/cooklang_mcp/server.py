@@ -1512,8 +1512,11 @@ async def shopping_list_edit(
     end of a trip: anything that changes what the user is going to buy.
 
     Actions, with the fields they take (? optional): `add`(path, scale?) puts a
-    recipe on the list, with `scale` only when its braces in the plan hold a
-    number such as `{2}`; `remove`(path) takes
+    recipe on the list, `scale` multiplying its quantities, as for a double
+    batch. From a plan entry, `{}` takes no scale and a bare `{2}` is `scale`
+    2, but `{2%servings}` asks for 2 servings: divide by the `servings` in the
+    recipe's frontmatter, and leave `scale` out and say so when it has none.
+    `remove`(path) takes
     one back off; `add_item`(name, quantity?) puts a single ingredient on it
     and `remove_item`(name) takes that back off; `check`(name) ticks an
     ingredient off and `uncheck`(name) puts it back; `clear` empties the list
