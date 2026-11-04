@@ -195,6 +195,39 @@ def test_aggregate_requests_expands_a_stored_menu():
     ]
 
 
+def test_shopping_list_reports_a_scale_only_where_it_changes_something(monkeypatch):
+    """`scale: 1.0` on every recipe gets repeated to the user as "at normal
+    scale", so the default is left out and only a real scale comes through."""
+
+    class Response:
+        def __init__(self, body):
+            self.body = body
+
+        def json(self):
+            return self.body
+
+    async def request(method, path, **_kwargs):
+        if path == "/api/shopping_list/items":
+            return Response(
+                [
+                    {"path": "Risotto.cook", "scale": 2.0},
+                    {"path": "Caprese.cook", "scale": 1.0},
+                    {"path": "Salad.cook"},
+                ]
+            )
+        return Response({"categories": [], "pantry_items": []})
+
+    monkeypatch.setattr(cookcli, "request", request)
+
+    recipes = asyncio.run(cookcli.shopping_list())["recipes"]
+
+    assert recipes == [
+        {"path": "Risotto.cook", "scale": 2.0},
+        {"path": "Caprese.cook"},
+        {"path": "Salad.cook"},
+    ]
+
+
 def test_format_quantities_reads_as_a_cook_would_write_it():
     assert format_quantities([{"unit": "g", "value": number(200.0)}]) == "200 g"
     # A count, which arrives as an f64 and must not read "6.0 eggs".

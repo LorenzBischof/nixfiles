@@ -171,9 +171,9 @@ async def shopping_list() -> dict[str, Any]:
     checked = {name.lower() for name in aggregated.get("checked", [])}
 
     return {
-        "recipes": [
-            {"path": item["path"], "scale": item.get("scale", 1.0)} for item in items
-        ],
+        # Scale is only reported when it changes something: a `scale: 1.0` on
+        # every entry gets read back to the user as "at normal scale".
+        "recipes": [_listed_recipe(item) for item in items],
         "categories": [
             {
                 "category": category["category"],
@@ -192,6 +192,14 @@ async def shopping_list() -> dict[str, Any]:
         # why an ingredient a recipe calls for is missing or short.
         "pantry_items": aggregated.get("pantry_items", []),
     }
+
+
+def _listed_recipe(item: dict[str, Any]) -> dict[str, Any]:
+    recipe = {"path": item["path"]}
+    scale = item.get("scale", 1.0)
+    if scale != 1.0:
+        recipe["scale"] = scale
+    return recipe
 
 
 def _walk(node: dict[str, Any], root: str) -> Any:

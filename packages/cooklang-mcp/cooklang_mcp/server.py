@@ -112,7 +112,7 @@ the one to the other. A recipe tagged `archived` is one they chose not to cook \
 again: never suggest it or put it on the plan unasked, and write (archived) \
 after its name wherever it appears. Do not create weekly or date-named plan \
 files. When adding a meal plan to the shopping list, read it and add its \
-individual recipes with their scales, never the whole menu file. This is a \
+individual recipes, never the whole menu file. This is a \
 temporary workaround until CookCLI handles menu updates and removing \
 individual recipes correctly: editing the plan must not be assumed to update \
 the shopping list.\
@@ -948,8 +948,8 @@ async def recipe_write(
     `shopping_list_edit`'s `add_item`, which writes `Extra Items.menu` itself.
 
     Writing the plan does not synchronize the shopping list. When asked to
-    shop for the plan, add each referenced recipe separately with its scale
-    through `shopping_list_edit`, never `Meal Plan.menu` itself. This temporary
+    shop for the plan, add each referenced recipe separately through
+    `shopping_list_edit`, never `Meal Plan.menu` itself. This temporary
     CookCLI workaround keeps recipes individually removable from the list.
 
     A folder in the path must already exist — writing into one that does not
@@ -1345,7 +1345,8 @@ async def shopping_list_read() -> dict[str, Any]:
     here changes what the pantry holds.
 
     This is the same list the collection's web UI shows, including which items
-    have been ticked off. `recipes` carries each source path and scale;
+    have been ticked off. `recipes` carries each source path, plus a `scale`
+    only for one added at other than its written quantities;
     ingredient entries carry `checked` individually. `Extra Items.menu` among
     them is not a recipe: it is the single ingredients added with
     `shopping_list_edit`'s `add_item`, and it is not something to cook, to
@@ -1379,8 +1380,8 @@ async def shopping_list_read() -> dict[str, Any]:
 
     Copying these recipes into `Meal Plan.menu` is only ever done when the user
     explicitly asks for it. Then read the plan, append the missing recipe paths
-    in shopping-list order without disturbing the queue, and preserve a
-    non-default scale — empty braces mean scale 1. Say which already-planned
+    in shopping-list order without disturbing the queue, writing a `scale`
+    into the braces as `{2}` and leaving them empty otherwise. Say which already-planned
     paths you skipped; `Risotto.cook` and `./Risotto` are the same path. A
     recipe in the plan but absent from this list may be stale, so ask whether
     it is still upcoming or was already cooked.
@@ -1511,7 +1512,8 @@ async def shopping_list_edit(
     end of a trip: anything that changes what the user is going to buy.
 
     Actions, with the fields they take (? optional): `add`(path, scale?) puts a
-    recipe on the list; `remove`(path) takes
+    recipe on the list, with `scale` only when its braces in the plan hold a
+    number such as `{2}`; `remove`(path) takes
     one back off; `add_item`(name, quantity?) puts a single ingredient on it
     and `remove_item`(name) takes that back off; `check`(name) ticks an
     ingredient off and `uncheck`(name) puts it back; `clear` empties the list
@@ -1520,7 +1522,7 @@ async def shopping_list_edit(
     when one recipe is what you mean.
 
     To shop for a meal plan, read the menu and send a separate `add` for each
-    referenced recipe, preserving its scale. Never add `Meal Plan.menu` or
+    referenced recipe. Never add `Meal Plan.menu` or
     another whole meal-plan menu as the source. This is a temporary workaround
     until CookCLI correctly handles menu changes and individual recipe removal:
     changing a menu does not reliably refresh its shopping-list ingredients,

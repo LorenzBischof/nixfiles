@@ -88,7 +88,7 @@ server name carries the same words.
 ## Adding a meal plan to the shopping list
 
 The descriptions tell clients to read the plan and add its recipes individually,
-preserving their scales, rather than add the menu file. A temporary workaround
+rather than add the menu file. A temporary workaround
 for reported CookCLI behaviour: editing a menu does not reliably update the
 shopping list, and a recipe included through a menu cannot be removed
 individually. Revisit when CookCLI handles both.
