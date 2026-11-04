@@ -55,7 +55,7 @@ test host="": add
     elif [ "{{host}}" = "nas" ]; then
         nixos-rebuild test --flake .#nas --target-host nas --elevate sudo $overrides
     elif [ "{{host}}" = "vps" ]; then
-        nixos-rebuild test --flake .#vps --target-host vps --build-host vps --elevate sudo $overrides
+        nixos-rebuild test --use-substitutes --flake .#vps --target-host vps --build-host vps --elevate sudo
     else
         echo "Unknown host: {{host}}"
         exit 1

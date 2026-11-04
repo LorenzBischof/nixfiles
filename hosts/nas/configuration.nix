@@ -30,10 +30,8 @@ in
     ./offline-backup.nix
     ./scrutiny.nix
     ./dawarich.nix
-    #./open-webui.nix
     ./alias-watch.nix
     ./homeassistant
-    #./mealie.nix
     ./hedgedoc.nix
     ./outline.nix
     ./umap.nix
