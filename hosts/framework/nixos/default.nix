@@ -56,7 +56,8 @@
     # TODO: 7.3 oopses in mt7925e_mac_reset (napi_disable on the never-allocated
     # WM2 queue) when hibernation thaws devices, so the image is never written.
     # Fixed upstream by c182bfe944eb (not in 7.3.1 as of 2026-11); back to
-    # _latest once a 7.3.y/7.4 has it.
+    # _latest once a 7.3.y/7.4 has it. 7.2 itself went EOL with 7.2.15 on
+    # 2026-11-01, so this pin no longer gets fixes.
     kernelPackages = pkgs.linuxPackages_7_2;
     loader = {
       timeout = 0;
