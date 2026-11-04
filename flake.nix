@@ -93,7 +93,7 @@
     # lock is read at eval time without import-from-derivation; a bump is the
     # tag in this URL.
     basic-memory = {
-      url = "github:basicmachines-co/basic-memory/v0.24.1";
+      url = "github:basicmachines-co/basic-memory/v1.0.0";
       flake = false;
     };
     pyproject-nix = {
