@@ -29,6 +29,8 @@ in
   };
 
   my.programs.firefox.enable = true;
+  programs.firefox.profiles.default.settings."network.lna.skip-domains" = secrets.vps-domain;
+
   my.programs.git.enable = true;
   my.profiles.ai.enable = true;
   my.programs.foot.urgentNtfyTopic = secrets.ntfy-alertmanager;
