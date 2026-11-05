@@ -173,6 +173,23 @@
         "type": "github"
       }
     },
+    "egm": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793072110,
+        "narHash": "sha256-pg7ceIy3Maf6cLK2j3ABFC0CPlXhRMssOUiSjFJdCl4=",
+        "owner": "google",
+        "repo": "elephant-goldfish-model",
+        "rev": "b3a35956759bf7f024af2ff061b2e0b44b438e4c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "google",
+        "ref": "v0.1.0",
+        "repo": "elephant-goldfish-model",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -768,6 +785,7 @@
         "asustor-platform-driver": "asustor-platform-driver",
         "basic-memory": "basic-memory",
         "disko": "disko",
+        "egm": "egm",
         "galaxus-mcp": "galaxus-mcp",
         "home-manager": "home-manager",
         "lanzaboote": "lanzaboote",

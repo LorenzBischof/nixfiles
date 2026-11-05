@@ -96,6 +96,13 @@
       url = "github:basicmachines-co/basic-memory/v1.0.0";
       flake = false;
     };
+    # Elephant-Goldfish Model: spec drafting and fresh-context design review. The
+    # repo root is the plugin for both Claude Code and Codex, so it is handed to
+    # both as-is; a bump is the tag in this URL.
+    egm = {
+      url = "github:google/elephant-goldfish-model/v0.1.0";
+      flake = false;
+    };
     pyproject-nix = {
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";

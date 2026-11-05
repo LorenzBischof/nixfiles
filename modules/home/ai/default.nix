@@ -505,6 +505,20 @@ in
         # be picked up from claude.ai or the app. Only honoured from user
         # settings: project and local settings cannot turn it on.
         remoteControlAtStartup = true;
+        # TODO: Elephant-Goldfish Model, loaded from the pinned source as a
+        # local marketplace rather than through `plugins` above. The module
+        # links a plugin's top-level entries into a wrapper, so `.claude-plugin`
+        # becomes a symlink, and Claude Code 2.1.310 then silently drops the
+        # reviewer agents EGM's manifest lists by path: the skills load, but
+        # every review fails for want of an `egm:*` agent type. A directory
+        # marketplace is read in place, with real directories. No upstream
+        # issue on either side as of 2026-11; move this to `plugins.egm` once
+        # `claude --plugin-dir` on the module's wrapper lists the egm agents.
+        extraKnownMarketplaces.egm.source = {
+          source = "directory";
+          path = "${inputs.egm}";
+        };
+        enabledPlugins."egm@egm" = true;
       };
       # Required, because the rest of ~/.claude/settings.json is hand-maintained:
       # the default merges nothing and would replace that file with a read-only
@@ -540,7 +554,10 @@ in
         notify = [ (lib.getExe codexNotify) ];
         tui.animations = false;
       };
-      plugins = [ basicMemoryCodexPlugin ];
+      plugins = [
+        basicMemoryCodexPlugin
+        inputs.egm
+      ];
     };
 
     home.file = {
