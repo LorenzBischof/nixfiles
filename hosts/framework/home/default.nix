@@ -3,7 +3,6 @@
   config,
   osConfig,
   pkgs,
-  pkgs-citrix-workspace,
   lib,
   inputs,
   secrets,
@@ -156,10 +155,13 @@ in
     # fonts
     font-awesome
     nerd-fonts.dejavu-sans-mono
+    # citrix-workspace's source is a licensed download that `requireFile` can
+    # never fetch; docs/citrix-workspace.md covers how the tarball reaches CI,
+    # which is what fills the binary cache for this host.
     (writeShellApplication {
       name = "wfica";
       runtimeInputs = [
-        pkgs-citrix-workspace.citrix_workspace
+        citrix-workspace
       ];
       text = ''
         sed -i 's/TWIMode=On/TWIMode=Off/' "$1"

@@ -96,6 +96,66 @@ jobs:
           path: ${{ env.GHA_CACHE_DIR }}
           key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
           restore-keys: nix-binary-cache-${{ matrix.target }}-
+      # Citrix Workspace is a licensed download behind a Citrix login, so
+      # nixpkgs takes its tarball through `requireFile`: no fetcher can reach
+      # it, and without the file in the store the framework build stops at
+      # requireFile's message. The tarball itself sits in the cache bucket under
+      # citrix/, put there by hand once per Citrix release — a plain upload, no
+      # nix (docs/citrix-workspace.md). This step feeds it back into the store
+      # only when the build would otherwise stall on it, so building and pushing
+      # the package happens here rather than on the laptop. `aws s3 sync` in the
+      # push step never deletes, so the prefix survives it, and nix ignores keys
+      # that are not narinfos when it reads the bucket as a cache.
+      - name: Citrix Workspace tarball
+        if: ${{ matrix.target == 'framework' }}
+        env:
+          S3_CACHE_BUCKET: ${{ secrets.S3_CACHE_BUCKET }}
+          AWS_ENDPOINT_URL: https://${{ secrets.S3_CACHE_ENDPOINT }}
+          AWS_REGION: ${{ secrets.S3_CACHE_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          # Secrets are empty on a fork PR. Leave the tarball alone there and
+          # let the build fail at requireFile, as it did before this step.
+          if [ -z "$S3_CACHE_BUCKET" ]; then
+            echo "no cache credentials, leaving the tarball to the build"
+            exit 0
+          fi
+          attr=".#nixosConfigurations.framework.pkgs.citrix-workspace"
+          # One eval for all three: the package, the fixed-output path the
+          # tarball has to land on, and the file name the recipe asks for.
+          # $p is a Nix variable, not a shell expansion.
+          # shellcheck disable=SC2016
+          read -r out src name < <(
+            nix eval --raw "$attr" --apply \
+              'p: "${p.outPath} ${p.src.outPath} ${p.src.name}"'
+          )
+          # Either of these gets the build past Citrix without the file: the
+          # built package, or the tarball's own path from an earlier run.
+          # requireFile leaves `allowSubstitutes` at its default, so nix
+          # substitutes the latter like any other path.
+          for path in "$out" "$src"; do
+            if nix store verify --store "$S3_CACHE_STORE_URL" --no-contents "$path" > /dev/null 2>&1; then
+              echo "$path is in the binary cache, nothing to add"
+              exit 0
+            fi
+          done
+          tarball="$RUNNER_TEMP/$name"
+          if ! nix shell --inputs-from "$GITHUB_WORKSPACE" nixpkgs#awscli2 -c \
+            aws s3 cp "s3://$S3_CACHE_BUCKET/citrix/$name" "$tarball" --no-progress; then
+            echo "::error::$name is not in the bucket under citrix/. Download it from Citrix and upload it there (docs/citrix-workspace.md); nothing in CI can fetch it."
+            exit 1
+          fi
+          # --add-fixed hashes flat and names the path after the file, which is
+          # what requireFile computes. A mismatch means what was uploaded is not
+          # the version nixpkgs pins.
+          added=$(nix-store --add-fixed sha256 "$tarball")
+          if [ "$added" != "$src" ]; then
+            echo "::error::$name hashes to $added, but nixpkgs pins $src"
+            exit 1
+          fi
+          echo "added $added"
       - name: Build
         id: build
         env:

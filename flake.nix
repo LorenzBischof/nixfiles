@@ -3,7 +3,6 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs-citrix-workspace.url = "github:nixos/nixpkgs/87f93d54c572c70f5e4c69eb82f0a7ece26ac9f6";
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -117,7 +116,6 @@
     {
       self,
       nixpkgs,
-      nixpkgs-citrix-workspace,
       nixos-hardware,
       home-manager,
       nix-index-database,
@@ -148,33 +146,6 @@
         ];
       };
 
-      pkgs-citrix-workspace = import nixpkgs-citrix-workspace {
-        inherit system;
-        config = {
-          allowUnfree = true;
-          permittedInsecurePackages = [
-            "libsoup-2.74.3"
-            "libxml2-2.13.8"
-          ];
-        };
-        overlays = [
-          (final: prev: {
-            citrix_workspace =
-              (prev.citrix_workspace.overrideAttrs (attrs: {
-                # Required by newer version
-                buildInputs = attrs.buildInputs ++ [ prev.sane-backends ];
-                src = attrs.src.overrideAttrs (srcAttrs: {
-                  # So that I can push the tar.gz to the Nix cache
-                  allowSubstitutes = true;
-                });
-              })).override
-                {
-                  version = "25.03.0.66";
-                  hash = "052zibykhig9091xl76z2x9vn4f74w5q8i9frlpc473pvfplsczk";
-                };
-          })
-        ];
-      };
       treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
     in
     {
@@ -195,7 +166,7 @@
                 useUserPackages = true;
                 users.lbischof = import ./hosts/framework/home;
                 extraSpecialArgs = {
-                  inherit self inputs pkgs-citrix-workspace;
+                  inherit self inputs;
                   secrets = import nix-secrets;
                 };
               };
