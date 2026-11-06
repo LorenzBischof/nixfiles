@@ -42,38 +42,45 @@ do.
    asks for.
 2. Stops right there if either path is already in the cache bucket. On the usual
    run this is where it ends, with nothing downloaded.
-3. Otherwise looks for the file in the bucket under `citrix/`, and failing that
-   walks Citrix's pages — the current release first, then every per-version page
-   the [legacy index][legacy] links (19 pages, ~115 kB each) — until one
-   publishes the exact file name, then downloads it.
+3. Otherwise walks Citrix's pages — the current release first, then every
+   per-version page the [legacy index][legacy] links (19 pages, ~115 kB each) —
+   until one publishes the exact file name, then downloads it.
 4. `nix-store --add-fixed sha256`es it, which lands on precisely the path
    `requireFile` computes. A path mismatch fails the step: what arrived is not
    the version nixpkgs pins.
-5. Uploads anything it got from Citrix to the bucket under `citrix/`.
 
 [legacy]: https://www.citrix.com/downloads/workspace-app/legacy-workspace-app-for-linux/
 
-Step 5 is what makes this hold up over time. **Citrix withdraws a version from
-its site as soon as the next one ships**, typically months before nixpkgs moves
-off it, so by the time a pin needs fetching the file is often already gone from
-citrix.com. The bucket is then the only place it still exists. Keeping a copy on
-the one run that could still download it is what stops a later rebuild — a
-dependency bump that invalidates the package, say — from being unfixable.
+That is the whole step: it keeps no copy of its own anywhere. **Citrix leaves a
+GA release on the legacy index for years** — as of 2026-11 that index still
+publishes every version back to 23.2.0.10 (February 2023), seventeen of them —
+so the file nixpkgs pins is normally still being served, and after the first run
+has built the package step 2 ends the step before any download.
+
+The one kind of build Citrix does withdraw is a **tech preview**, as soon as its
+GA replacement ships; that is what happened to 26.08.0.153. A private archive of
+the tarball would not help there, which is why there isn't one: it could only
+hold a version that some run had already downloaded, and that run also pushed
+the built package to the cache — the very thing step 2 looks for. The archive
+would never be what saved a build. (If a bare tarball ever does need to live in
+the cache — a nixpkgs recipe change that invalidates the built package while the
+pinned version is unavailable — it belongs there as a store path, pushed with
+`nix copy`, not as a loose object: step 2's second check already finds it.)
 
 ## When it fails, and what to do
 
 ```
 ::error::Citrix publishes linuxx64-<version>.tar.gz on none of its Linux
-download pages, and the bucket has no copy under citrix/.
+download pages.
 ```
 
-This means the pinned version was withdrawn before any run archived it. No
-amount of downloading fixes it; the pin has to move to a version Citrix still
-offers. nixpkgs is usually already on its way there — check for an open
-`citrix-workspace: <old> -> <new>` pull request — and until it merges,
-`hosts/framework/nixos/default.nix` carries an overlay that overrides `version`
-and `src`. The hash goes in as the nix32 form of the SHA-256 the download page
-publishes, so it needs no download to write down:
+Since the legacy index keeps GA releases, this is almost certainly a withdrawn
+tech preview. No amount of downloading fixes it; the pin has to move to a
+version Citrix still offers. nixpkgs is usually already on its way there — check
+for an open `citrix-workspace: <old> -> <new>` pull request — and until it
+merges, `hosts/framework/nixos/default.nix` carries an overlay that overrides
+`version` and `src`. The hash goes in as the nix32 form of the SHA-256 the
+download page publishes, so it needs no download to write down:
 
 ```sh
 nix hash convert --hash-algo sha256 --to nix32 <hex-from-the-page>
@@ -85,8 +92,9 @@ place under the same name. Same remedy: the pin moves.
 ## Why not something else
 
 - **Uploading the tarball by hand**, once per Citrix release, is what this
-  replaces. The bucket upload remains as the archive the step reads and writes,
-  so a file put there by hand is still picked up.
+  replaces. A tarball `nix copy`ed into the cache by hand is still honoured —
+  that is step 2's second check — so the old route remains available, it is just
+  no longer needed.
 - **A headless browser.** Not needed: the signed URL is in the HTML of a page a
   bare `curl` can fetch, and nothing on the download path runs JavaScript or
   checks a session.
