@@ -1,7 +1,7 @@
 # Build command of the fixed-output derivation in packages/citrix-tarball.nix,
-# which is where $name, $latestPage and $legacyIndex come from.
+# which is where $name, $latestPage, $legacyIndex and $out come from.
 # shellcheck shell=bash
-# shellcheck disable=SC2154 # $name, $latestPage, $legacyIndex and $out are its
+# shellcheck disable=SC2154
 set -euo pipefail
 
 # --disable: ignore any ~/.curlrc the sandbox exposes. --cacert: the sandbox has
@@ -45,8 +45,7 @@ done <<<"$pages"
 
 if [ -z "$url" ]; then
   echo "error: Citrix publishes $name on none of its Linux download pages." >&2
-  echo "Almost certainly a withdrawn tech preview, so the pin has to move." >&2
-  echo "See docs/citrix-workspace.md." >&2
+  echo "Almost certainly a withdrawn tech preview; the pin has to move. See docs/citrix-workspace.md." >&2
   exit 1
 fi
 

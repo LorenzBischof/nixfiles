@@ -14,8 +14,7 @@
 # download accepts a click-through EULA. Drop this if nixpkgs ever fetches it.
 # How the page walk works: docs/citrix-workspace.md.
 stdenvNoCC.mkDerivation {
-  # requireFile's own name and flat hash, so this lands on the store path
-  # upstream computes.
+  # requireFile's own name and flat hash, so this lands on upstream's store path.
   inherit name;
   outputHash = hash;
   outputHashAlgo = "sha256";

@@ -155,8 +155,7 @@ in
     # fonts
     font-awesome
     nerd-fonts.dejavu-sans-mono
-    # citrix-workspace's tarball is fetched by the overlay in
-    # hosts/framework/nixos/default.nix; see docs/citrix-workspace.md.
+    # citrix-workspace's tarball: see the overlay in ../nixos/default.nix.
     (writeShellApplication {
       name = "wfica";
       runtimeInputs = [

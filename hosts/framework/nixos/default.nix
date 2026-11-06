@@ -303,8 +303,6 @@
         usePin = lib.versionOlder prev.citrix-workspace.version pin.version;
       in
       {
-        # Fetch the `requireFile` source in the build sandbox instead of
-        # requiring it in the store by hand — see packages/citrix-tarball.nix.
         citrix-workspace = prev.citrix-workspace.overrideAttrs (
           prevAttrs:
           let
