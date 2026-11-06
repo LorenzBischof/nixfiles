@@ -96,16 +96,25 @@ jobs:
           path: ${{ env.GHA_CACHE_DIR }}
           key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
           restore-keys: nix-binary-cache-${{ matrix.target }}-
-      # Citrix Workspace is a licensed download behind a Citrix login, so
-      # nixpkgs takes its tarball through `requireFile`: no fetcher can reach
-      # it, and without the file in the store the framework build stops at
-      # requireFile's message. The tarball itself sits in the cache bucket under
-      # citrix/, put there by hand once per Citrix release — a plain upload, no
-      # nix (docs/citrix-workspace.md). This step feeds it back into the store
-      # only when the build would otherwise stall on it, so building and pushing
-      # the package happens here rather than on the laptop. `aws s3 sync` in the
-      # push step never deletes, so the prefix survives it, and nix ignores keys
-      # that are not narinfos when it reads the bucket as a cache.
+      # nixpkgs takes Citrix Workspace's tarball through `requireFile`, so no
+      # fetcher reaches it and without the file in the store the framework build
+      # stops at requireFile's message — which used to mean a build on the laptop
+      # and a hand-made `nix copy` of the result to the cache.
+      #
+      # It turns out nothing about the download needs a human. Citrix's Linux
+      # download pages are plain HTML, served to an anonymous `curl` with no
+      # login and no JavaScript, and each entry carries its own Akamai-signed URL
+      # in a `rel` attribute (`?__gda__=exp=…~acl=/*~hmac=…`, good for about an
+      # hour) next to the file's published SHA-256. So this step fetches the
+      # tarball itself. What a human used to do by hand was accept the EULA by
+      # clicking through; doing it here accepts it on our behalf.
+      #
+      # The bucket comes first and gets a copy of anything fetched from Citrix,
+      # because Citrix removes a version from its site as soon as the next one
+      # ships — months before nixpkgs moves off it — so the bucket is the only
+      # place an older pinned version stays reachable. `aws s3 sync` in the push
+      # step never deletes, so the prefix survives it, and nix ignores keys that
+      # are not narinfos when it reads the bucket as a cache.
       - name: Citrix Workspace tarball
         if: ${{ matrix.target == 'framework' }}
         env:
@@ -114,6 +123,8 @@ jobs:
           AWS_REGION: ${{ secrets.S3_CACHE_REGION }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_ACCESS_KEY }}
+          CITRIX_LATEST_PAGE: https://www.citrix.com/downloads/workspace-app/linux/workspace-app-for-linux-latest.html
+          CITRIX_LEGACY_INDEX: https://www.citrix.com/downloads/workspace-app/legacy-workspace-app-for-linux/
         run: |
           set -euo pipefail
           # Secrets are empty on a fork PR. Leave the tarball alone there and
@@ -141,21 +152,69 @@ jobs:
               exit 0
             fi
           done
+          aws() {
+            nix shell --inputs-from "$GITHUB_WORKSPACE" nixpkgs#awscli2 -c aws "$@"
+          }
           tarball="$RUNNER_TEMP/$name"
-          if ! nix shell --inputs-from "$GITHUB_WORKSPACE" nixpkgs#awscli2 -c \
-            aws s3 cp "s3://$S3_CACHE_BUCKET/citrix/$name" "$tarball" --no-progress; then
-            echo "::error::$name is not in the bucket under citrix/. Download it from Citrix and upload it there (docs/citrix-workspace.md); nothing in CI can fetch it."
-            exit 1
+          archive="s3://$S3_CACHE_BUCKET/citrix/$name"
+          fetched_from_citrix=
+          # A version not archived yet makes this print aws's own 404; that is
+          # the normal path on a bump, not a problem.
+          if aws s3 cp "$archive" "$tarball" --no-progress; then
+            echo "took $name from the bucket"
+          else
+            # Every Citrix page that offers a Linux build: the current release,
+            # plus the per-version pages the legacy index links. Only the page
+            # for the pinned release carries its file and nothing says which page
+            # that is, so they are tried in turn until one has the name. ~19
+            # pages of ~115 kB, and only when the bucket came up empty.
+            pages=$(
+              printf '%s\n' "$CITRIX_LATEST_PAGE"
+              curl -sfL --max-time 60 "$CITRIX_LEGACY_INDEX" \
+                | grep -oE '/downloads/workspace-app/legacy-workspace-app-for-linux/[a-z0-9.-]+\.html' \
+                | sort -u | sed 's|^|https://www.citrix.com|'
+            )
+            # The file name is a literal here; `.` is a metacharacter to grep -E.
+            pattern=${name//./\\.}
+            url=
+            while read -r page; do
+              html=$(curl -sfL --max-time 120 "$page") || continue
+              # Every variant (arm64, the gcc-8 builds) sits on the same page, so
+              # the name is matched whole, between the component id and the token.
+              hits=$(grep -oE "//downloads\.citrix\.com/[0-9]+/$pattern\?__gda__=[^\"]+" <<< "$html") || continue
+              # One match is enough, and the signed token is not logged.
+              url="https:${hits%%$'\n'*}"
+              echo "$name is published on $page"
+              break
+            done <<< "$pages"
+            if [ -z "$url" ]; then
+              echo "::error::Citrix publishes $name on none of its Linux download pages, and the bucket has no copy under citrix/. It has most likely been withdrawn; the pin has to move to a version Citrix still offers (docs/citrix-workspace.md)."
+              exit 1
+            fi
+            curl -fL --retry 3 --max-time 1800 -o "$tarball" "$url"
+            fetched_from_citrix=1
           fi
           # --add-fixed hashes flat and names the path after the file, which is
-          # what requireFile computes. A mismatch means what was uploaded is not
-          # the version nixpkgs pins.
+          # what requireFile computes. A mismatch means what arrived is not the
+          # version nixpkgs pins — a tarball Citrix replaced in place under the
+          # same name, or a stale upload.
           added=$(nix-store --add-fixed sha256 "$tarball")
           if [ "$added" != "$src" ]; then
             echo "::error::$name hashes to $added, but nixpkgs pins $src"
             exit 1
           fi
           echo "added $added"
+          # Keep what Citrix served, so the run after it withdraws this version
+          # still has it. Only on the Citrix path: a copy from the bucket is
+          # already there. Not fatal — the store has the file either way, and
+          # failing here would throw away a build over a missing spare copy.
+          if [ -n "$fetched_from_citrix" ]; then
+            if aws s3 cp "$tarball" "$archive" --no-progress; then
+              echo "archived $name in the bucket under citrix/"
+            else
+              echo "::warning::could not archive $name under citrix/. This build is fine, but the next one has to download it from Citrix again — and will fail if Citrix has withdrawn it by then."
+            fi
+          fi
       - name: Build
         id: build
         env:

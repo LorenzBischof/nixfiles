@@ -288,6 +288,26 @@
 
   nixpkgs.overlays = [
     inputs.neovim-config.overlays.default
+    # TODO: nixpkgs pins citrix-workspace 26.08.0.153, a tech preview Citrix has
+    # since taken down: the page requireFile sends you to 404s, and neither the
+    # current release page nor any of the 18 legacy ones still offers that
+    # version, so the pin cannot be satisfied by anyone — not CI, not by hand.
+    # 26.08.0.225 is the current release. NixOS/nixpkgs#582762 bumps to exactly
+    # this version and hash and has been open since 2026-11-03; drop this overlay
+    # once it merges. Citrix publishes the SHA-256 next to each download, which
+    # is where this one comes from, and the tarball we fetched hashes to it.
+    (_final: prev: {
+      citrix-workspace = prev.citrix-workspace.overrideAttrs (
+        finalAttrs: _prevAttrs: {
+          version = "26.08.0.225";
+          src = prev.requireFile {
+            name = "linuxx64-${finalAttrs.version}.tar.gz";
+            sha256 = "185sbj67b12iz2s49g0q1ixby79r8c2xflsvl2fghmh6ap1d8ca2";
+            url = "https://www.citrix.com/downloads/workspace-app/linux/workspace-app-for-linux-latest.html";
+          };
+        }
+      );
+    })
   ];
 
   # https://github.com/NixOS/nixpkgs/issues/180175
