@@ -138,10 +138,19 @@ jobs:
           # tarball has to land on, and the file name the recipe asks for.
           # $p is a Nix variable, not a shell expansion.
           # shellcheck disable=SC2016
-          read -r out src name < <(
+          paths=$(
             nix eval --raw "$attr" --apply \
               'p: "${p.outPath} ${p.src.outPath} ${p.src.name}"'
           )
+          # Through a variable, not `read < <(nix eval)`: --raw writes no trailing
+          # newline, so `read` hits EOF without a delimiter and returns 1 even
+          # though it assigned all three — which `set -e` turns into a dead step.
+          # The substitution also lets an eval failure stop us here.
+          read -r out src name <<< "$paths"
+          if [ -z "$out" ] || [ -z "$src" ] || [ -z "$name" ]; then
+            echo "::error::$attr did not evaluate to three paths: $paths"
+            exit 1
+          fi
           # Either of these gets the build past Citrix without the file: the
           # built package, or the tarball's own path from an earlier run.
           # requireFile leaves `allowSubstitutes` at its default, so nix
@@ -191,7 +200,8 @@ jobs:
               echo "::error::Citrix publishes $name on none of its Linux download pages, and the bucket has no copy under citrix/. It has most likely been withdrawn; the pin has to move to a version Citrix still offers (docs/citrix-workspace.md)."
               exit 1
             fi
-            curl -fL --retry 3 --max-time 1800 -o "$tarball" "$url"
+            # -sS: no progress meter in the log, but keep curl's error message.
+            curl -fsSL --retry 3 --max-time 1800 -o "$tarball" "$url"
             fetched_from_citrix=1
           fi
           # --add-fixed hashes flat and names the path after the file, which is
