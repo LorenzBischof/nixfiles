@@ -288,6 +288,30 @@
 
   nixpkgs.overlays = [
     inputs.neovim-config.overlays.default
+    (final: prev: {
+      citrix-workspace = prev.citrix-workspace.overrideAttrs (
+        finalAttrs: prevAttrs:
+        let
+          # TODO: nixpkgs is on 26.08.0.153, a tech preview Citrix has withdrawn,
+          # so no download page publishes it. Pin 26.08.0.225 until
+          # NixOS/nixpkgs#582762 (open as of 2026-11-06) reaches nixos-unstable,
+          # then drop `pinned`. To pin another release, use the version and the
+          # SHA-256 its Citrix download page lists.
+          pinned = lib.versionOlder prevAttrs.version "26.08.0.225";
+        in
+        {
+          version = if pinned then "26.08.0.225" else prevAttrs.version;
+          src = final.callPackage ../../../packages/citrix-tarball.nix {
+            inherit (finalAttrs) version;
+            hash =
+              if pinned then
+                "4231d4c2550656f89ca05b53d70543391dbf7a0c18bc44b4f85184758c5cbaa0"
+              else
+                prevAttrs.src.outputHash;
+          };
+        }
+      );
+    })
   ];
 
   # https://github.com/NixOS/nixpkgs/issues/180175

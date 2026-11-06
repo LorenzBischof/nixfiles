@@ -3,7 +3,6 @@
   config,
   osConfig,
   pkgs,
-  pkgs-citrix-workspace,
   lib,
   inputs,
   secrets,
@@ -161,7 +160,7 @@ in
     (writeShellApplication {
       name = "wfica";
       runtimeInputs = [
-        pkgs-citrix-workspace.citrix_workspace
+        citrix-workspace
       ];
       text = ''
         sed -i 's/TWIMode=On/TWIMode=Off/' "$1"

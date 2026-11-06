@@ -614,22 +614,6 @@
         "type": "github"
       }
     },
-    "nixpkgs-citrix-workspace": {
-      "locked": {
-        "lastModified": 1760749502,
-        "narHash": "sha256-RkRfF3ETNkAjK/w+dNrbQduClp6lDRYJ1Z+Bm+xXlrI=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "87f93d54c572c70f5e4c69eb82f0a7ece26ac9f6",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "87f93d54c572c70f5e4c69eb82f0a7ece26ac9f6",
-        "type": "github"
-      }
-    },
     "nixpkgs-lib": {
       "locked": {
         "lastModified": 1774748309,
@@ -798,7 +782,6 @@
         "nixos-agent-test-vm": "nixos-agent-test-vm",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs_3",
-        "nixpkgs-citrix-workspace": "nixpkgs-citrix-workspace",
         "nixpkgs-umap": "nixpkgs-umap",
         "numen": "numen",
         "pyproject-build-systems": "pyproject-build-systems",
