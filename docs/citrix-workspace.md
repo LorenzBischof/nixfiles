@@ -53,7 +53,7 @@ do.
 
 That is the whole step: it keeps no copy of its own anywhere. **Citrix leaves a
 GA release on the legacy index for years** — as of 2026-11 that index still
-publishes every version back to 23.2.0.10 (February 2023), seventeen of them —
+publishes sixteen versions, every one back to 23.2.0.10 (February 2023) —
 so the file nixpkgs pins is normally still being served, and after the first run
 has built the package step 2 ends the step before any download.
 
