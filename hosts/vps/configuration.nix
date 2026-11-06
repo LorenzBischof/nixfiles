@@ -13,7 +13,6 @@
     ./cooklang.nix
     ./galaxus.nix
     ./mcp.nix
-    ./paperclip.nix
     ../../modules/nixos
   ];
   nixpkgs.config.allowUnfree = true;
