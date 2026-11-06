@@ -288,31 +288,48 @@
 
   nixpkgs.overlays = [
     inputs.neovim-config.overlays.default
-    # Replace the `requireFile` source with one the sandbox fetches off Citrix's
-    # download pages, so nothing has to be put in the store by hand — see
-    # packages/citrix-tarball.nix for why that works and why it stays here.
-    #
-    # TODO: the version and hash on top are a second, shorter-lived thing:
-    # nixpkgs pins 26.08.0.153, a tech preview Citrix has since taken down, so
-    # the version it pins is published nowhere and the fetch above cannot
-    # succeed for it. 26.08.0.225 is the current release, and
-    # NixOS/nixpkgs#582762 bumps to exactly this version and hash (open since
-    # 2026-11-03). Once that merges, drop the `version` line and take the hash
-    # from `prevAttrs.src.outputHash`, which is the one requireFile pins — then
-    # the next nixpkgs bump needs no edit here at all. The hash below is the
-    # nix32 form of the SHA-256 Citrix publishes beside the download, and the
-    # tarball we fetched hashes to it.
-    (final: prev: {
-      citrix-workspace = prev.citrix-workspace.overrideAttrs (
-        finalAttrs: _prevAttrs: {
+    (
+      final: prev:
+      let
+        # TODO: nixpkgs pins 26.08.0.153, a tech preview Citrix has withdrawn,
+        # so no page publishes its tarball. NixOS/nixpkgs#582762 bumps to this
+        # exact release (open as of 2026-11-06); `usePin` retires the override
+        # on its own once nixpkgs is there, so delete `pin` then.
+        pin = rec {
           version = "26.08.0.225";
-          src = final.callPackage ../../../packages/citrix-tarball.nix {
-            inherit (finalAttrs) version;
-            hash = "185sbj67b12iz2s49g0q1ixby79r8c2xflsvl2fghmh6ap1d8ca2";
-          };
-        }
-      );
-    })
+          name = "linuxx64-${version}.tar.gz";
+          hash = "185sbj67b12iz2s49g0q1ixby79r8c2xflsvl2fghmh6ap1d8ca2";
+        };
+        usePin = lib.versionOlder prev.citrix-workspace.version pin.version;
+      in
+      {
+        # Fetch the `requireFile` source in the build sandbox instead of
+        # requiring it in the store by hand — see packages/citrix-tarball.nix.
+        citrix-workspace = prev.citrix-workspace.overrideAttrs (
+          prevAttrs:
+          let
+            # Version, name and hash describe one release and move together: a
+            # name from one with a hash from another sends the page walk after
+            # a tarball Citrix does not publish.
+            release =
+              if usePin then
+                pin
+              else
+                {
+                  inherit (prevAttrs) version;
+                  inherit (prevAttrs.src) name;
+                  hash = prevAttrs.src.outputHash;
+                };
+          in
+          {
+            inherit (release) version;
+            src = final.callPackage ../../../packages/citrix-tarball.nix {
+              inherit (release) name hash;
+            };
+          }
+        );
+      }
+    )
   ];
 
   # https://github.com/NixOS/nixpkgs/issues/180175

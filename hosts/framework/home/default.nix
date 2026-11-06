@@ -155,9 +155,8 @@ in
     # fonts
     font-awesome
     nerd-fonts.dejavu-sans-mono
-    # citrix-workspace's source is a licensed download that `requireFile` can
-    # never fetch; docs/citrix-workspace.md covers how the tarball reaches CI,
-    # which is what fills the binary cache for this host.
+    # citrix-workspace's tarball is fetched by the overlay in
+    # hosts/framework/nixos/default.nix; see docs/citrix-workspace.md.
     (writeShellApplication {
       name = "wfica";
       runtimeInputs = [
