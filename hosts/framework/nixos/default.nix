@@ -288,46 +288,30 @@
 
   nixpkgs.overlays = [
     inputs.neovim-config.overlays.default
-    (
-      final: prev:
-      let
-        # TODO: nixpkgs pins 26.08.0.153, a tech preview Citrix has withdrawn,
-        # so no page publishes its tarball. NixOS/nixpkgs#582762 bumps to this
-        # exact release (open as of 2026-11-06); `usePin` retires the override
-        # on its own once nixpkgs is there, so delete `pin` then.
-        pin = rec {
-          version = "26.08.0.225";
-          name = "linuxx64-${version}.tar.gz";
-          hash = "185sbj67b12iz2s49g0q1ixby79r8c2xflsvl2fghmh6ap1d8ca2";
-        };
-        usePin = lib.versionOlder prev.citrix-workspace.version pin.version;
-      in
-      {
-        citrix-workspace = prev.citrix-workspace.overrideAttrs (
-          prevAttrs:
-          let
-            # Version, name and hash describe one release and move together: a
-            # name from one with a hash from another sends the page walk after
-            # a tarball Citrix does not publish.
-            release =
-              if usePin then
-                pin
+    (final: prev: {
+      citrix-workspace = prev.citrix-workspace.overrideAttrs (
+        finalAttrs: prevAttrs:
+        let
+          # TODO: nixpkgs is on 26.08.0.153, a tech preview Citrix has withdrawn,
+          # so no download page publishes it. Pin 26.08.0.225 until
+          # NixOS/nixpkgs#582762 (open as of 2026-11-06) reaches nixos-unstable,
+          # then drop `pinned`. To pin another release, use the version and the
+          # SHA-256 its Citrix download page lists.
+          pinned = lib.versionOlder prevAttrs.version "26.08.0.225";
+        in
+        {
+          version = if pinned then "26.08.0.225" else prevAttrs.version;
+          src = final.callPackage ../../../packages/citrix-tarball.nix {
+            inherit (finalAttrs) version;
+            hash =
+              if pinned then
+                "4231d4c2550656f89ca05b53d70543391dbf7a0c18bc44b4f85184758c5cbaa0"
               else
-                {
-                  inherit (prevAttrs) version;
-                  inherit (prevAttrs.src) name;
-                  hash = prevAttrs.src.outputHash;
-                };
-          in
-          {
-            inherit (release) version;
-            src = final.callPackage ../../../packages/citrix-tarball.nix {
-              inherit (release) name hash;
-            };
-          }
-        );
-      }
-    )
+                prevAttrs.src.outputHash;
+          };
+        }
+      );
+    })
   ];
 
   # https://github.com/NixOS/nixpkgs/issues/180175

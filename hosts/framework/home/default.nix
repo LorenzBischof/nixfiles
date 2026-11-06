@@ -155,7 +155,6 @@ in
     # fonts
     font-awesome
     nerd-fonts.dejavu-sans-mono
-    # citrix-workspace's tarball: see the overlay in ../nixos/default.nix.
     (writeShellApplication {
       name = "wfica";
       runtimeInputs = [

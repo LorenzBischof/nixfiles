@@ -1,59 +1,33 @@
-# Build command of the fixed-output derivation in packages/citrix-tarball.nix,
-# which is where $name, $latestPage, $legacyIndex and $out come from.
+# Build command of packages/citrix-tarball.nix, which sets $name and $out.
 # shellcheck shell=bash
 # shellcheck disable=SC2154
 set -euo pipefail
 
-# --disable: ignore any ~/.curlrc the sandbox exposes. --cacert: the sandbox has
-# no system trust store, only the bundle the derivation passes in.
-curlFlags=(
-  --disable
-  --fail
-  --silent
-  --show-error
-  --location
-  --max-redirs 10
-  --retry 3
-  --cacert "$SSL_CERT_FILE"
-)
-
-# The pinned version is usually the current release, so try that page first,
-# then the per-version pages the legacy index links. Listing it is best-effort.
-pages=$latestPage
-if legacy=$(
-  curl "${curlFlags[@]}" --max-time 60 "$legacyIndex" \
+# The download links carry a signed token that expires within the hour, so they
+# have to be read off the pages at fetch time. Try the current release first,
+# then every version page the legacy index links.
+curlFlags=(--fail --silent --show-error --location --retry 3)
+pages="https://www.citrix.com/downloads/workspace-app/linux/workspace-app-for-linux-latest.html"
+pages+=$'\n'$(
+  curl "${curlFlags[@]}" https://www.citrix.com/downloads/workspace-app/legacy-workspace-app-for-linux/ \
     | grep -oE '/downloads/workspace-app/legacy-workspace-app-for-linux/[a-z0-9.-]+\.html' \
     | sort -u \
-    | sed 's|^|https://www.citrix.com|'
-); then
-  pages+=$'\n'$legacy
-fi
+    | sed 's|^|https://www.citrix.com|' || true
+)
 
-# Nothing says which page publishes the pinned release, so try them in turn.
-# The file name is a literal; `.` is a metacharacter to grep -E.
-pattern=${name//./\\.}
 url=
 while read -r page; do
-  html=$(curl "${curlFlags[@]}" --max-time 120 "$page") || continue
-  # Other variants sit on the same page, so match the name whole, between the
-  # component id and the signed token. One match is enough, and is not echoed.
-  hits=$(grep -oE "//downloads\.citrix\.com/[0-9]+/$pattern\?__gda__=[^\"]+" <<<"$html") || continue
-  url="https:${hits%%$'\n'*}"
-  echo "$name is published on $page"
-  break
+  url=$(curl "${curlFlags[@]}" "$page" \
+    | grep -oE "//downloads\.citrix\.com/[0-9]+/${name//./\\.}\?__gda__=[^\"]+" \
+    | head -n1) || true
+  [ -n "$url" ] && break
 done <<<"$pages"
 
 if [ -z "$url" ]; then
-  echo "error: Citrix publishes $name on none of its Linux download pages." >&2
-  echo "Almost certainly a withdrawn tech preview; the pin has to move. See docs/citrix-workspace.md." >&2
+  echo "error: no Citrix download page publishes $name." >&2
+  echo "nixpkgs is likely on a withdrawn tech preview; pin a published release in the citrix-workspace overlay." >&2
   exit 1
 fi
 
-curl "${curlFlags[@]}" --max-time 1800 --output "$out" "$url"
-
-# A rejected or expired token answers with an HTML error page rather than a 4xx,
-# and a bare hash mismatch is a confusing way to hear about that.
-if [ "$(od -An -N2 -tx1 "$out" | tr -d ' \n')" != "1f8b" ]; then
-  echo "error: $page served $name as something other than a gzip file." >&2
-  exit 1
-fi
+echo "downloading $name from $page"
+curl "${curlFlags[@]}" --output "$out" "https:$url"
