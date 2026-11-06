@@ -288,22 +288,27 @@
 
   nixpkgs.overlays = [
     inputs.neovim-config.overlays.default
-    # TODO: nixpkgs pins citrix-workspace 26.08.0.153, a tech preview Citrix has
-    # since taken down: the page requireFile sends you to 404s, and neither the
-    # current release page nor any of the 18 legacy ones still offers that
-    # version, so the pin cannot be satisfied by anyone — not CI, not by hand.
-    # 26.08.0.225 is the current release. NixOS/nixpkgs#582762 bumps to exactly
-    # this version and hash and has been open since 2026-11-03; drop this overlay
-    # once it merges. Citrix publishes the SHA-256 next to each download, which
-    # is where this one comes from, and the tarball we fetched hashes to it.
-    (_final: prev: {
+    # Replace the `requireFile` source with one the sandbox fetches off Citrix's
+    # download pages, so nothing has to be put in the store by hand — see
+    # packages/citrix-tarball.nix for why that works and why it stays here.
+    #
+    # TODO: the version and hash on top are a second, shorter-lived thing:
+    # nixpkgs pins 26.08.0.153, a tech preview Citrix has since taken down, so
+    # the version it pins is published nowhere and the fetch above cannot
+    # succeed for it. 26.08.0.225 is the current release, and
+    # NixOS/nixpkgs#582762 bumps to exactly this version and hash (open since
+    # 2026-11-03). Once that merges, drop the `version` line and take the hash
+    # from `prevAttrs.src.outputHash`, which is the one requireFile pins — then
+    # the next nixpkgs bump needs no edit here at all. The hash below is the
+    # nix32 form of the SHA-256 Citrix publishes beside the download, and the
+    # tarball we fetched hashes to it.
+    (final: prev: {
       citrix-workspace = prev.citrix-workspace.overrideAttrs (
         finalAttrs: _prevAttrs: {
           version = "26.08.0.225";
-          src = prev.requireFile {
-            name = "linuxx64-${finalAttrs.version}.tar.gz";
-            sha256 = "185sbj67b12iz2s49g0q1ixby79r8c2xflsvl2fghmh6ap1d8ca2";
-            url = "https://www.citrix.com/downloads/workspace-app/linux/workspace-app-for-linux-latest.html";
+          src = final.callPackage ../../../packages/citrix-tarball.nix {
+            inherit (finalAttrs) version;
+            hash = "185sbj67b12iz2s49g0q1ixby79r8c2xflsvl2fghmh6ap1d8ca2";
           };
         }
       );
