@@ -41,7 +41,8 @@ device introspection is not just restricted but *misleading*: `lspci` returns
 nothing, `/dev/accel` and `/sys/class/accel` are absent, and `dmesg` is empty,
 even when the hardware is present and its module loaded. Never conclude
 hardware is missing from inside the session — inspect the nix config, or have
-the user run the check.
+the user run the check. Browser automation must run with the sandbox disabled;
+use the upstream `playwright-cli` skill.
 
 The sandbox also drops 0-byte deny stubs into the working directory for every
 path on its deny list (`.bashrc`, `.gitconfig`, `.claude/settings.json`, …),

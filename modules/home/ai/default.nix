@@ -160,6 +160,7 @@ let
     mkdir -p $out
     ln -s ${./skills}/* $out/
     ln -s ${basicMemory.src}/skills/memory-* $out/
+    ln -s ${pkgs.playwright}/lib/tools/skills/playwright-cli $out/
   '';
   workLogExtract = pkgs.writers.writePython3Bin "work-log-extract" {
     flakeIgnore = [
@@ -359,6 +360,7 @@ in
 {
   imports = [
     ./aichat.nix
+    ./browser.nix
     inputs.voxtype.homeManagerModules.default
   ];
   options.my.profiles.ai = {
@@ -396,6 +398,8 @@ in
       # Agents reach for python3 for one-off scripting; without it on PATH they
       # fall back to awk and sed, which is where the fiddly mistakes come from.
       pkgs.python3
+      # Also used by browser automation.
+      pkgs.nodejs
       pkgs.socat
       codexBwrap
       claudeBwrap
