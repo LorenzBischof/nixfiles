@@ -98,13 +98,6 @@ in
           ];
         }
       ];
-      http = {
-        trusted_proxies = [
-          "::1"
-          "127.0.0.1"
-        ];
-        use_x_forwarded_for = true;
-      };
       homeassistant.media_dirs.media = mediaDir;
     };
     blueprints.automation = [
