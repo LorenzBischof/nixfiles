@@ -168,6 +168,72 @@ let
       "W503" # black-style line breaks before binary operators
     ];
   } (builtins.readFile ./skills/work-log/extract.py);
+  # Nobody watches this run and it reads text it did not write, so unlike the
+  # bwrap wrappers it gets no blanket permissions: dontAsk denies everything but
+  # the skill and the graph tools (no bm_delete, no shell, no web). bm_project is
+  # left out because it can create projects, so the prompt points at bm_search.
+  # Without --no-session-persistence each run would show up in work-log.
+  memoryReflect = pkgs.writeShellApplication {
+    name = "memory-reflect";
+    # Spawned by systemd, so it cannot rely on home.sessionVariables.
+    runtimeEnv = basicMemoryEnv // {
+      # Otherwise the run can start before the graph tools have connected, give
+      # up and still exit 0.
+      MCP_CONNECTION_NONBLOCKING = "false";
+    };
+    text = ''
+      ${lib.getExe config.programs.claude-code.finalPackage} -p ${lib.escapeShellArg ''
+        Run the memory-reflect skill on project main. Nobody is watching this run.
+        bm_project is not available, so find changed notes with
+        bm_search(since=<date of the last reflection>, project="main", page_size=50),
+        paging until there are no more. Also check the active tasks and open
+        decisions, and correct any that other notes show are out of date.
+      ''} \
+        --no-session-persistence \
+        --model opus \
+        --permission-mode dontAsk \
+        --tools Skill \
+        --allowedTools ${
+          lib.escapeShellArgs (
+            [ "Skill(memory-reflect)" ]
+            ++ map (tool: "mcp__plugin_hm_basic-memory__bm_${tool}") [
+              "context"
+              "edit"
+              "find"
+              "list"
+              "read"
+              "search"
+              "write"
+            ]
+          )
+        }
+    '';
+  };
+  # Skips memory-reflect when the 5h or weekly window has less than 10% left
+  # (exit 1 is a skip, not a failure) and retries once that window resets. If
+  # the usage can't be read, the run goes ahead. Each check replaces any pending
+  # retry, so a run that happens first makes the retry redundant.
+  memoryReflectUsageCheck = pkgs.writeShellApplication {
+    name = "memory-reflect-usage-check";
+    runtimeInputs = with pkgs; [
+      coreutils
+      curl
+      jq
+      systemd
+    ];
+    text = ''
+      systemctl --user stop memory-reflect-retry.timer 2>/dev/null || true
+      token="$(jq -r .claudeAiOauth.accessToken ~/.claude/.credentials.json)"
+      usage="$(curl -fsS https://api.anthropic.com/api/oauth/usage \
+        -H "Authorization: Bearer $token" -H 'anthropic-beta: oauth-2025-04-20')" || exit 0
+      reset="$(jq -r '[.five_hour, .seven_day | select(.utilization > 90) | .resets_at] | max // empty' <<<"$usage")"
+      [ -z "$reset" ] && exit 0
+      echo "Less than 10% usage left, retrying after $reset"
+      systemd-run --user --unit=memory-reflect-retry --on-calendar="$(date -d "$reset 1 minute" '+%F %T')" \
+        systemctl --user start memory-reflect.service
+      exit 1
+    '';
+  };
   mkBwrapTool =
     {
       name,
@@ -428,6 +494,27 @@ in
     home.activation.basicMemoryDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       run mkdir -p ${lib.escapeShellArg basicMemoryHome} ${lib.escapeShellArg basicMemoryStateDir}
     '';
+
+    systemd.user.services.memory-reflect = {
+      Unit.Description = "Consolidate the Basic Memory graph";
+      Service = {
+        Type = "oneshot";
+        ExecCondition = lib.getExe memoryReflectUsageCheck;
+        ExecStart = lib.getExe memoryReflect;
+        TimeoutStartSec = "1h";
+      };
+    };
+
+    systemd.user.timers.memory-reflect = {
+      Unit.Description = "Twice-weekly Basic Memory reflection";
+      Timer = {
+        # Midday rather than overnight: the laptop is asleep at night, and a
+        # catch-up fired on wake can beat the network.
+        OnCalendar = "Mon,Thu 12:30";
+        Persistent = true;
+      };
+      Install.WantedBy = [ "timers.target" ];
+    };
 
     programs.voxtype = {
       enable = true;
