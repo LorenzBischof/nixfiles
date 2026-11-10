@@ -99,7 +99,7 @@
     # repo root is the plugin for both Claude Code and Codex, so it is handed to
     # both as-is; a bump is the tag in this URL.
     egm = {
-      url = "github:google/elephant-goldfish-model/v0.1.0";
+      url = "github:google/elephant-goldfish-model/v0.1.1";
       flake = false;
     };
     pyproject-nix = {
