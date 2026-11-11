@@ -37,9 +37,9 @@ switch host="": add
         # prompts up front instead of mid-run, so the build can be left alone.
         nixos-rebuild switch --flake . --elevate sudo --ask-elevate-password $overrides
     elif [ "{{host}}" = "nas" ]; then
-        nixos-rebuild switch --flake .#nas --target-host nas --elevate sudo $overrides
+        nixos-rebuild switch --use-substitutes --flake .#nas --target-host nas --build-host nas --elevate sudo $overrides
     elif [ "{{host}}" = "vps" ]; then
-        nixos-rebuild switch --use-substitutes --flake .#vps --target-host vps --build-host vps --elevate sudo
+        nixos-rebuild switch --use-substitutes --flake .#vps --target-host vps --build-host vps --elevate sudo $overrides
     else
         echo "Unknown host: {{host}}"
         exit 1
@@ -53,9 +53,9 @@ test host="": add
     if [ "{{host}}" = "" ]; then
         nixos-rebuild test --flake . --elevate sudo --ask-elevate-password $overrides
     elif [ "{{host}}" = "nas" ]; then
-        nixos-rebuild test --flake .#nas --target-host nas --elevate sudo $overrides
+        nixos-rebuild test --use-substitutes --flake .#nas --target-host nas --build-host nas --elevate sudo $overrides
     elif [ "{{host}}" = "vps" ]; then
-        nixos-rebuild test --use-substitutes --flake .#vps --target-host vps --build-host vps --elevate sudo
+        nixos-rebuild test --use-substitutes --flake .#vps --target-host vps --build-host vps --elevate sudo $overrides
     else
         echo "Unknown host: {{host}}"
         exit 1
