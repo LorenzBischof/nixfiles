@@ -1,7 +1,7 @@
 blueprint:
   name: NFC Media
   description: >-
-    Play a media file while an NFC tag sits on the tagreader.
+    Play a media file or Sonos favorite while an NFC tag sits on the tagreader.
 
     Driven by the reader's tag-scanned/tag-removed events instead of the
     per-tag binary_sensor, whose state edges get swallowed when one tag is
@@ -37,10 +37,19 @@ conditions: []
 variables:
   file: !input file
   player: "{{ file.entity_id }}"
-  # The player reports the resolved (signed) URL rather than the media-source
-  # id, so the file name is all the two have in common.
-  wanted: "{{ (file.media_content_id | default('', true)).split('/')[-1] }}"
-  loaded: "{{ (state_attr(player, 'media_content_id') | default('', true)).split('?')[0].split('/')[-1] }}"
+  # A Sonos favorite (e.g. a Spotify playlist) is queued, and the player then
+  # reports the current track's URI, which never names the favorite; its
+  # `media_playlist` carries the favorite's title instead, and is cleared again
+  # once something plays outside the queue (sonos/media.py, `clear()`).
+  favorite: "{{ file.media_content_type == 'favorite_item_id' }}"
+  # For files, the player reports the resolved (signed) URL rather than the
+  # media-source id, so the file name is all the two have in common.
+  wanted: >-
+    {{ (file.metadata.title | default('', true)) if favorite
+       else (file.media_content_id | default('', true)).split('/')[-1] }}
+  loaded: >-
+    {{ (state_attr(player, 'media_playlist') | default('', true)) if favorite
+       else (state_attr(player, 'media_content_id') | default('', true)).split('?')[0].split('/')[-1] }}
   # Resume is decided by the position, not by the state name: Home Assistant
   # reports a paused Sonos as `idle` whenever the track carries no ID3 title
   # (sonos/media_player.py, `media.title is None`), and a finished episode
@@ -90,8 +99,12 @@ actions:
     # the previous tag's pause must see the new episode and stand down.
     - condition: template
       value_template: >-
-        {{ is_state(player, 'playing')
-           and (state_attr(player, 'media_content_id') | default('', true)).split('?')[0].split('/')[-1] == wanted }}
+        {% if favorite %}
+          {% set now_loaded = state_attr(player, 'media_playlist') | default('', true) %}
+        {% else %}
+          {% set now_loaded = (state_attr(player, 'media_content_id') | default('', true)).split('?')[0].split('/')[-1] %}
+        {% endif %}
+        {{ wanted != '' and is_state(player, 'playing') and now_loaded == wanted }}
     - action: media_player.media_pause
       target:
         entity_id: "{{ player }}"
