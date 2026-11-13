@@ -500,11 +500,14 @@ in
     programs.claude-code = {
       enable = true;
       package = inputs.llm-agents.packages.${system}.claude-code;
-      # No "Co-Authored-By: Claude" on commits and no "Generated with Claude
-      # Code" on pull requests. Commits here are the description line and nothing
-      # else.
+      # No "Co-Authored-By: Claude" or "Claude-Session:" link on commits and no
+      # "Generated with Claude Code" or session link on pull requests. Commits
+      # here are the description line and nothing else.
       settings = {
-        includeCoAuthoredBy = false;
+        attribution = {
+          commit = "";
+          pr = "";
+        };
         # The hooks read this before any project-level block, so one declaration
         # covers every repository; a repo that wants a different graph or
         # placement overrides it in its own .claude/settings.local.json.
