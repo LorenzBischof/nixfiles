@@ -15,6 +15,11 @@ Run jj with the sandbox disabled — a sandboxed jj writes 0-byte deny stubs int
 the repository root, and they get snapshotted into the change. Check `jj diff -r
 <change> --summary` before considering a change final.
 
+A change is not done until it has a description. Give it one with `jj describe
+-m "scope: message"` (lowercase scope, imperative wording) rather than handing
+back a "(no description set)" change; descriptions are cheap to rewrite as the
+work grows.
+
 jj owning the working copy also means **nix reads the git tree, not your edits**.
 `nix build` / `nixos-rebuild --flake .#host` build from the git index, which jj
 only refreshes when a jj command runs. Editing a file and going straight to `just
