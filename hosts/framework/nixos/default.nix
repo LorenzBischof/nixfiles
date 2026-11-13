@@ -48,7 +48,15 @@
     # an alternating A/B (200000/0/200000/0, 45s phases):
     # 0.800 cores with polling on vs 0.694 with it off, 13% off for free.
     # Nothing in the guests cares about interrupt latency, so buy the battery.
-    extraModprobeConfig = "options kvm halt_poll_ns=0";
+    #
+    # Wi-Fi boots in the world regdomain "00", which disables 6 GHz. The Pixel
+    # hotspot runs 6 GHz only, so it stayed invisible until the MT7925 picked
+    # up a country hint from nearby beacons -- 17 minutes on 2026-11-14 with
+    # only other phone hotspots around. Pin CH so 6 GHz is usable from boot.
+    extraModprobeConfig = ''
+      options kvm halt_poll_ns=0
+      options cfg80211 ieee80211_regdom=CH
+    '';
 
     plymouth = {
       enable = true;
