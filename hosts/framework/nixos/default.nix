@@ -139,7 +139,13 @@
 
   # Containers
   virtualisation = {
-    docker.enable = true;
+    # Rootless: no daemon and no group that hands out root, unlike docker.
+    # dockerCompat provides the `docker` command for muscle memory and scripts.
+    podman = {
+      enable = true;
+      dockerCompat = true;
+      defaultNetwork.settings.dns_enabled = true;
+    };
     libvirtd = {
       enable = true;
       # The default "suspend" saves guests to disk on host shutdown and restores
@@ -224,7 +230,6 @@
       "i2c"
       "scanner"
       "libvirtd"
-      "docker"
       "kvm"
       "uinput"
     ];

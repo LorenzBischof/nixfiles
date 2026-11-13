@@ -272,7 +272,6 @@
               };
               services.tailscale.enable = lib.mkForce false;
               services.syncthing.enable = lib.mkForce false;
-              virtualisation.docker.enable = lib.mkForce false;
               virtualisation.libvirtd.enable = lib.mkForce false;
               my.system.autoUpgrade.enable = lib.mkForce false;
               home-manager.users.lbischof.programs.voxtype.service.enable = lib.mkForce false;
