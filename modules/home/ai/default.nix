@@ -374,6 +374,8 @@ in
         "-a"
         "on-request"
         "-c"
+        "approvals_reviewer=auto_review"
+        "-c"
         "sandbox_workspace_write.network_access=true"
       ];
     };
