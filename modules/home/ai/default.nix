@@ -432,7 +432,21 @@ in
     programs.voxtype = {
       enable = true;
       # Use the upstream ONNX package for Parakeet transcription on the CPU.
-      package = inputs.voxtype.packages.${system}.onnx;
+      # TODO: nixpkgs' cargoSetupHook forces onig_sys and libsqlite3-sys onto
+      # system libraries since #537108, and the voxtype flake doesn't provide
+      # them (nixpkgs' own voxtype got both in #585434). No upstream issue or
+      # fix, still missing on voxtype main as of 2026-11. Drop the override
+      # once the flake's onnx build lists oniguruma and sqlite.
+      package = inputs.voxtype.packages.${system}.onnx.overrideAttrs {
+        paths = [
+          (inputs.voxtype.packages.${system}.voxtype-onnx-unwrapped.overrideAttrs (old: {
+            buildInputs = old.buildInputs ++ [
+              pkgs.oniguruma
+              pkgs.sqlite
+            ];
+          }))
+        ];
+      };
       service.enable = true;
       settings = {
         hotkey.enabled = false;
