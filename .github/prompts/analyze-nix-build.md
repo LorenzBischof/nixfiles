@@ -161,6 +161,15 @@ from this repo is otherwise invisible to the reader. Name what the patch did,
 not the file it lives in, and keep it to a clause: for a drop, the release that
 now carries the fix is justification enough.
 
+### A workaround the bump broke
+
+A `TODO:` comment marks a workaround for something upstream, and says what lets
+us drop it. Any upstream state it reports was true when it was written, not now.
+When a bump breaks a workaround, first check its drop condition against the newly
+pinned revision: read versions off the evaluated tree, and look for any named
+fix in the release's changelog. If the condition holds, removing the workaround
+is the fix. Otherwise adapt it, and update the dated state in its comment.
+
 ## Deprecations
 
 For each deprecation warning, identify what triggers it and what the replacement
