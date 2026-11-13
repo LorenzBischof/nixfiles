@@ -21,13 +21,21 @@ let
 
   # Packages without a `version` are wrappers and generated derivations whose
   # version can never change; dropping them keeps the diff to real applications.
+  # Where the version-diff worker reads about a bump: the changelog URL, else
+  # the source repository (fetchFromGitHub records it, and its releases page is
+  # the changelog), else the homepage. Reading `src` evaluates, never fetches.
   entry =
     source: drv:
     let
       version = drv.version or null;
+      srcHome = tryEval (drv.src.meta.homepage or null);
+      url =
+        drv.meta.changelog
+          or (if srcHome.success && srcHome.value != null then srcHome.value else drv.meta.homepage or null);
     in
     if (drv.type or "") == "derivation" && version != null && version != "" then
       "${drv.pname or drv.name} ${version} (${source})"
+      + (if builtins.isString url then " ${url}" else "")
     else
       null;
 

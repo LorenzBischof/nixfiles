@@ -216,16 +216,16 @@ jobs:
     # run regardless of the build result (a plain `needs` would skip on failure).
     # On the pusher, not the PR author, which stays dependabot[bot] for the life
     # of the PR: the fix this job pushes leaves flake.lock untouched, so the run
-    # it triggers has nothing new to analyse and the builds alone prove the fix.
-    # Only dependabot pushes a new lock (its own bump, or a rebase), and a fork
-    # PR never has it as sender, so this still never runs on outside code.
+    # it triggers (once approved, as github-actions[bot]) has nothing new to
+    # analyse and the builds alone prove the fix. Only dependabot pushes a new
+    # lock (its own bump, or a rebase), and a fork PR never has it as sender,
+    # so this still never runs on outside code.
     # The branch prefix skips github-actions bumps, which leave flake.lock
     # alone and wait for a manual merge anyway.
     if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.sender.login == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/nix/') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
       pull-requests: write
     outputs:
       # `false` is the only value that lets auto-merge through, so a missing or
@@ -426,34 +426,24 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           path_to_claude_code_executable: ${{ steps.claude_bin.outputs.path }}
           prompt: ${{ steps.prompt.outputs.content }}
-          # Dependabot opens the PR; pushing a fix back re-triggers the run as
-          # github-actions[bot]. The `if` still gates on a Dependabot PR author.
-          allowed_bots: "dependabot[bot],github-actions[bot]"
+          allowed_bots: "dependabot[bot]"
           # Surface the full SDK output so failures are diagnosable (the action
           # otherwise hides it "for security").
           show_full_output: true
-          # auto mode classifies each tool call (allows safe read/build commands,
-          # fails closed in CI on anything risky), so the only list left is a
-          # pre-allow for the tools whose blocking would sink the job: the edits
-          # and the git commit/push it exists to produce, plus Task, since the
-          # prompt delegates the changelog and release-note reading to subagents
-          # and that shouldn't depend on how the classifier reads a spawn.
-          # Nothing is denied. A `Bash(curl:*)` deny sat here as an egress
-          # backstop but never was one — WebFetch reaches any domain the
-          # classifier allows, and this job holds a write token it can `git push`
-          # with — and it cost a worker a turn when a changelog lived off GitHub.
+          # auto mode classifies each tool call and fails closed in CI on
+          # anything it judges risky; nothing is pre-allowed or denied.
           #
           # --tools cuts the built-in set to the ones an earlier run actually
           # used (Bash, Read, Edit, Write, WebFetch, ToolSearch) plus Task for
-          # the delegation above. Measured 6.4k tokens off every turn's context:
-          # tool schemas are not all loaded on demand. It also removes the
+          # the worker subagents the prompt delegates to. Measured 6.4k tokens
+          # off every turn's context: tool schemas are not all loaded on demand. It also removes the
           # wait-and-resume tools — Monitor, ScheduleWakeup, Cron*, TaskOutput —
           # which mean nothing in a one-shot job and which that run reached for
           # instead of just waiting. ToolSearch stays because WebFetch arrives
           # deferred and has to be loaded. Unknown names here are ignored
           # silently, so a typo fails open: check against the init message's
           # tool list rather than assuming a name exists.
-          claude_args: '--permission-mode auto --add-dir "/nix/store" --tools "Bash,Read,Edit,Write,Task,WebFetch,ToolSearch" --allowedTools "Task,Edit,Write,Bash(git add:*),Bash(git commit:*),Bash(git push:*)"'
+          claude_args: '--permission-mode auto --add-dir "/nix/store" --tools "Bash,Read,Edit,Write,Task,WebFetch,ToolSearch"'
           # Two things keep this one-shot job from ending mid-work, since
           # anything still running dies with the session. Background tasks are
           # off, so a build that outlives the 2-minute foreground timeout runs
@@ -548,8 +538,10 @@ jobs:
 
   automerge-dependabot:
     # Require passing builds and successful analysis with an explicit no-hold
-    # verdict. The bot's fix push skips analysis because flake.lock is unchanged.
-    # !cancelled() allows that skipped dependency; check success explicitly.
+    # verdict. The bot's fix push skips analysis because flake.lock is unchanged;
+    # its run only starts once a human approves it, which stands in for the
+    # verdict. !cancelled() allows that skipped dependency; check success
+    # explicitly.
     needs: [build, analyze-claude]
     if: >-
       ${{
