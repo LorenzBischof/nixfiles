@@ -30,10 +30,10 @@ jobs:
       # push step uploads, so it stays far below the full closure.
       GHA_CACHE_DIR: /nix/.gha-cache
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 20
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
         with:
           # Its post step saves the binfmt image with docker, which cleave
           # removes. The binfmt registration itself lives in the kernel.
@@ -50,7 +50,7 @@ jobs:
           # Region comes from the store URL, so root needs only the key pair.
           sudo -i aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
           sudo -i aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
-      - uses: wimpysworld/nothing-but-nix@main
+      - uses: wimpysworld/nothing-but-nix@b2574ec1cf1462bee0a34de0fb6ff11ad3c43cb2 # v12
         with:
           # actions/cache stages its archive in $RUNNER_TEMP, on /, which the
           # runner image leaves at ~1GB free: the framework entry (~2GB)
@@ -63,7 +63,7 @@ jobs:
           # mid-build cut every open download (HTTP2 framing errors) and nix
           # disabled cache.nixos.org.
           witness-carnage: true
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
         with:
           # We set our custom GitHub token for any private flake inputs we might have
           github_access_token: ${{ secrets.GH_TOKEN }}
@@ -91,7 +91,7 @@ jobs:
       # run restores from.
       - name: Restore GitHub Actions binary cache
         if: ${{ matrix.target != 'flake-check' }}
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ env.GHA_CACHE_DIR }}
           key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
@@ -143,12 +143,11 @@ jobs:
         run: |
           set -euo pipefail
           out=$(readlink -f result)
-          # printenv, not echo, so the key can't reach the log; umask so it is
-          # never briefly world-readable.
-          umask 077
-          key="$RUNNER_TEMP/nix-cache-signing-key"
-          printenv NIX_CACHE_SIGNING_KEY > "$key"
-          nix store sign --recursive --key-file "$key" "$out"
+          # Through a pipe, so the key never lands on disk where later post
+          # steps (nothing-but-nix's post-run-action among them) could read it;
+          # every host trusts this key. printenv, not echo, so it can't reach
+          # the log.
+          nix store sign --recursive --key-file <(printenv NIX_CACHE_SIGNING_KEY) "$out"
           # The cache directory doubles as the staging area for the upload.
           # `nix copy` can't write the filtered subset directly: a binary-cache
           # destination rejects paths whose references it doesn't already hold,
@@ -197,14 +196,14 @@ jobs:
       # under a new key, or after a miss an empty one that later runs restore.
       - name: Save GitHub Actions binary cache
         if: ${{ success() && matrix.target != 'flake-check' && github.event_name == 'push' && steps.build.outputs.cached != 'true' }}
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ env.GHA_CACHE_DIR }}
           key: nix-binary-cache-${{ matrix.target }}-${{ github.sha }}
       # Public artifact, so only on the runs analyze-claude reads it from.
       - name: Upload build log
-        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.sender.login == 'dependabot[bot]' }}
-        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.sender.login == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/nix/') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: build-log-${{ matrix.target }}
           path: build.log
@@ -220,7 +219,9 @@ jobs:
     # it triggers has nothing new to analyse and the builds alone prove the fix.
     # Only dependabot pushes a new lock (its own bump, or a rebase), and a fork
     # PR never has it as sender, so this still never runs on outside code.
-    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.sender.login == 'dependabot[bot]' }}
+    # The branch prefix skips github-actions bumps, which leave flake.lock
+    # alone and wait for a manual merge anyway.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.sender.login == 'dependabot[bot]' && startsWith(github.head_ref, 'dependabot/nix/') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -233,7 +234,7 @@ jobs:
     env:
       HEAD_REF: ${{ github.event.pull_request.head.ref }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # Check out the PR head branch so the fix commits back onto it; the
           # persisted GITHUB_TOKEN is what `git push` uses below.
@@ -241,10 +242,10 @@ jobs:
           fetch-depth: 20
       # Minimal surface for a job running on Dependabot input: disk + public
       # cache only, no tailnet/private-cache/QEMU. Builds aren't pushed.
-      - uses: wimpysworld/nothing-but-nix@main
+      - uses: wimpysworld/nothing-but-nix@b2574ec1cf1462bee0a34de0fb6ff11ad3c43cb2 # v12
         with:
           hatchet-protocol: holster
-      - uses: cachix/install-nix-action@v31
+      - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
         with:
           github_access_token: ${{ secrets.GH_TOKEN }}
           extra_nix_config: |
@@ -253,7 +254,7 @@ jobs:
             max-substitution-jobs = 128
             substituters = https://cache.nixos.org/
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: build-log-*
           path: build-logs
@@ -414,7 +415,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
       - name: Analyze build with Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@4d75e5f390ee76b2e09c1980ecc99ff3a2e088c8 # v1.0.275
         env:
           # Claude pushes the fix, so it needs the
           # write GITHUB_TOKEN in-shell anyway — no point isolating a read-only
@@ -571,7 +572,7 @@ jobs:
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Enable auto-merge for flake updates

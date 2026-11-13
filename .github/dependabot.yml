@@ -24,3 +24,20 @@ updates:
         patterns:
           - "*"
     open-pull-requests-limit: 5
+  # Actions are pinned by commit SHA in the workflows; this keeps the pins
+  # moving. They run beside the cache signing key, so these PRs are never
+  # auto-merged (automerge-dependabot only takes the nix ecosystem), and the
+  # cooldown leaves a hijacked release a week to be noticed and pulled first.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      actions:
+        patterns:
+          - "*"
