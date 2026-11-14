@@ -89,13 +89,47 @@
     SuspendState = "mem";
     HibernateOnACPower = "no";
   };
-  environment.etc."systemd/system-sleep/drop-caches-on-hibernate".source =
-    pkgs.writeShellScript "drop-caches-on-hibernate" ''
-      if [ "$1" = "pre" ] && [ "$SYSTEMD_SLEEP_ACTION" = "hibernate" ]; then
-        logger -t drop-caches-on-hibernate "syncing before hibernate"
-        ${pkgs.coreutils}/bin/sync
-        echo 3 > /proc/sys/vm/drop_caches
+  # The hibernation image carries every page the kernel can't drop. Page cache
+  # can be dropped; the ~23 GB of NPU buffers flm pins can't, short of ending
+  # flm. systemd-sleep has frozen user sessions by the time this hook runs, so
+  # `systemctl --user` can't reach flm.service; its cgroup is killed instead,
+  # which works on frozen tasks, and Restart=on-failure brings flm back 10 s
+  # after the session thaws. The reload reads the 21 GB model at ~460 MB/s for
+  # about a minute; measured alongside fio, that costs other I/O about as much
+  # as run-to-run noise, so it is not throttled.
+  environment.etc."systemd/system-sleep/shrink-hibernate-image".source =
+    pkgs.writeShellScript "shrink-hibernate-image" ''
+      [ "$1" = "pre" ] && [ "$SYSTEMD_SLEEP_ACTION" = "hibernate" ] || exit 0
+      PATH=${
+        lib.makeBinPath [
+          pkgs.coreutils
+          pkgs.gawk
+          pkgs.util-linux
+        ]
+      }
+      log() { logger -t shrink-hibernate-image "$*"; }
+      meminfo() { awk -v k="$1:" '$1 == k { print $2 }' /proc/meminfo; }
+
+      uid=$(id -u lbischof)
+      cg=/sys/fs/cgroup/user.slice/user-$uid.slice/user@$uid.service/app.slice/flm.service
+      pids=$(cat $cg/cgroup.procs 2>/dev/null)
+      if [ -n "$pids" ]; then
+        # The driver frees the buffers asynchronously, ~0.8 s after the process
+        # is already a zombie, so wait on the memory itself rather than the pid.
+        npu=$(cat $(printf '/proc/%s/fdinfo/* ' $pids) 2>/dev/null \
+          | awk '$1 == "drm-total-memory:" { s += $2 } END { print s + 0 }')
+        target=$(( $(meminfo Unevictable) - npu * 9 / 10 ))
+        echo 1 > $cg/cgroup.kill
+        for _ in $(seq 100); do
+          [ "$(meminfo Unevictable)" -le "$target" ] && break
+          sleep 0.1
+        done
+        log "killed flm holding $(( npu / 1024 )) MiB of NPU memory; unevictable now $(( $(meminfo Unevictable) / 1024 )) MiB"
       fi
+
+      log "syncing before hibernate"
+      ${pkgs.coreutils}/bin/sync
+      echo 3 > /proc/sys/vm/drop_caches
     '';
   # Disable Bluetooth as wakeup source, because it prevents automatic hibernation
   services.udev.extraRules = ''
