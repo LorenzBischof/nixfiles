@@ -1,7 +1,7 @@
 {
   "_comment": "Persisted GraphQL operation hashes for the Galaxus/Digitec storefront. These rotate when the shop deploys a new frontend. Regenerate with `npm run refresh-hashes`.",
   "_capturedAt": "2026-11-15",
-  "_clientVersion": "master-20261114-1428-43599900028-1",
+  "_clientVersion": "master-20261114-1428-43599900028-1-experiment",
   "operations": {
     "useSearchDataQuery": "44b9362610e64cf070d9d35c0c4f2764",
     "productDetailPageQuery": "2bd1e201be16d45e42c619417c4c8cda",
