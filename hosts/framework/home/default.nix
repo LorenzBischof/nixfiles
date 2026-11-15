@@ -324,6 +324,12 @@ in
     # into a public repo and the domain is a nix-secrets value. No token: the
     # bearer check is on the public name only, and that name is not this one.
     export MCP_BASE_URL=https://mcp-tnet.${secrets.vps-domain}
+    # Home Assistant's mcp_server, for .mcp.json. It authenticates with a
+    # long-lived access token of its own, unlike the vps servers above.
+    export HA_MCP_URL=https://homeassistant.${secrets.prod-domain}/api/mcp
+    if [[ -r /run/agenix/homeassistant-mcp-token ]]; then
+      export HA_MCP_TOKEN=$(</run/agenix/homeassistant-mcp-token)
+    fi
   '';
 
   home = {

@@ -23,6 +23,7 @@ in
       "isal"
       "esphome"
       "sonos"
+      "mcp_server"
       "homekit_controller"
       "zha"
       "lifx"

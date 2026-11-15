@@ -7,6 +7,13 @@
     "cooklang": {
       "type": "http",
       "url": "${MCP_BASE_URL}/cooklang"
+    },
+    "homeassistant": {
+      "type": "http",
+      "url": "${HA_MCP_URL}",
+      "headers": {
+        "Authorization": "Bearer ${HA_MCP_TOKEN}"
+      }
     }
   }
 }
