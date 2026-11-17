@@ -168,6 +168,14 @@ let
       "W503" # black-style line breaks before binary operators
     ];
   } (builtins.readFile ./skills/work-log/extract.py);
+  nixpkgsReviewGha = pkgs.writeShellApplication {
+    name = "nixpkgs-review-gha";
+    runtimeInputs = [
+      pkgs.gh
+      pkgs.gnugrep
+    ];
+    text = builtins.readFile ./skills/nixpkgs-review-gha/review.sh;
+  };
   # Nobody watches this run and it reads text it did not write, so unlike the
   # bwrap wrappers it gets no blanket permissions: dontAsk denies everything but
   # the skill and the graph tools (no bm_delete, no shell, no web). bm_project is
@@ -472,6 +480,7 @@ in
       claudeBwrap
       piBwrap
       workLogExtract
+      nixpkgsReviewGha
       inputs.llm-agents.packages.${system}.pi
       #inputs.nix-ai-tools.packages.${system}.openclaw
     ];

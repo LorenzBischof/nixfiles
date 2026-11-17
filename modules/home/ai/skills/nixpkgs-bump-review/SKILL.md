@@ -205,8 +205,8 @@ in themselves:
 It adds the one thing route B cannot: everything that rebuilds *because* of this change.
 Worth having when the §1 rebuild count is large, worth nothing when it is 1.
 
-It only runs from inside a nixpkgs checkout, and there is none on this machine. Cloning
-nixpkgs is a decision to put to the user, not a step to take mid-review.
+It also builds on aarch64 and Darwin, which route B does not. Run it remotely with the
+`nixpkgs-review-gha` skill, including its check for an earlier review of the same head.
 
 ### Then exercise the output — in the agent VM
 
@@ -239,7 +239,8 @@ falling back to running the output here.
 ## 7. Report the verdict — post nothing
 
 **Never issue a write call against the PR** — no approve, no comment, no merge. Posting under
-the user's account is their step.
+the user's account is their step. The one exception is the build report that route C's
+`nixpkgs-review-gha` run posts by itself; the verdict below still stays in the chat.
 
 Finish with a few lines saying what you'd do:
 
