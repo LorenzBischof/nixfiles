@@ -9,8 +9,7 @@ usage="usage: nixpkgs-review-gha [--post-result] [--systems SYSTEMS] [--tests]
        [-p PACKAGE] [-P SKIP_PACKAGE] [--force] number [number ...]
        nixpkgs-review-gha    (list the queue, dispatch nothing)
 --systems defaults to the platforms whose 10.rebuild-* label is not 0.
---force also runs drafts, mass rebuilds (501+), PRs not yet labelled by CI's eval,
-and heads that already have a report."
+--force also runs drafts, mass rebuilds (501+) and heads that already have a report."
 
 queue=false
 [ $# -gt 0 ] || queue=true
@@ -52,14 +51,15 @@ active=$(gh run list -R "$fork" -w review.yml -L 50 --json displayTitle,status,u
 
 for pr in "${prs[@]}"; do
   # CI's eval labels each platform's rebuild count; no label means it has not
-  # finished or failed. platforms lists the systems not labelled 0, mass the
+  # finished or failed. platforms lists the systems not labelled 0 (of
+  # Darwin only aarch64, to spare the scarce macOS runners), mass the
   # buckets of 501 and up; both comma-separated, "-" if none.
   # shellcheck disable=SC2016 # $r, $platforms and $mass are jq variables
   read -r state draft head evaluated platforms mass title < <(gh pr view "$pr" -R NixOS/nixpkgs \
     --json state,isDraft,headRefOid,labels,title \
     --jq '[.labels[].name | select(startswith("10.rebuild-"))] as $r
       | [if $r | index("10.rebuild-linux: 0") then empty else "x86_64-linux", "aarch64-linux" end,
-         if $r | index("10.rebuild-darwin: 0") then empty else "x86_64-darwin", "aarch64-darwin" end]
+         if $r | index("10.rebuild-darwin: 0") then empty else "aarch64-darwin" end]
         as $platforms
       | ($r | map(select(test(": (501-1000|1001-2500|2501-5000|5001\\+)$"))
           | ltrimstr("10.rebuild-") | gsub(" "; ""))) as $mass
@@ -87,7 +87,9 @@ for pr in "${prs[@]}"; do
   elif [ "$platforms" = - ]; then
     status=no-rebuilds detail="0 rebuilds on Linux and Darwin, nothing to build" final=true
   elif [ "$evaluated" = false ]; then
-    status=pending-eval detail="no 10.rebuild-* labels, CI eval not finished or failed" held=true
+    # nixpkgs-review fetches CI's eval and gives up after 10 minutes without it.
+    status=pending-eval final=true
+    detail="no 10.rebuild-* labels; wait for CI's eval, or re-run it if it failed or was cancelled"
   elif [ -n "$report" ]; then
     status=current detail="report for this head: $report" held=true
   elif [ -n "$latest" ]; then
