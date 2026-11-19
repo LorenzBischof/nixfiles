@@ -19,7 +19,7 @@
     ./monitoring.nix
     ./disko.nix
     ./low-battery-power-button-led.nix
-    ./lid-closed-led.nix
+    ./lid-closed.nix
     ./vm-autosleep.nix
     ./power.nix
   ];
