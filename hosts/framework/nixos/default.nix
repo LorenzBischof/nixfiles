@@ -212,7 +212,7 @@
     # Strategies ship with the package; "medium" starts ramping at 40°C.
     fw-fanctrl = {
       enable = true;
-      config = {
+      settings = {
         defaultStrategy = "medium";
         strategyOnDischarging = "lazy";
       };

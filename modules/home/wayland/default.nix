@@ -319,15 +319,15 @@ in
         # Alternative to opentabletdriver: https://www.reddit.com/r/swaywm/comments/ppx6xt/configuring_a_wacom_tablet_where_to_start/
       };
       output = {
-        "*" = {
+        "eDP-1" = {
+          bg = "${./wallpaper_cropped_0.png} fill";
           # Not cosmetic: on the laptop panel this is worth 0.6 W on battery
           # (5.0 W with it on, 5.6 W off, idle desktop). With VRR the panel
           # sits at its minimum refresh whenever the screen is static, which
           # is also why capping eDP-1 to 60 Hz on battery saves nothing.
+          # Panel only: on the Thunderbolt Dells (U4021QW, U3425WE) it is the
+          # suspected cause of the monitor blanking now and then.
           adaptive_sync = "on";
-        };
-        "eDP-1" = {
-          bg = "${./wallpaper_cropped_0.png} fill";
         };
       };
     };
