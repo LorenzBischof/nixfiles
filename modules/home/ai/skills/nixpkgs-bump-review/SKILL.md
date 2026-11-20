@@ -205,7 +205,7 @@ in themselves:
 It adds the one thing route B cannot: everything that rebuilds *because* of this change.
 Worth having when the §1 rebuild count is large, worth nothing when it is 1.
 
-It also builds on aarch64 and Darwin, which route B does not. Run it remotely with the
+It also builds on aarch64 (and Darwin, if the user asks), which route B does not. Run it remotely with the
 `nixpkgs-review-gha` skill, including its check for an earlier review of the same head.
 
 ### Then exercise the output — in the agent VM

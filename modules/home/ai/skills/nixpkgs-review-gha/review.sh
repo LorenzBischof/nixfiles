@@ -8,7 +8,8 @@ all_systems="x86_64-linux aarch64-linux x86_64-darwin aarch64-darwin"
 usage="usage: nixpkgs-review-gha [--post-result] [--systems SYSTEMS] [--tests]
        [-p PACKAGE] [-P SKIP_PACKAGE] [--force] number [number ...]
        nixpkgs-review-gha    (list the queue, dispatch nothing)
---systems defaults to the platforms whose 10.rebuild-* label is not 0.
+--systems defaults to the Linux platforms whose 10.rebuild-* label is not 0;
+Darwin runs only when named, e.g. --systems all.
 --force also runs drafts, mass rebuilds (501+) and heads that already have a report."
 
 queue=false
@@ -65,6 +66,10 @@ for pr in "${prs[@]}"; do
           | ltrimstr("10.rebuild-") | gsub(" "; ""))) as $mass
       | [.state, .isDraft, .headRefOid, $r != [], ($platforms, $mass | join(",") | if . == "" then "-" end), .title]
         | join(" ")')
+  # Darwin only when asked for with --systems; aarch64-darwin is always last.
+  if [ -z "$systems" ] && [ "$platforms" != - ]; then
+    platforms=${platforms%aarch64-darwin} && platforms=${platforms%,} && platforms=${platforms:--}
+  fi
   # Our reports name the head commit they reviewed. One line per report, oldest
   # first: "<url> <true if it is for the current head>".
   reports=$(gh api --paginate "repos/NixOS/nixpkgs/issues/$pr/comments?per_page=100" \
@@ -85,7 +90,12 @@ for pr in "${prs[@]}"; do
   elif [ -n "$run" ]; then
     status=running detail="follow $run" final=true
   elif [ "$platforms" = - ]; then
-    status=no-rebuilds detail="0 rebuilds on Linux and Darwin, nothing to build" final=true
+    if [ -z "$systems" ]; then
+      detail="0 rebuilds on Linux, nothing to build; Darwin only with --systems"
+    else
+      detail="0 rebuilds on Linux and Darwin, nothing to build"
+    fi
+    status=no-rebuilds final=true
   elif [ "$evaluated" = false ]; then
     # nixpkgs-review fetches CI's eval and gives up after 10 minutes without it.
     status=pending-eval final=true
