@@ -13,6 +13,7 @@
     ./cooklang.nix
     ./galaxus.nix
     ./mcp.nix
+    ./ovis.nix
     ../../modules/nixos
   ];
   nixpkgs.config.allowUnfree = true;
@@ -94,6 +95,8 @@
   # Enable the OpenSSH daemon.
   services.openssh = {
     enable = true;
+    # Opened on tailscale0 only, below.
+    openFirewall = false;
     settings = {
       PermitRootLogin = "no";
       PasswordAuthentication = false;
@@ -118,7 +121,10 @@
   services.getty.autologinUser = null;
 
   # Open ports in the firewall.
-  networking.firewall.allowedTCPPorts = [ 22 ];
+  # SSH only over the tailnet. Nothing deploys over public SSH (the host pulls
+  # its own upgrades), and with tailscaled down the Oracle serial console still
+  # takes lbischof's password.
+  networking.firewall.interfaces."tailscale0".allowedTCPPorts = [ 22 ];
   # networking.firewall.allowedUDPPorts = [ ... ];
 
   # Disable documentation for minimal install.

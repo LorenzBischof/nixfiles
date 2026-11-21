@@ -31,6 +31,7 @@ in
   programs.firefox.profiles.default.settings."network.lna.skip-domains" = secrets.vps-domain;
 
   my.programs.git.enable = true;
+  my.programs.herdr.enable = true;
   my.profiles.ai.enable = true;
   my.programs.foot.urgentNtfyTopic = secrets.ntfy-alertmanager;
 
@@ -132,6 +133,7 @@ in
   # The home.packages option allows you to install Nix packages into your
   # environment.
   home.packages = with pkgs; [
+    (pkgs.callPackage ../../../packages/ovis-desktop.nix { })
     github-cli
     mullvad-browser
     keepassxc

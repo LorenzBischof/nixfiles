@@ -14,6 +14,7 @@
 {
   imports = [
     ./hardware-configuration.nix
+    ./agents.nix
     ./ai.nix
     ./autoupgrade.nix
     ./monitoring.nix

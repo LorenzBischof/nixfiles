@@ -12,5 +12,6 @@
     ./firefox.nix
     ./ai
     ./theme.nix
+    ./herdr
   ];
 }

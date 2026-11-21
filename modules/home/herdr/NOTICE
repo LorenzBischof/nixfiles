@@ -1,0 +1,14 @@
+The layouts and mods under config/ are derived from Herdr App v0.1.16
+(https://github.com/herdrdev/herdr-app/tree/v0.1.16), Apache-2.0 (see LICENSE).
+
+Changes:
+- layouts: the system title bar (Sway draws no window buttons), no terminal
+  padding or outer pane frames, gray split dividers, the Eighties theme, and
+  eighties-pane as the pane header.
+- eighties-pane (from pane): a blue focus underline and title; icons copied
+  into the mod.
+- eighties-terminals-bar (from terminals-bar): theme() tokens instead of
+  hardcoded colours; icons copied into the mod.
+
+When bumping Herdr, diff each mod against its upstream mod and each layout
+against upstream's main and terminals.

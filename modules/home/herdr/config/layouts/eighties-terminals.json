@@ -1,0 +1,53 @@
+{
+  "id": "root",
+  "type": "column",
+  "titlebar": "system",
+  "traffic_lights": [
+    16,
+    18
+  ],
+  "theme": "eighties",
+  "background": "canvas",
+  "padding": 0,
+  "gap": 0,
+  "children": [
+    {
+      "id": "tabs",
+      "type": "block",
+      "size": {
+        "px": 38
+      },
+      "window_drag": true,
+      "content": {
+        "mod": "eighties-terminals-bar"
+      }
+    },
+    {
+      "id": "main",
+      "type": "block",
+      "content": {
+        "tab": "active",
+        "pane": {
+          "header": {
+            "content": {
+              "mod": "eighties-pane"
+            },
+            "height": 32
+          },
+          "background": "background",
+          "gap": 3,
+          "lone": true
+        }
+      },
+      "background": "ansi8"
+    }
+  ],
+  "cloned_from": {
+    "name": "terminals",
+    "version": "0.1.16"
+  },
+  "terminal_padding": [
+    0,
+    0
+  ]
+}

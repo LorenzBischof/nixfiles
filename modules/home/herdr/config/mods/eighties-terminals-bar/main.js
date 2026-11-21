@@ -1,0 +1,178 @@
+// SPDX-License-Identifier: Apache-2.0
+// Based on herdrdev/herdr-app v0.1.16. See NOTICE for source and modifications.
+// Terminals layout's draggable top bar: space picker, tabs, and window controls.
+
+import { View, div, svg, image } from "gpui-kit";
+import { h_flex } from "gpui-base";
+import { spaces, panes, run, theme, home, openOverlay, window as win } from "herdr";
+
+function folder(cwd) {
+  if (!cwd) return "";
+  const h = home();
+  return cwd === h ? "~" : cwd.startsWith(h + "/") ? "~" + cwd.slice(h.length) : cwd;
+}
+
+// The pane a tab's tab speaks for: the focused one, else its agent, else the first.
+function lead(all, id) {
+  const mine = all.filter((p) => p.tab === id);
+  return mine.find((p) => p.focused) ?? mine.find((p) => p.program?.agent) ?? mine[0];
+}
+
+// The program's tile from the app's table: its color, its glyph (or logo) on it.
+function tile(t, p) {
+  const g = p?.program;
+  const dot = p?.status && p.status !== "idle" ? t[p.status] : null;
+  return div()
+    .relative()
+    .flex_none()
+    .w(26)
+    .h(26)
+    .rounded(7)
+    .border_1()
+    .border_color(t.border)
+    .bg(g?.tile ?? t.surface)
+    .flex()
+    .items_center()
+    .justify_center()
+    .when(Boolean(g?.icon), (el) =>
+      el.child(g.tint ? svg(g.icon).size(15).text_color(g.color ?? t.foreground) : image(g.icon).w(15).h(15)),
+    )
+    .when(Boolean(dot), (el) =>
+      el.child(div().absolute().top(-4).right(-4).w(11).h(11).rounded_full().border_2().border_color(t.canvas).bg(dot)),
+    );
+}
+
+// A control in the draggable bar: the press is its own, not the window's
+// (a right press there would open the system's window menu).
+function own(el) {
+  return el.on_mouse_down("left", (_e, cx) => cx.stop_propagation()).on_mouse_down("right", (_e, cx) => cx.stop_propagation());
+}
+
+function windowButton(t, id, icon, command) {
+  return own(
+    div()
+      .id(id)
+      .flex_none()
+      .w(24)
+      .h(24)
+      .rounded_full()
+      .flex()
+      .items_center()
+      .justify_center()
+      .bg(t.surface)
+      .text_color(t.dim)
+      .cursor_pointer()
+      .hover((s) => s.bg(t.border).text_color(t.foreground))
+      .on_click(() => run(command))
+      .child(svg(`mods/eighties-terminals-bar/${icon}.svg`).size(14)),
+  );
+}
+
+function iconButton(t, id, icon, onClick) {
+  return own(div())
+    .id(id)
+    .flex_none()
+    .p(7)
+    .rounded(8)
+    .text_color(t.dim)
+    .cursor_pointer()
+    .hover((s) => s.bg(t.surface).text_color(t.foreground))
+    .on_click(onClick)
+    .child(svg(`mods/eighties-terminals-bar/${icon}.svg`).size(17));
+}
+
+export default class TerminalsBar extends View {
+  render() {
+    const t = theme();
+    const space = spaces().find((p) => p.active);
+    if (!space) return div();
+    const all = panes();
+    const w = win() ?? {};
+
+    const tab = (c) => {
+      const p = lead(all, c.id);
+      const where = folder(p?.cwd);
+      return own(h_flex())
+        .id(`tm-${c.id}`)
+        .flex_shrink(1)
+        .w(260)
+        .min_w(0)
+        .h_full()
+        .pl(5)
+        .pr(12)
+        .gap(9)
+        .items_center()
+        .rounded(13)
+        .border_1()
+        .cursor_pointer()
+        .text_size(13)
+        .when(c.active, (el) => el.bg(t.selected).border_color(t.border))
+        .when(!c.active, (el) => el.border_color("#00000000").hover((s) => s.bg(t.hover)))
+        .on_click(() => run("tab.select", { id: c.id }))
+        .on_mouse_down("right", () =>
+          openOverlay({ mod: "menu", kind: "popup", width: 200, props: { tab: "tab", target: { id: c.id, space: space.id } } }),
+        )
+        .child(tile(t, p))
+        .child(
+          h_flex()
+            .min_w(0)
+            .gap(6)
+            .truncate()
+            .child(div().flex_none().text_color(c.active ? t.foreground : t.muted).child(c.name))
+            .when(Boolean(where), (el) => el.child(div().truncate().text_color(t.dim).child(where))),
+        );
+    };
+
+    return h_flex()
+      .size_full()
+      .gap(8)
+      .items_center()
+      // macOS: the window buttons sit here (the layout's traffic_lights).
+      .when(w.platform === "macos" && w.titlebar === "none" && !w.fullscreen, (el) => el.pl(72))
+      .child(
+        own(h_flex())
+          .id("tm-space")
+          .flex_none()
+          .h(30)
+          .pl(10)
+          .pr(12)
+          .gap(8)
+          .items_center()
+          .rounded_full()
+          .bg(t.surface)
+          .cursor_pointer()
+          .text_size(13)
+          .text_color(t.dim)
+          .hover((s) => s.text_color(t.foreground))
+          .on_click(() => openOverlay({ mod: "picker", kind: "popup", at: "top", offset: 40, width: 640, height: 0.8 }))
+          .child(svg("mods/eighties-terminals-bar/stack.svg").size(15))
+          .child(div().max_w(160).truncate().text_color(t.foreground).child(space.name)),
+      )
+      .child(
+        h_flex()
+          .flex_shrink(1)
+          .min_w(0)
+          .h(36)
+          .p(3)
+          .gap(3)
+          .rounded(16)
+          .bg(t.canvas)
+          .children(space.tabs.map(tab)),
+      )
+      .child(div().flex_1())
+      .child(iconButton(t, "tm-keys", "command", () => run("app.palette")))
+      .child(iconButton(t, "tm-new", "plus", () => run("tab.new", { space: space.id })))
+      .when(Boolean(w.buttons), (el) =>
+        el.child(
+          h_flex()
+            .flex_none()
+            .pl(6)
+            .pr(4)
+            .gap(8)
+            .child(windowButton(t, "tm-min", "win-min", "window.minimize"))
+            .child(windowButton(t, "tm-max", w.maximized ? "win-restore" : "win-max", "window.maximize"))
+            .child(windowButton(t, "tm-close", "win-close", "window.close")),
+        ),
+      );
+  }
+}

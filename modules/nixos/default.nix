@@ -6,6 +6,7 @@
 }:
 {
   imports = [
+    ./agents
     ./alloy-validate.nix
     ./autoupgrade.nix
     ./common.nix
