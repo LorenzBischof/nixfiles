@@ -67,21 +67,10 @@ You can't edit a PR the user opened, or comment on it; push new commits to the b
 
 ### After giving a compare link
 
-Don't stop at the link. Start a Monitor that waits for the user to open the PR, then reports each check as it finishes and exits once none are pending. A Monitor runs for at most 30 minutes, so set `timeout_ms` to 1800000 and re-arm it each time it expires. Give up 2 hours after the first arm. Note the time with `date +%s` when you first arm it, add 7200, and put the result in `deadline` unchanged in every re-arm:
+Don't stop at the link. Watch the PR in the background; `pr-watch` waits for the user to open it, then for its checks, and exits with one report (or gives up after 2 hours). Its exit wakes you:
 
 ```bash
-deadline=EPOCH; head=lorenzbischof-agents:BRANCH; prev=""
-past() { [ "$(date +%s)" -ge "$deadline" ] && { echo "gave up: 2h deadline reached"; exit 0; }; }
-until pr=$(gh pr list -R OWNER/REPO --head "$head" --state all --json number,url -q '.[0] | select(.) | "\(.number) \(.url)"' 2>/dev/null) && [ -n "$pr" ]; do past; sleep 60; done
-echo "PR opened: ${pr#* }"; n=${pr%% *}
-while true; do
-  past
-  s=$(gh pr checks "$n" -R OWNER/REPO --json name,bucket 2>/dev/null) || { sleep 60; continue; }
-  cur=$(jq -r '.[] | select(.bucket!="pending") | "\(.name): \(.bucket)"' <<<"$s" | sort)
-  comm -13 <(echo "$prev") <(echo "$cur"); prev=$cur
-  [ "$s" != "[]" ] && jq -e 'all(.bucket!="pending")' <<<"$s" >/dev/null && { echo "all checks done"; break; }
-  sleep 60
-done
+hc run --bg pr-watch OWNER/REPO BRANCH   # note the address it prints, e.g. t7
 ```
 
-If it gives up, tell the user what was still pending. If a check fails, read its log (`gh run view --log-failed`), find the cause and propose a fix. Push the fix only to a fork of a `LorenzBischof` repo; for anyone else's repo, show the change and wait for the user to say push.
+When it exits, `hc read ADDRESS`, then `hc rm ADDRESS`, and tell the user the result, including anything still pending if it gave up. For a failed GitHub Actions check, the link ends in `/actions/runs/RUN/job/JOB`: read its log with `gh run view -R OWNER/REPO --job JOB --log-failed`, find the cause and propose a fix. Push the fix only to a fork of a `LorenzBischof` repo; for anyone else's repo, show the change and wait for the user to say push.
