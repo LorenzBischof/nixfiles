@@ -26,79 +26,54 @@ let
   uid = 1001;
 
   # Two fine-grained PATs, because one can only reach the repos of a single
-  # owner: the org token (lorenzbischof-agents, full access; read-only
-  # elsewhere) and the personal token (LorenzBischof, contents read and PRs).
-  # git and gh share one rule: repos owned by LorenzBischof get the personal
-  # token, everything else the org token. Both read the bare token from its
-  # agenix file per request, so it is in neither the config nor the
-  # environment, where `git config -l` or `env` would print it.
+  # owner: the personal token (LorenzBischof: contents read, PRs; read access
+  # to public repos anywhere) and the org token (lorenzbischof-agents: full
+  # access). git and gh share one rule: the org token for lorenzbischof-agents,
+  # the personal token for everything else. Both keep a lifetime of at most
+  # 366 days, as the NixOS enterprise refuses longer-lived fine-grained tokens
+  # (the org token reads nixpkgs when forking it). Both are read from their
+  # agenix file per request, so neither is in the config or the environment,
+  # where `git config -l` or `env` would print it.
   orgToken = config.age.secrets.agents-push-org.path;
   personalToken = config.age.secrets.agents-pr.path;
 
   # git appends the operation, so this runs as `<helper> <file> get|store|erase`
   # and only answers get. Git only asks after a 401, so public clones stay
-  # anonymous until GitHub demands authentication.
+  # anonymous until GitHub demands authentication. An empty helper resets the
+  # list, so the org section replaces the catch-all instead of adding to it.
   credentialHelper = pkgs.writeShellScript "git-credential-token-file" ''
     [ "$2" = get ] || exit 0
     printf 'username=x-access-token\npassword=%s\n' "$(< "$1")"
   '';
-
-  # An empty helper resets the list, so the owner section replaces the
-  # catch-all instead of adding to it. Paths match case-sensitively, hence
-  # both spellings.
   gitConfig = pkgs.writeText "agent-gitconfig" ''
     [user]
       name = LorenzBischof
       email = 1837725+LorenzBischof@users.noreply.github.com
     [credential "https://github.com"]
       helper =
+      helper = ${credentialHelper} ${personalToken}
+    [credential "https://github.com/lorenzbischof-agents"]
+      helper =
       helper = ${credentialHelper} ${orgToken}
-    [credential "https://github.com/LorenzBischof"]
-      helper =
-      helper = ${credentialHelper} ${personalToken}
-    [credential "https://github.com/lorenzbischof"]
-      helper =
-      helper = ${credentialHelper} ${personalToken}
   '';
 
-  # gh only reads GH_TOKEN, so the wrapper picks it per call by the same owner
-  # rule, from the repos the call names: -R/--repo values, github.com URLs and
-  # repos/ API paths, or failing those the cwd's origin. `repo fork` always
-  # takes the org token, since the fork is created there. A wrong guess fails
-  # with 403/404 rather than writing anywhere: neither token can write where
-  # the other one is meant for.
+  # gh only reads GH_TOKEN, so pick it per call by the same rule: the org
+  # token for `gh repo fork` (the fork is created in the org) and any call
+  # naming lorenzbischof-agents/, the personal token otherwise. A wrong pick
+  # fails with 403/404 rather than writing anywhere, and a GH_TOKEN set by the
+  # caller wins.
   gh = pkgs.writeShellApplication {
     name = "gh";
-    runtimeInputs = [ pkgs.git ];
     text = ''
-      if [[ -n ''${GH_TOKEN-} ]]; then
-        exec ${pkgs.gh}/bin/gh "$@"
+      if [[ -z ''${GH_TOKEN-} ]]; then
+        token=${personalToken}
+        if [[ "''${1-} ''${2-}" == "repo fork" || "$*" == *lorenzbischof-agents/* ]]; then
+          token=${orgToken}
+        fi
+        GH_TOKEN=$(< "$token")
+        export GH_TOKEN
       fi
-
-      repos=()
-      prev=
-      for arg in "$@"; do
-        case $prev in -R | --repo) repos+=("github.com/$arg") ;; esac
-        case $arg in
-          --repo=*) repos+=("github.com/''${arg#--repo=}") ;;
-          *github.com[/:]* | repos/* | /repos/*) repos+=("$arg") ;;
-        esac
-        prev=$arg
-      done
-      if [[ ''${#repos[@]} -eq 0 ]]; then
-        repos=("$(git remote get-url origin 2>/dev/null || true)")
-      fi
-
-      token=${orgToken}
-      if [[ "''${1-} ''${2-}" != "repo fork" ]]; then
-        for repo in "''${repos[@]}"; do
-          if [[ ''${repo,,} =~ (github\.com[/:]|^/?repos/)lorenzbischof/ ]]; then
-            token=${personalToken}
-          fi
-        done
-      fi
-
-      GH_TOKEN=$(< "$token") exec ${pkgs.gh}/bin/gh "$@"
+      exec ${pkgs.gh}/bin/gh "$@"
     '';
   };
 in

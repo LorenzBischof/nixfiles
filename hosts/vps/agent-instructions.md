@@ -28,11 +28,11 @@ When the worktree is clean and its commits are pushed, remove it with `git workt
 
 # GitHub
 
-`git` and `gh` are already authenticated. Don't set `GH_TOKEN`, don't run `gh auth login`, and never read, print or copy a token. Both tools pick a token by the repository's owner: repos owned by `LorenzBischof` get a personal token (read contents, open PRs), everything else gets the `lorenzbischof-agents` org token (full access to the org, read access elsewhere). So:
+`git` and `gh` are already authenticated. Don't set `GH_TOKEN`, don't run `gh auth login`, and never read, print or copy a token. Both tools use the `lorenzbischof-agents` org token (full access to the org) for repos in `lorenzbischof-agents`, and a personal token (read contents and open PRs on `LorenzBischof` repos, read public repos anywhere) for everything else. So:
 
 - You can clone and fetch any public repo and any `LorenzBischof` repo, private ones included.
 - You can push only to repos in `lorenzbischof-agents`. Forks always go there.
-- `gh` decides from `-R`/`--repo`, a `github.com/OWNER/…` URL or a `repos/OWNER/…` API path in its arguments, and failing those from the `origin` remote of the current directory. `gh repo fork` always uses the org token. If a `gh` call to a `LorenzBischof` repo fails with 403/404, name the repo explicitly with `-R`.
+- `gh` uses the org token for `gh repo fork` and for any call whose arguments contain `lorenzbischof-agents/`, such as `-R lorenzbischof-agents/REPO` or `repos/lorenzbischof-agents/…`. Keep that string out of PR titles and bodies: there it would select the wrong token. Name the fork as `lorenzbischof-agents:BRANCH` in `--head`.
 
 ## Contributing
 
