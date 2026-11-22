@@ -26,6 +26,11 @@ Before suggesting a check goes, show the case can't occur or is already
 handled, with a real call where that's harmless. Clearer beats shorter: no
 dense one-liners, renames or matters of taste.
 
+Where the repo doesn't already run them, run the usual dead-code and idiom
+linters for the changed files' languages (e.g. deadnix, statix, ruff),
+fetching missing ones with `nix shell nixpkgs#TOOL -c …`. Report only what the
+change introduces.
+
 For each finding give file:line, what to remove or replace with what, and why
 it's safe, with the evidence you checked. If nothing clearly simplifies, report
 no findings. Write findings to a file and report its path with `hc send` to

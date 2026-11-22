@@ -19,6 +19,10 @@ Trigger each for real where it's harmless. Code that retries or ignores an
 error must tell permanent failures from transient ones. Also check who else
 reads or runs what changed. Only call something fine once a check backs it up.
 
+Where the repo doesn't already run them, run the usual linters for the changed
+files' languages (e.g. shellcheck, statix, ruff), fetching missing ones with
+`nix shell nixpkgs#TOOL -c …`. Report only what the change introduces.
+
 For each finding give file:line, what breaks, what triggers it, how severe it
 is (blocking, or fix eventually), and the evidence you checked. If nothing is
 clearly worth fixing, report no findings rather than guesses. Write findings
