@@ -15,7 +15,19 @@ let
   # units itself through systemd-run. herdr's server instead holds every pane
   # in its one process, and under a systemd unit its upgrade path kills them
   # all - https://github.com/herdrdev/herdr/issues/4972.
-  ovis = llmAgents.ovis.override { runtime = "herdr-core"; };
+  ovis = llmAgents.ovis.override {
+    runtime = "herdr-core";
+    # TODO: on herdr-core, Claude Code's grey prompt suggestion is refused as
+    # "input box may not be empty" whenever hc's coloured and plain screen reads
+    # differ by a row anywhere, far above the input box included. The patch
+    # compares only the box rows when hc gives no scroll info.
+    # https://github.com/devswha/ovis/issues/4321, no upstream fix yet (still
+    # the whole-screen check on main and in v0.5.9 as of 2026-11). Drop once
+    # ovis ships a fix for it.
+    ovis-unwrapped = llmAgents.ovis.unwrapped.overrideAttrs (old: {
+      patches = (old.patches or [ ]) ++ [ ./ovis-claude-suggestion.patch ];
+    });
+  };
   port = 7317;
 
   # A normal login user, not a system user: hc needs a lingering user manager

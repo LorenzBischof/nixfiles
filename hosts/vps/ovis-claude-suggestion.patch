@@ -1,0 +1,76 @@
+diff -ru a/server/claude-input.ts b/server/claude-input.ts
+--- a/server/claude-input.ts	2026-11-22 17:28:55.226208471 +0100
++++ b/server/claude-input.ts	2026-11-22 17:29:07.542870647 +0100
+@@ -304,6 +304,21 @@
+   return atBottom && live === before;
+ }
+ 
++/**
++ * viewportShowsLive for Claude Code's input box alone. Without scroll info (herdr-core), the colored and
++ * plain reads can differ by a row far above the box, after a redraw while idle (ovis#4321), and the
++ * whole-screen comparison then throws away colors the box needs. Its rows equal in both reads, and the
++ * live screen unchanged across them, prove the colors are the live box's: claudeInputDraft compares the
++ * same rows again before it reads their colors.
++ */
++export function claudeBoxShowsLive(scrollBefore: { offset_from_bottom: number } | null, scrollAfter: { offset_from_bottom: number } | null,
++  colors: string, before: string, live: string): boolean {
++  if (viewportShowsLive(scrollBefore, scrollAfter, colors, before, live)) return true;
++  if (scrollBefore !== null || scrollAfter !== null || live !== before) return false;
++  const shown = claudeInputBox(colors), box = claudeInputBox(live);
++  return shown !== null && shown !== "clipped" && box !== null && box !== "clipped" && shown.plain.join("\n") === box.plain.join("\n");
++}
++
+ const screenLines = (text: string): string => text.replace(ANSI_RE, "").replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
+   .split(/\r?\n/).map((line) => line.trimEnd()).join("\n").trimEnd();
+ 
+diff -ru a/server/core/composer.ts b/server/core/composer.ts
+--- a/server/core/composer.ts	2026-11-22 17:28:55.229475414 +0100
++++ b/server/core/composer.ts	2026-11-22 17:29:07.543702853 +0100
+@@ -11,7 +11,7 @@
+ import { processStartedAt } from "../process-start.ts";
+ import { isOmpProcess, ompLoadsIntegration } from "../omp.ts";
+ import { processEnviron } from "../omo.ts";
+-import { bindCommandProcess, CLAUDE_CLEAR_INPUT_KEYS, claudeClearableDraft, claudeInputBoxContent, claudeInputDraft, foldedPlaceholder, claudeInputEmpty, claudeRestoredDraft, claudeRewindOpen, claudeSendAnywayBox, codexQuestionsCollapsed, heldCandidate, historyEndShowsLive, lastChatSubmitted, hermesInputDraft, noteSubmitted, parseInteractivePrompt, prepareCommandSend, viewportShowsLive } from "../prompt.ts";
++import { bindCommandProcess, CLAUDE_CLEAR_INPUT_KEYS, claudeClearableDraft, claudeInputBoxContent, claudeInputDraft, foldedPlaceholder, claudeInputEmpty, claudeRestoredDraft, claudeRewindOpen, claudeSendAnywayBox, codexQuestionsCollapsed, heldCandidate, historyEndShowsLive, lastChatSubmitted, hermesInputDraft, noteSubmitted, parseInteractivePrompt, prepareCommandSend, viewportShowsLive, claudeBoxShowsLive } from "../prompt.ts";
+ import { agentPickerWaits, registry, SCREEN_READ_AGENTS } from "../dialogs/registry.ts";
+ import { codexOwnScreenOpen, CODEX_OWN_SCREEN_MESSAGE } from "../dialogs/codex.ts";
+ import { CLAUDE_REWIND_OPEN_MESSAGE } from "../dialogs/claude.ts";
+@@ -316,7 +316,7 @@
+   const colors = (await paneRead({ paneId, source: "visible", format: "ansi" })).text;
+   const scrollAfter = await paneScrollInfo(paneId);
+   const live = (await paneRead({ paneId, source: "detection", format: "text" })).text;
+-  return [live, viewportShowsLive(scrollBefore, scrollAfter, colors, before, live) ? colors : null];
++  return [live, claudeBoxShowsLive(scrollBefore, scrollAfter, colors, before, live) ? colors : null];
+ }
+ 
+ /**
+diff -ru a/server/prompt.ts b/server/prompt.ts
+--- a/server/prompt.ts	2026-11-22 17:28:55.257217649 +0100
++++ b/server/prompt.ts	2026-11-22 17:29:07.543417331 +0100
+@@ -38,7 +38,7 @@
+ import { navigatePiAsk } from "./dialogs/pi-ask-navigate.ts";
+ import { draftKept, nativeStepTarget, navigateNativeSteps } from "./dialogs/step-navigate.ts";
+ import { gjcCustomEditorMatches, parseFallbackPrompt } from "./dialogs/fallback.ts";
+-import { SUGGESTION_READ_MS, claudeHeldIsGrey, claudeInputBoxContent, claudeInputDraft, claudeRestoredDraft, parseClaudeSuggestion, viewportShowsLive } from "./claude-input.ts";
++import { SUGGESTION_READ_MS, claudeHeldIsGrey, claudeInputBoxContent, claudeInputDraft, claudeRestoredDraft, parseClaudeSuggestion, viewportShowsLive, claudeBoxShowsLive } from "./claude-input.ts";
+ import { parseGjcSuggestion, parseOmpSuggestion } from "./omp-input.ts";
+ import { OMO_FORM_RE, omoAskOf, omoAsksFor } from "./omo-questions.ts";
+ import { codexQueuedPrompt, queuedQuestionCount, type QueueFront } from "./codex-queue.ts";
+@@ -47,7 +47,7 @@
+ export { INVISIBLE_CHAR_RE } from "./dialogs/claude.ts";
+ export type { OmoAsk } from "./dialogs/shared.ts";
+ export { parseFallbackPrompt } from "./dialogs/fallback.ts";
+-export { CLAUDE_CLEAR_INPUT_KEYS, INPUT_BOX_SHOWN_CHARS, claudeClearableDraft, claudeHeldIsGrey, claudeInputBoxContent, claudeSendAnywayBox, claudeInputBoxText, foldedPlaceholder, claudeInputDraft, claudeInputEmpty, claudeRestoredDraft, claudeRewindOpen, historyEndShowsLive, isClaudeHeld, parseClaudeSuggestion, shownInputBox, viewportShowsLive } from "./claude-input.ts";
++export { CLAUDE_CLEAR_INPUT_KEYS, INPUT_BOX_SHOWN_CHARS, claudeClearableDraft, claudeHeldIsGrey, claudeInputBoxContent, claudeSendAnywayBox, claudeInputBoxText, foldedPlaceholder, claudeInputDraft, claudeInputEmpty, claudeRestoredDraft, claudeRewindOpen, historyEndShowsLive, isClaudeHeld, parseClaudeSuggestion, shownInputBox, viewportShowsLive, claudeBoxShowsLive } from "./claude-input.ts";
+ export { hermesInputDraft } from "./hermes-input.ts";
+ export { OpenCodePromptState } from "./opencode-prompt.ts";
+ export { openOmoAsks, pendingOmoAsk } from "./omo-questions.ts";
+@@ -639,7 +639,7 @@
+   const colors = (await paneRead({ paneId, source: "visible", format: "ansi", timeoutMs: SUGGESTION_READ_MS })).text;
+   const scrollAfter = await paneScrollInfo(paneId);
+   const live = await detection();
+-  return viewportShowsLive(scrollBefore, scrollAfter, colors, before, live) ? claudeRestoredDraft(live, colors, sent) : null;
++  return claudeBoxShowsLive(scrollBefore, scrollAfter, colors, before, live) ? claudeRestoredDraft(live, colors, sent) : null;
+ }
+ 
+ /**
