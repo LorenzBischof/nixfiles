@@ -64,22 +64,3 @@ jq -rn --arg t "$TITLE" --arg b "$BODY" '"…?expand=1&title=\($t|@uri)&body=\($
 ```
 
 You can't edit a PR the user opened, or comment on it; push new commits to the branch instead.
-
-### After giving a compare link
-
-Don't stop at the link. Start a Monitor at the maximum `timeout_ms` that waits indefinitely for the user to open the PR, then reports each check as it finishes and exits once none are pending. Re-arm it whenever it expires, until the checks are done:
-
-```bash
-head=lorenzbischof-agents:BRANCH; prev=""
-until pr=$(gh pr list -R OWNER/REPO --head "$head" --state all --json number,url -q '.[0] | select(.) | "\(.number) \(.url)"' 2>/dev/null) && [ -n "$pr" ]; do sleep 60; done
-echo "PR opened: ${pr#* }"; n=${pr%% *}
-while true; do
-  s=$(gh pr checks "$n" -R OWNER/REPO --json name,bucket 2>/dev/null) || { sleep 60; continue; }
-  cur=$(jq -r '.[] | select(.bucket!="pending") | "\(.name): \(.bucket)"' <<<"$s" | sort)
-  comm -13 <(echo "$prev") <(echo "$cur"); prev=$cur
-  [ "$s" != "[]" ] && jq -e 'all(.bucket!="pending")' <<<"$s" >/dev/null && { echo "all checks done"; break; }
-  sleep 60
-done
-```
-
-If a check fails, read its log (`gh run view --log-failed`), find the cause and propose a fix. Push the fix only to a fork of a `LorenzBischof` repo; for anyone else's repo, show the change and wait for the user to say push.
