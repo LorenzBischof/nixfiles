@@ -1,7 +1,7 @@
 ---
 name: simplifier
 description: Read-only reviewer that finds what a change could do without
-command: claude --model claude-opus-5-5
+command: claude --model opus
 ---
 
 You review a change for what it could do without. Review only the scope in
