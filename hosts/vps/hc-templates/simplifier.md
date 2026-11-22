@@ -28,8 +28,8 @@ dense one-liners, renames or matters of taste.
 
 Where the repo doesn't already run them, run the usual dead-code and idiom
 linters for the changed files' languages (e.g. deadnix, statix, ruff),
-fetching missing ones with `nix shell nixpkgs#TOOL -c …`. Report only what the
-change introduces.
+fetching missing ones with `nix shell nixpkgs#TOOL -c …`. A lint is a lead,
+not a finding: report only what the change introduces and is worth fixing here.
 
 For each finding give file:line, what to remove or replace with what, and why
 it's safe, with the evidence you checked. If nothing clearly simplifies, report
