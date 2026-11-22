@@ -129,14 +129,21 @@ let
         tick "no PR opened within 2h"
       done
       echo "https://github.com/$repo/pull/$n"
-      # Checks register up to half a minute after the PR opens, one workflow
-      # or app at a time; --watch would stop at the first ones to finish.
-      sleep 60
-      left=$((end - SECONDS))
-      timeout "$((left > 0 ? left : 1))" gh pr checks "$n" -R "$repo" --watch --interval 60 >/dev/null || true
+      # Checks register up to half a minute after each push, one workflow or
+      # app at a time; --watch would stop at the first ones to finish. So wait,
+      # and start over when the head moved during the watch.
+      head=""
+      while :; do
+        now=$(gh pr view "$n" -R "$repo" --json headRefOid -q .headRefOid)
+        [ "$now" != "$head" ] || break
+        head=$now
+        sleep 60
+        left=$((end - SECONDS))
+        timeout "$((left > 0 ? left : 1))" gh pr checks "$n" -R "$repo" --watch --interval 60 >/dev/null || true
+        [ "$SECONDS" -lt "$end" ] || break
+      done
       # A run held for a maintainer's approval has no checks, so gh pr checks
       # can't show it.
-      head=$(gh pr view "$n" -R "$repo" --json headRefOid -q .headRefOid)
       gh run list -R "$repo" --commit "$head" --status action_required --json name,url \
         -q '.[] | "waits for approval\t\(.name)\t\(.url)"'
       gh pr checks "$n" -R "$repo"
