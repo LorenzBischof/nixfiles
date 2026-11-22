@@ -29,6 +29,12 @@ jobs:
       # there. Holds only what cache.nixos.org doesn't serve, the same subset the
       # push step uploads, so it stays far below the full closure.
       GHA_CACHE_DIR: /nix/.gha-cache
+      # Fork PRs get no secrets: no token for the private nix-secrets input and
+      # no S3 keys. They evaluate against the public stub in ci/secrets-stub and
+      # substitute from cache.nixos.org and the GHA cache only. The stub changes
+      # just the derivations that use a secret value (config files, units, the
+      # toplevel); everything else keeps main's hashes and still substitutes.
+      NIX_SECRETS: ${{ secrets.GH_TOKEN != '' && 'real' || 'stub' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,6 +48,7 @@ jobs:
       # a client-side `nix copy` reads AWS_* from the env, a daemon-side read
       # only consults root's credentials file (NixOS/nix#5723).
       - name: Binary cache credentials
+        if: ${{ env.NIX_SECRETS == 'real' }}
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_CACHE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_CACHE_SECRET_ACCESS_KEY }}
@@ -76,8 +83,9 @@ jobs:
             # then S3 (50), so S3 only gets the paths neither has. S3's priority
             # is set here because without one nix takes the bucket's
             # nix-cache-info value, which put it ahead of both. The GHA cache's
-            # narinfos carry the same s3 signature the bucket's do.
-            substituters = file://${{ env.GHA_CACHE_DIR }}?priority=10 https://cache.nixos.org/ ${{ env.S3_CACHE_STORE_URL }}&priority=50
+            # narinfos carry the same s3 signature the bucket's do. No S3 on a
+            # stub run: without the bucket name the URL isn't a valid store.
+            substituters = file://${{ env.GHA_CACHE_DIR }}?priority=10 https://cache.nixos.org/ ${{ env.NIX_SECRETS == 'real' && format('{0}&priority=50', env.S3_CACHE_STORE_URL) || '' }}
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= s3:g+tSfjDOsI+PlY7ZGs981O+IIAYadMSzSz4NMm/kwIk=
       # After the Nix install, not before, so the installer finds /nix as
       # nothing-but-nix left it. The runner user extracts the archive, hence the
@@ -113,11 +121,19 @@ jobs:
           # below. Guarded: secrets are empty on fork PRs, and sed rejects an
           # empty pattern.
           trap '[ -z "$S3_CACHE_BUCKET" ] || sed -i -e "s|$S3_CACHE_ENDPOINT|***|g" -e "s|$S3_CACHE_BUCKET|***|g" build.log' EXIT
+          flags=()
+          if [ "$NIX_SECRETS" = stub ]; then
+            flags=(--override-input nix-secrets path:./ci/secrets-stub --no-write-lock-file)
+          fi
           if [ "$TARGET" = "flake-check" ]; then
-            nix flake check -L 2>&1 | tee build.log
+            nix flake check -L "${flags[@]}" 2>&1 | tee build.log
             exit "${PIPESTATUS[0]}"
           fi
           attr=".#nixosConfigurations.$TARGET.config.system.build.toplevelWithoutRevision"
+          if [ "$NIX_SECRETS" = stub ]; then
+            nix build -L "${flags[@]}" "$attr" 2>&1 | tee build.log
+            exit "${PIPESTATUS[0]}"
+          fi
           # A toplevel already in the bucket is the very build that passed
           # before, so skip it instead of pulling its closure back from S3: a
           # host the change doesn't touch, or on the re-run after analyze-claude
@@ -132,7 +148,7 @@ jobs:
           nix build -L "$attr" 2>&1 | tee build.log
           exit "${PIPESTATUS[0]}"
       - name: Push to S3 cache
-        if: ${{ success() && matrix.target != 'flake-check' && steps.build.outputs.cached != 'true' }}
+        if: ${{ success() && matrix.target != 'flake-check' && steps.build.outputs.cached != 'true' && env.NIX_SECRETS == 'real' }}
         env:
           S3_CACHE_BUCKET: ${{ secrets.S3_CACHE_BUCKET }}
           AWS_ENDPOINT_URL: https://${{ secrets.S3_CACHE_ENDPOINT }}
