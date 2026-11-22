@@ -67,10 +67,10 @@ You can't edit a PR the user opened, or comment on it; push new commits to the b
 
 ### After giving a compare link
 
-Don't stop at the link. Watch the PR in the background; `pr-watch` waits for the user to open it, then for its checks, and exits with one report (or gives up after 2 hours). Its exit wakes you:
+Don't stop at the link. From the clone, watch for the PR in the background; `pr-watch` waits for the user to open it and for its checks to finish, then prints gh's check table once (exit 0 all passed, 1 failed, 8 still pending after 2 hours). Its exit wakes you:
 
 ```bash
 hc run --bg pr-watch OWNER/REPO BRANCH   # note the address it prints, e.g. t7
 ```
 
-When it exits, `hc read ADDRESS`, then `hc rm ADDRESS`, and tell the user the result, including anything still pending if it gave up. For a failed GitHub Actions check, the link ends in `/actions/runs/RUN/job/JOB`: read its log with `gh run view -R OWNER/REPO --job JOB --log-failed`, find the cause and propose a fix. Push the fix only to a fork of a `LorenzBischof` repo; for anyone else's repo, show the change and wait for the user to say push.
+When it exits, `hc read ADDRESS`, then `hc rm ADDRESS`, and tell the user the result. For a failed GitHub Actions check, the link ends in `/actions/runs/RUN/job/JOB`: read its log with `gh run view -R OWNER/REPO --job JOB --log-failed`, find the cause and propose a fix. Push the fix only to a fork of a `LorenzBischof` repo; for anyone else's repo, show the change and wait for the user to say push.
