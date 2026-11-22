@@ -70,6 +70,13 @@ restic repository, domains, ntfy and healthchecks IDs. Never read that file or
 print an evaluated `secrets.*` value: not into a transcript, a CI log, or a PR
 comment. This repo and its Actions logs are public.
 
+Fork PRs can't fetch `nix-secrets`, so CI evaluates them against the public stub
+in `ci/secrets-stub/`. When a config starts reading a new `secrets.<name>`, add a
+dummy value for it to `ci/secrets-stub/default.nix`; when it starts reading a new
+`config.age.secrets.<name>`, add the name to that host's list in
+`ci/secrets-stub/flake.nix`. Do it in the same change. A missed name fails the
+fork PR's build with `attribute '<name>' missing`.
+
 ## Nix + Bash interpolation
 
 When writing shell scripts inside Nix strings (for example `writeShellScript` or
