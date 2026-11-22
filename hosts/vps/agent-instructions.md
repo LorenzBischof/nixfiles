@@ -32,7 +32,7 @@ When the worktree is clean and its commits are pushed, remove it with `git workt
 
 - You can clone and fetch any public repo and any `LorenzBischof` repo, private ones included.
 - You can push only to repos in `lorenzbischof-agents`. Forks always go there.
-- `gh` uses the org token for `gh repo fork` and for any call whose arguments contain `lorenzbischof-agents/`, such as `-R lorenzbischof-agents/REPO` or `repos/lorenzbischof-agents/…`. Keep that string out of PR titles and bodies: there it would select the wrong token. Name the fork as `lorenzbischof-agents:BRANCH` in `--head`.
+- `gh` uses the org token for `gh repo fork` and for calls with an argument that starts with an org repo: `-R lorenzbischof-agents/REPO`, `repos/lorenzbischof-agents/…` in `gh api`, or a `https://github.com/lorenzbischof-agents/…` URL. Everything else, including `gh pr create --head lorenzbischof-agents:BRANCH`, uses the personal token.
 
 ## Contributing
 

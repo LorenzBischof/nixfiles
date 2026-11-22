@@ -58,8 +58,10 @@ let
   '';
 
   # gh only reads GH_TOKEN, so pick it per call by the same rule: the org
-  # token for `gh repo fork` (the fork is created in the org) and any call
-  # naming lorenzbischof-agents/, the personal token otherwise. A wrong pick
+  # token for `gh repo fork` (the fork is created in the org) and for any
+  # argument that names an org repo (`-R lorenzbischof-agents/REPO`, an API
+  # path or URL), the personal token otherwise. Arguments are matched by
+  # prefix, so a PR body that mentions the org changes nothing. A wrong pick
   # fails with 403/404 rather than writing anywhere, and a GH_TOKEN set by the
   # caller wins.
   gh = pkgs.writeShellApplication {
@@ -67,9 +69,18 @@ let
     text = ''
       if [[ -z ''${GH_TOKEN-} ]]; then
         token=${personalToken}
-        if [[ "''${1-} ''${2-}" == "repo fork" || "$*" == *lorenzbischof-agents/* ]]; then
+        if [[ "''${1-} ''${2-}" == "repo fork" ]]; then
           token=${orgToken}
         fi
+        for arg in "$@"; do
+          case ''${arg,,} in
+            lorenzbischof-agents/* | --repo=lorenzbischof-agents/* | \
+              repos/lorenzbischof-agents/* | /repos/lorenzbischof-agents/* | \
+              https://github.com/lorenzbischof-agents/*)
+              token=${orgToken}
+              ;;
+          esac
+        done
         GH_TOKEN=$(< "$token")
         export GH_TOKEN
       fi
@@ -174,15 +185,19 @@ in
     };
   };
 
-  # Not programs.git.config, which would apply to lbischof too. AGENTS.md in
-  # home is what Claude Code and Codex find from every terminal; it describes
-  # the GitHub setup above, so it is generated next to it.
+  # Not programs.git.config, which would apply to lbischof too. The agent
+  # instructions describe the GitHub setup above, so they are generated next
+  # to it: Claude Code reads ~/CLAUDE.md as a parent of every working
+  # directory, Codex reads only $CODEX_HOME/AGENTS.md (~/.codex, 0700 for its
+  # auth.json) and the repo it works in.
   systemd.tmpfiles.rules = [
     "d /home/${user}/.config 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/git 0755 ${user} ${config.users.users.${user}.group} -"
+    "d /home/${user}/.codex 0700 ${user} ${config.users.users.${user}.group} -"
     "L+ /home/${user}/.config/git/config - - - - ${gitConfig}"
     "L+ /home/${user}/AGENTS.md - - - - ${./agent-instructions.md}"
     "L+ /home/${user}/CLAUDE.md - - - - ${pkgs.writeText "CLAUDE.md" "@AGENTS.md\n"}"
+    "L+ /home/${user}/.codex/AGENTS.md - - - - ${./agent-instructions.md}"
   ];
 
   my.homelab.ports = [ port ];
