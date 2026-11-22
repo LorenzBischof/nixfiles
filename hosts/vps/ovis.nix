@@ -254,6 +254,12 @@ in
     "L+ /home/${user}/AGENTS.md - - - - ${./agent-instructions.md}"
     "L+ /home/${user}/CLAUDE.md - - - - ${pkgs.writeText "CLAUDE.md" "@AGENTS.md\n"}"
     "L+ /home/${user}/.codex/AGENTS.md - - - - ${./agent-instructions.md}"
+    # hc templates (`hc run reviewer "…"`), linked one by one so the folder
+    # stays writable for templates still being tried out.
+    "d /home/${user}/.config/herdr-core 0755 ${user} ${config.users.users.${user}.group} -"
+    "d /home/${user}/.config/herdr-core/templates 0755 ${user} ${config.users.users.${user}.group} -"
+    "L+ /home/${user}/.config/herdr-core/templates/reviewer.md - - - - ${./hc-templates/reviewer.md}"
+    "L+ /home/${user}/.config/herdr-core/templates/simplifier.md - - - - ${./hc-templates/simplifier.md}"
   ];
 
   my.homelab.ports = [ port ];

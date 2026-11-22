@@ -65,6 +65,18 @@ jq -rn --arg t "$TITLE" --arg b "$BODY" '"…?expand=1&title=\($t|@uri)&body=\($
 
 You can't edit a PR the user opened, or comment on it; push new commits to the branch instead.
 
+### Before pushing for a PR
+
+Have the change reviewed first, for bugs and for what it could do without:
+
+```bash
+hc run --bg reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."     # note the address each prints, e.g. t7
+hc run --bg simplifier "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."
+hc wait --children all
+```
+
+Read their findings files and fix what holds up. Review once; run them again only after a substantial rework. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
+
 ### After giving a compare link
 
 Don't stop at the link. From the clone, watch for the PR in the background; `pr-watch` waits up to 2 hours for the user to open it and for its checks to finish, then prints gh's check table once. Its exit wakes you:
