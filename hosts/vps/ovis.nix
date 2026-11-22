@@ -134,6 +134,11 @@ let
       sleep 60
       left=$((end - SECONDS))
       timeout "$((left > 0 ? left : 1))" gh pr checks "$n" -R "$repo" --watch --interval 60 >/dev/null || true
+      # A run held for a maintainer's approval has no checks, so gh pr checks
+      # can't show it.
+      head=$(gh pr view "$n" -R "$repo" --json headRefOid -q .headRefOid)
+      gh run list -R "$repo" --commit "$head" --status action_required --json name,url \
+        -q '.[] | "waits for approval\t\(.name)\t\(.url)"'
       gh pr checks "$n" -R "$repo"
     '';
   };
