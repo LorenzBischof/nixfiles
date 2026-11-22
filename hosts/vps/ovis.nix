@@ -129,9 +129,12 @@ let
         tick "no PR opened within 2h"
       done
       echo "https://github.com/$repo/pull/$n"
-      # Checks register up to half a minute after the PR opens, one workflow
-      # or app at a time; --watch would stop at the first ones to finish.
-      sleep 60
+      # gh pr checks fails outright while a PR has no checks; this counts them.
+      while :; do
+        c=$(gh pr view "$n" -R "$repo" --json statusCheckRollup -q '.statusCheckRollup | length')
+        [ "$c" = 0 ] || break
+        tick "no checks within 2h: no CI, or the run waits for a maintainer's approval"
+      done
       left=$((end - SECONDS))
       timeout "$((left > 0 ? left : 1))" gh pr checks "$n" -R "$repo" --watch --interval 60 >/dev/null || true
       gh pr checks "$n" -R "$repo"
