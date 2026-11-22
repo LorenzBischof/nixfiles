@@ -25,16 +25,96 @@ let
   # Pinned so the slice below can name it.
   uid = 1001;
 
-  # Agents push to forks in lorenzbischof-agents and open PRs into
-  # LorenzBischof's repos. The include sets git's auth header for github.com;
-  # a credential helper would also be asked to store and erase.
+  # Two fine-grained PATs, because one can only reach the repos of a single
+  # owner: the org token (lorenzbischof-agents, full access; read-only
+  # elsewhere) and the personal token (LorenzBischof, contents read and PRs).
+  # git and gh share one rule: repos owned by LorenzBischof get the personal
+  # token, everything else the org token. Both read the bare token from its
+  # agenix file per request, so it is in neither the config nor the
+  # environment, where `git config -l` or `env` would print it.
+  orgToken = config.age.secrets.agents-push-org.path;
+  personalToken = config.age.secrets.agents-pr.path;
+
+  # git appends the operation, so this runs as `<helper> <file> get|store|erase`
+  # and only answers get. Git only asks after a 401, so public clones stay
+  # anonymous until GitHub demands authentication.
+  credentialHelper = pkgs.writeShellScript "git-credential-token-file" ''
+    [ "$2" = get ] || exit 0
+    printf 'username=x-access-token\npassword=%s\n' "$(< "$1")"
+  '';
+
+  # An empty helper resets the list, so the owner section replaces the
+  # catch-all instead of adding to it. Paths match case-sensitively, hence
+  # both spellings.
   gitConfig = pkgs.writeText "agent-gitconfig" ''
     [user]
       name = LorenzBischof
       email = 1837725+LorenzBischof@users.noreply.github.com
-    [include]
-      path = ${config.age.secrets.agents-push-org.path}
+    [credential "https://github.com"]
+      helper =
+      helper = ${credentialHelper} ${orgToken}
+    [credential "https://github.com/LorenzBischof"]
+      helper =
+      helper = ${credentialHelper} ${personalToken}
+    [credential "https://github.com/lorenzbischof"]
+      helper =
+      helper = ${credentialHelper} ${personalToken}
   '';
+
+  # gh only reads GH_TOKEN, so pick it per call by the same owner rule. The
+  # owner comes from -R/--repo, a github.com URL or a repos/ API path in the
+  # arguments, else from GH_REPO, else from the cwd's origin remote. `repo
+  # fork` always takes the org token: the fork is created there. A wrong guess
+  # fails with 403/404 rather than writing anywhere, as neither token can write
+  # where the other one is meant for.
+  gh = pkgs.writeShellApplication {
+    name = "gh";
+    runtimeInputs = [ pkgs.git ];
+    text = ''
+      if [ -n "''${GH_TOKEN:-}" ]; then
+        exec ${pkgs.gh}/bin/gh "$@"
+      fi
+
+      shopt -s nocasematch
+      owners=()
+      prev=
+      for arg in "$@"; do
+        case "$prev" in
+          -R | --repo) owners+=("''${arg%%/*}") ;;
+        esac
+        case "$arg" in
+          --repo=*)
+            value=''${arg#--repo=}
+            owners+=("''${value%%/*}")
+            ;;
+        esac
+        if [[ $arg =~ github\.com[/:]([^/]+)/ ]] || [[ $arg =~ ^/?repos/([^/]+)/ ]]; then
+          owners+=("''${BASH_REMATCH[1]}")
+        fi
+        prev=$arg
+      done
+      if [ ''${#owners[@]} -eq 0 ] && [ -n "''${GH_REPO:-}" ]; then
+        owners+=("''${GH_REPO%%/*}")
+      fi
+      if [ ''${#owners[@]} -eq 0 ]; then
+        origin=$(git remote get-url origin 2>/dev/null || true)
+        if [[ $origin =~ github\.com[/:]([^/]+)/ ]]; then
+          owners+=("''${BASH_REMATCH[1]}")
+        fi
+      fi
+
+      token=${orgToken}
+      if [ "''${1:-}" != repo ] || [ "''${2:-}" != fork ]; then
+        for owner in "''${owners[@]}"; do
+          if [[ $owner == lorenzbischof ]]; then
+            token=${personalToken}
+          fi
+        done
+      fi
+
+      GH_TOKEN=$(< "$token") exec ${pkgs.gh}/bin/gh "$@"
+    '';
+  };
 in
 {
   users.users.${user} = {
@@ -52,7 +132,7 @@ in
       ovis
       # On PATH as well as inside the ovis wrapper, for `hc attach` over SSH.
       llmAgents.herdr-core
-      pkgs.gh
+      gh
       pkgs.git
       pkgs.jq
       pkgs.ripgrep
@@ -133,14 +213,15 @@ in
     };
   };
 
-  # Not programs.git.config, which would apply to lbischof too. environment.d
-  # gives GH_TOKEN to every unit, read only when user@${toString uid} starts.
+  # Not programs.git.config, which would apply to lbischof too. AGENTS.md in
+  # home is what Claude Code and Codex find from every terminal; it describes
+  # the GitHub setup above, so it is generated next to it.
   systemd.tmpfiles.rules = [
     "d /home/${user}/.config 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/git 0755 ${user} ${config.users.users.${user}.group} -"
-    "d /home/${user}/.config/environment.d 0755 ${user} ${config.users.users.${user}.group} -"
     "L+ /home/${user}/.config/git/config - - - - ${gitConfig}"
-    "L+ /home/${user}/.config/environment.d/gh.conf - - - - ${config.age.secrets.agents-pr.path}"
+    "L+ /home/${user}/AGENTS.md - - - - ${./agent-instructions.md}"
+    "L+ /home/${user}/CLAUDE.md - - - - ${pkgs.writeText "CLAUDE.md" "@AGENTS.md\n"}"
   ];
 
   my.homelab.ports = [ port ];
