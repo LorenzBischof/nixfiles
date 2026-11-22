@@ -113,30 +113,22 @@ let
     ];
     text = ''
       repo=$1 branch=$2
+      # The open PR whose head is the pushed commit: an older PR from the same
+      # branch, or another fork's branch of the same name, has another head.
+      sha=$(git rev-parse "fork/$branch")
       end=$((SECONDS + 7200))
-      # Waits a minute, or past the 2h deadline prints $1 and gives up.
-      tick() { [ "$SECONDS" -lt "$end" ] || { echo "$1"; exit 1; }; sleep 60; }
-      # gh calls stay out of conditions: an error ends the watch with gh's
-      # message rather than passing for "not yet".
       while :; do
-        # The open PR whose head is the branch's pushed commit, re-read so a
-        # later push still matches. An older PR from the same branch, or
-        # another fork's branch of the same name, has another head.
-        sha=$(git rev-parse "fork/$branch")
+        # Not in a condition, so a gh error (wrong repo, no access) ends the
+        # watch with gh's message instead of passing for "not opened yet".
         n=$(gh pr list -R "$repo" --head "$branch" --state open --json number,headRefOid \
           -q "first(.[] | select(.headRefOid == \"$sha\") | .number) // empty")
         [ -z "$n" ] || break
-        tick "no PR opened within 2h"
+        [ "$SECONDS" -lt "$end" ] || { echo "no PR opened within 2h"; exit 1; }
+        sleep 60
       done
       echo "https://github.com/$repo/pull/$n"
-      # gh pr checks fails outright while a PR has no checks; this counts them.
-      while :; do
-        c=$(gh pr view "$n" -R "$repo" --json statusCheckRollup -q '.statusCheckRollup | length')
-        [ "$c" = 0 ] || break
-        tick "no checks within 2h: no CI, or the run waits for a maintainer's approval"
-      done
-      left=$((end - SECONDS))
-      timeout "$((left > 0 ? left : 1))" gh pr checks "$n" -R "$repo" --watch --interval 60 >/dev/null || true
+      sleep 60 # checks register a few seconds after the PR opens
+      timeout 2h gh pr checks "$n" -R "$repo" --watch --interval 60 >/dev/null 2>&1 || true
       gh pr checks "$n" -R "$repo"
     '';
   };
