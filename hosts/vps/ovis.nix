@@ -101,59 +101,35 @@ let
   };
 
   # Waits for the user to open the PR from a compare link the agent gave them,
-  # then for its checks, and prints one report at the end. Agents run it as an
+  # then for its checks, and prints gh's check table once at the end. Run from
+  # the clone, after pushing BRANCH to the `fork` remote. Agents run it as an
   # hc background terminal, whose exit wakes them (see agent-instructions.md).
   prWatch = pkgs.writeShellApplication {
     name = "pr-watch";
     runtimeInputs = [
       gh
-      pkgs.jq
+      pkgs.git
+      pkgs.coreutils
     ];
     text = ''
       repo=$1 branch=$2
-      # Only PRs from the agents' fork, opened after the link was handed out:
-      # an older closed PR from the same branch isn't the one we wait for.
-      since=$(date -u +%FT%TZ)
-      end=$((SECONDS + 7200)) found="" n="" checks="" fails=0 err=$(mktemp)
-
-      report() {
-        echo "$1"
-        [ -z "$n" ] || echo "https://github.com/$repo/pull/$n"
-        [ -z "$checks" ] || jq -r '.[] | "\(.bucket)\t\(.name)\t\(.link)"' <<<"$checks"
-        exit 0
-      }
-
-      # Runs gh into $out. "No checks" is an answer, not an error. Any other
-      # failure is retried, but five in a row (bad repo, no access) end the
-      # watch rather than passing for "not yet" until the deadline.
-      call() {
-        if out=$("$@" 2>"$err"); then fails=0; return 0; fi
-        if grep -q 'no checks reported' "$err"; then out='[]' fails=0; return 0; fi
-        fails=$((fails + 1))
-        [ "$fails" -lt 5 ] || report "gave up: gh keeps failing: $(head -c 500 "$err")"
-        return 1
-      }
-
-      while [ "$SECONDS" -lt "$end" ]; do
-        if [ -z "$n" ]; then
-          if call gh pr list -R "$repo" --head "$branch" --state all \
-            --json number,createdAt,headRepositoryOwner \
-            -q "[.[] | select(.headRepositoryOwner.login == \"lorenzbischof-agents\" and .createdAt >= \"$since\")][0].number // empty"; then
-            n=$out found=$SECONDS
-          fi
-        elif call gh pr checks "$n" -R "$repo" --json name,bucket,link; then
-          checks=$out
-          # Checks can register a while after the PR opens; give them 5 min.
-          if [ $((SECONDS - found)) -ge 300 ] && jq -e 'all(.bucket != "pending")' <<<"$checks" >/dev/null; then
-            [ "$checks" != "[]" ] || { checks=""; report "PR has no checks"; }
-            report "all checks done"
-          fi
-        fi
+      # The open PR whose head is the pushed commit: an older PR from the same
+      # branch, or another fork's branch of the same name, has another head.
+      sha=$(git rev-parse "fork/$branch")
+      end=$((SECONDS + 7200))
+      while :; do
+        # Not in a condition, so a gh error (wrong repo, no access) ends the
+        # watch with gh's message instead of passing for "not opened yet".
+        n=$(gh pr list -R "$repo" --head "$branch" --state open --json number,headRefOid \
+          -q "first(.[] | select(.headRefOid == \"$sha\") | .number) // empty")
+        [ -z "$n" ] || break
+        [ "$SECONDS" -lt "$end" ] || { echo "no PR opened within 2h"; exit 1; }
         sleep 60
       done
-      [ -n "$n" ] || report "gave up: no PR opened within 2h"
-      checks=$(jq '[.[] | select(.bucket == "pending")]' <<<"$checks")
-      report "gave up after 2h; still pending:"
+      echo "https://github.com/$repo/pull/$n"
+      sleep 60 # checks register a few seconds after the PR opens
+      timeout 2h gh pr checks "$n" -R "$repo" --watch --interval 60 >/dev/null 2>&1 || true
+      gh pr checks "$n" -R "$repo"
     '';
   };
 in
