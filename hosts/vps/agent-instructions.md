@@ -75,7 +75,7 @@ hc run --bg simplifier "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR
 hc wait --children all
 ```
 
-Read their findings files and fix what holds up. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
+Read their findings files and fix what holds up. Review once; run them again only after a substantial rework. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
 
 ### After giving a compare link
 
