@@ -61,52 +61,38 @@ let
       helper = ${credentialHelper} ${personalToken}
   '';
 
-  # gh only reads GH_TOKEN, so pick it per call by the same owner rule. The
-  # owner comes from -R/--repo, a github.com URL or a repos/ API path in the
-  # arguments, else from GH_REPO, else from the cwd's origin remote. `repo
-  # fork` always takes the org token: the fork is created there. A wrong guess
-  # fails with 403/404 rather than writing anywhere, as neither token can write
-  # where the other one is meant for.
+  # gh only reads GH_TOKEN, so the wrapper picks it per call by the same owner
+  # rule, from the repos the call names: -R/--repo values, github.com URLs and
+  # repos/ API paths, or failing those the cwd's origin. `repo fork` always
+  # takes the org token, since the fork is created there. A wrong guess fails
+  # with 403/404 rather than writing anywhere: neither token can write where
+  # the other one is meant for.
   gh = pkgs.writeShellApplication {
     name = "gh";
     runtimeInputs = [ pkgs.git ];
     text = ''
-      if [ -n "''${GH_TOKEN:-}" ]; then
+      if [[ -n ''${GH_TOKEN-} ]]; then
         exec ${pkgs.gh}/bin/gh "$@"
       fi
 
-      shopt -s nocasematch
-      owners=()
+      repos=()
       prev=
       for arg in "$@"; do
-        case "$prev" in
-          -R | --repo) owners+=("''${arg%%/*}") ;;
+        case $prev in -R | --repo) repos+=("github.com/$arg") ;; esac
+        case $arg in
+          --repo=*) repos+=("github.com/''${arg#--repo=}") ;;
+          *github.com[/:]* | repos/* | /repos/*) repos+=("$arg") ;;
         esac
-        case "$arg" in
-          --repo=*)
-            value=''${arg#--repo=}
-            owners+=("''${value%%/*}")
-            ;;
-        esac
-        if [[ $arg =~ github\.com[/:]([^/]+)/ ]] || [[ $arg =~ ^/?repos/([^/]+)/ ]]; then
-          owners+=("''${BASH_REMATCH[1]}")
-        fi
         prev=$arg
       done
-      if [ ''${#owners[@]} -eq 0 ] && [ -n "''${GH_REPO:-}" ]; then
-        owners+=("''${GH_REPO%%/*}")
-      fi
-      if [ ''${#owners[@]} -eq 0 ]; then
-        origin=$(git remote get-url origin 2>/dev/null || true)
-        if [[ $origin =~ github\.com[/:]([^/]+)/ ]]; then
-          owners+=("''${BASH_REMATCH[1]}")
-        fi
+      if [[ ''${#repos[@]} -eq 0 ]]; then
+        repos=("$(git remote get-url origin 2>/dev/null || true)")
       fi
 
       token=${orgToken}
-      if [ "''${1:-}" != repo ] || [ "''${2:-}" != fork ]; then
-        for owner in "''${owners[@]}"; do
-          if [[ $owner == lorenzbischof ]]; then
+      if [[ "''${1-} ''${2-}" != "repo fork" ]]; then
+        for repo in "''${repos[@]}"; do
+          if [[ ''${repo,,} =~ (github\.com[/:]|^/?repos/)lorenzbischof/ ]]; then
             token=${personalToken}
           fi
         done
