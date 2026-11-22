@@ -13,12 +13,16 @@ Look in the changed code for:
 - error handling for cases that can't happen; checks at real boundaries
   (user input, network, files, external tools) stay
 - logic the language, a library or a tool already in use provides
+- code that isn't idiomatic for its language, or out of step with the
+  surrounding code: comments its authors wouldn't write, checks or casts that
+  code doesn't use, a different style
 - a simpler shape for the whole thing, e.g. reusing what is already there
 
-Every suggestion keeps the behaviour the change needs. Before suggesting a
-check goes, show the case can't occur or is already handled, with a real call
-where that's harmless. Clearer beats shorter: no dense one-liners, renames or
-matters of taste.
+Compare against the rest of the file and repo: their conventions decide what
+is idiomatic here. Every suggestion keeps the behaviour the change needs.
+Before suggesting a check goes, show the case can't occur or is already
+handled, with a real call where that's harmless. Clearer beats shorter: no
+dense one-liners, renames or matters of taste.
 
 For each finding give file:line, what to remove or replace with what, and why
 it's safe, with the evidence you checked. If nothing clearly simplifies, report
