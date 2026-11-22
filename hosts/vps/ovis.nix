@@ -37,16 +37,68 @@ let
   # Pinned so the slice below can name it.
   uid = 1001;
 
-  # Agents push to forks in lorenzbischof-agents and open PRs into
-  # LorenzBischof's repos. The include sets git's auth header for github.com;
-  # a credential helper would also be asked to store and erase.
+  # Two fine-grained PATs, because one can only reach the repos of a single
+  # owner: the personal token (LorenzBischof: contents read, PRs; read access
+  # to public repos anywhere) and the org token (lorenzbischof-agents: full
+  # access). git and gh share one rule: the org token for lorenzbischof-agents,
+  # the personal token for everything else. Both keep a lifetime of at most
+  # 366 days, as the NixOS enterprise refuses longer-lived fine-grained tokens
+  # (the org token reads nixpkgs when forking it). Both are read from their
+  # agenix file per request, so neither is in the config or the environment,
+  # where `git config -l` or `env` would print it.
+  orgToken = config.age.secrets.agents-push-org.path;
+  personalToken = config.age.secrets.agents-pr.path;
+
+  # git appends the operation, so this runs as `<helper> <file> get|store|erase`
+  # and only answers get. Git only asks after a 401, so public clones stay
+  # anonymous until GitHub demands authentication. An empty helper resets the
+  # list, so the org section replaces the catch-all instead of adding to it.
+  credentialHelper = pkgs.writeShellScript "git-credential-token-file" ''
+    [ "$2" = get ] || exit 0
+    printf 'username=x-access-token\npassword=%s\n' "$(< "$1")"
+  '';
   gitConfig = pkgs.writeText "agent-gitconfig" ''
     [user]
       name = LorenzBischof
       email = 1837725+LorenzBischof@users.noreply.github.com
-    [include]
-      path = ${config.age.secrets.agents-push-org.path}
+    [credential "https://github.com"]
+      helper =
+      helper = ${credentialHelper} ${personalToken}
+    [credential "https://github.com/lorenzbischof-agents"]
+      helper =
+      helper = ${credentialHelper} ${orgToken}
   '';
+
+  # gh only reads GH_TOKEN, so pick it per call by the same rule: the org
+  # token for `gh repo fork` (the fork is created in the org) and for any
+  # argument that names an org repo (`-R lorenzbischof-agents/REPO`, an API
+  # path or URL), the personal token otherwise. Arguments are matched by
+  # prefix, so a PR body that mentions the org changes nothing. A wrong pick
+  # fails with 403/404 rather than writing anywhere, and a GH_TOKEN set by the
+  # caller wins.
+  gh = pkgs.writeShellApplication {
+    name = "gh";
+    text = ''
+      if [[ -z ''${GH_TOKEN-} ]]; then
+        token=${personalToken}
+        if [[ "''${1-} ''${2-}" == "repo fork" ]]; then
+          token=${orgToken}
+        fi
+        for arg in "$@"; do
+          case ''${arg,,} in
+            lorenzbischof-agents/* | --repo=lorenzbischof-agents/* | \
+              repos/lorenzbischof-agents/* | /repos/lorenzbischof-agents/* | \
+              https://github.com/lorenzbischof-agents/*)
+              token=${orgToken}
+              ;;
+          esac
+        done
+        GH_TOKEN=$(< "$token")
+        export GH_TOKEN
+      fi
+      exec ${pkgs.gh}/bin/gh "$@"
+    '';
+  };
 in
 {
   users.users.${user} = {
@@ -64,7 +116,7 @@ in
       ovis
       # On PATH as well as inside the ovis wrapper, for `hc attach` over SSH.
       llmAgents.herdr-core
-      pkgs.gh
+      gh
       pkgs.git
       pkgs.jq
       pkgs.ripgrep
@@ -145,14 +197,19 @@ in
     };
   };
 
-  # Not programs.git.config, which would apply to lbischof too. environment.d
-  # gives GH_TOKEN to every unit, read only when user@${toString uid} starts.
+  # Not programs.git.config, which would apply to lbischof too. The agent
+  # instructions describe the GitHub setup above, so they are generated next
+  # to it: Claude Code reads ~/CLAUDE.md as a parent of every working
+  # directory, Codex reads only $CODEX_HOME/AGENTS.md (~/.codex, 0700 for its
+  # auth.json) and the repo it works in.
   systemd.tmpfiles.rules = [
     "d /home/${user}/.config 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/git 0755 ${user} ${config.users.users.${user}.group} -"
-    "d /home/${user}/.config/environment.d 0755 ${user} ${config.users.users.${user}.group} -"
+    "d /home/${user}/.codex 0700 ${user} ${config.users.users.${user}.group} -"
     "L+ /home/${user}/.config/git/config - - - - ${gitConfig}"
-    "L+ /home/${user}/.config/environment.d/gh.conf - - - - ${config.age.secrets.agents-pr.path}"
+    "L+ /home/${user}/AGENTS.md - - - - ${./agent-instructions.md}"
+    "L+ /home/${user}/CLAUDE.md - - - - ${pkgs.writeText "CLAUDE.md" "@AGENTS.md\n"}"
+    "L+ /home/${user}/.codex/AGENTS.md - - - - ${./agent-instructions.md}"
   ];
 
   my.homelab.ports = [ port ];
