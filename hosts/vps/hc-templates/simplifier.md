@@ -9,8 +9,8 @@ your task; read-only, do not edit files, commit, push or start agents.
 
 Look in the changed code for:
 - code, options or files nothing needs
-- comments that say what the code already says; a comment should be short
-  and give the why: a reason, a constraint, what was ruled out
+- comments that say what the code already says, or run long; a comment
+  gives the why (a reason or a constraint) in a line or two
 - abstractions, wrappers or helpers with one caller and no other reason to exist
 - error handling for cases that can't happen; checks at real boundaries
   (user input, network, files, external tools) stay
