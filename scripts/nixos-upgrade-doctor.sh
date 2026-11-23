@@ -73,7 +73,7 @@ case "$status" in
   *)         report "$host runs $sha \"$desc\" — GitHub compare inconclusive ($status: rate-limited or bad rev)." ;;
 esac
 
-# ---- 3. local jj/git forensics on the orphan --------------------------------
+# ---- 3. local git forensics on the orphan -----------------------------------
 head="$host runs $sha \"$desc\" — not on GitHub."
 
 if ! git cat-file -t "$rev" >/dev/null 2>&1; then
@@ -81,23 +81,16 @@ if ! git cat-file -t "$rev" >/dev/null 2>&1; then
          "redeploy from up-to-date main:  just switch $host"
 fi
 
-hidden="$(jj log --no-graph -r "$rev" -T 'if(hidden,"y","n")' 2>/dev/null)"
+# A commit on main with the same tree: the content landed under a new hash
+# (amend, rebase or squash merge after switching).
+tree="$(git rev-parse "$rev^{tree}")"
+cur="$(git log origin/main --format='%H %T' -n 500 | awk -v t="$tree" '$2 == t { print $1; exit }')"
 
-if [ "$hidden" = y ]; then
-  change_id="$(jj log --no-graph -r "$rev" -T 'change_id' 2>/dev/null)"
-  cur="$(jj log --no-graph -r "$change_id" -T 'commit_id' 2>/dev/null)"
-  curdesc="$(jj log --no-graph -r "$change_id" -T 'description.first_line()' 2>/dev/null)"; curdesc="${curdesc:-(no message)}"
-  # the verb of the op that rewrote it, e.g. "squash" / "rebase" / "describe"
-  op="$(jj evolog --no-graph -r "$rev" 2>/dev/null | sed -nE 's/.*operation [0-9a-f]+ ([a-z]+).*/\1/p' | head -1)"
-  if [ -n "$cur" ] && git merge-base --is-ancestor "$cur" origin/main 2>/dev/null; then
-    report "$head" \
-      "you deployed a pre-${op:-rewrite} snapshot; jj later rewrote that change into ${cur:0:7} \"$curdesc\" (now on main), orphaning the deployed hash — so the guard skips every run." \
-      "redeploy from up-to-date main:  just switch $host"
-  else
-    report "$head" \
-      "jj rewrote this commit into ${cur:0:7} \"$curdesc\", which isn't on main yet." \
-      "publish it, then redeploy:  jj bookmark set main -r ${cur:0:7} && jj git push ; just switch $host"
-  fi
+if [ -n "$cur" ]; then
+  curdesc="$(git log --format=%s -1 "$cur")"
+  report "$head" \
+    "the same content is on main as ${cur:0:7} \"$curdesc\" (rewritten by an amend, rebase or squash merge), orphaning the deployed hash — so the guard skips every run." \
+    "redeploy from up-to-date main:  just switch $host"
 elif [ "$status" = "ahead" ]; then
   report "$host runs $sha \"$desc\" — on the remote but ahead of main (unmerged)." \
     "it lives on a branch/PR that never merged." \
@@ -105,5 +98,5 @@ elif [ "$status" = "ahead" ]; then
 else
   report "$head" \
     "it's a real local commit you switched onto $host but never pushed; $host already runs this content." \
-    "publish it — no redeploy needed:  jj bookmark set main -r $sha && jj git push"
+    "push it and merge it into main; no redeploy needed."
 fi

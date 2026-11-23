@@ -104,5 +104,5 @@ The report lists, per platform, packages built, failed to build, and skipped as
 broken/unsupported. A failure on Darwin alone, or a NixOS test failing for lack of `kvm`,
 is often not the PR's fault — check the failed package on the base branch before
 blaming the change. To debug a failure locally, there is a nixpkgs checkout at
-`~/git/github.com/lorenzbischof/nixpkgs` (jj, remotes `origin` = NixOS, `fork` =
+`~/git/github.com/lorenzbischof/nixpkgs` (remotes `origin` = NixOS, `fork` =
 the user's fork).
