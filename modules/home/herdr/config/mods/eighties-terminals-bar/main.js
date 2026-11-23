@@ -4,7 +4,7 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, run, theme, home, openOverlay, window as win } from "herdr";
+import { spaces, panes, terminals, run, theme, home, openOverlay, window as win } from "herdr";
 
 function folder(cwd) {
   if (!cwd) return "";
@@ -16,6 +16,13 @@ function folder(cwd) {
 function lead(all, id) {
   const mine = all.filter((p) => p.tab === id);
   return mine.find((p) => p.focused) ?? mine.find((p) => p.program?.agent) ?? mine[0];
+}
+
+// Until when the agent's prompt cache stays warm, as "HH:MM", or null: the
+// claude.cache_expires label the Claude status line keeps (epoch seconds).
+function cacheUntil(terminal) {
+  const at = Number(terminals().find((x) => x.address === terminal)?.labels?.["claude.cache_expires"]);
+  return at * 1000 > Date.now() ? new Date(at * 1000).toTimeString().slice(0, 5) : null;
 }
 
 // The program's tile from the app's table: its color, its glyph (or logo) on it.
@@ -92,6 +99,7 @@ export default class TerminalsBar extends View {
     const tab = (c) => {
       const p = lead(all, c.id);
       const where = folder(p?.cwd);
+      const warm = p?.status !== "working" && p?.terminal && cacheUntil(p.terminal);
       return own(h_flex())
         .id(`tm-${c.id}`)
         .flex_shrink(1)
@@ -119,7 +127,8 @@ export default class TerminalsBar extends View {
             .gap(6)
             .truncate()
             .child(div().flex_none().text_color(c.active ? t.foreground : t.muted).child(c.name))
-            .when(Boolean(where), (el) => el.child(div().truncate().text_color(t.dim).child(where))),
+            .when(Boolean(where), (el) => el.child(div().truncate().text_color(t.dim).child(where)))
+            .when(Boolean(warm), (el) => el.child(div().flex_none().text_size(11).text_color(t.dim).child(warm))),
         );
     };
 
