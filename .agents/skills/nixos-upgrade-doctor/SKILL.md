@@ -1,6 +1,6 @@
 ---
 name: nixos-upgrade-doctor
-description: Use when a host's NixOS auto-upgrade (nixos-upgrade.service) is stuck, skipped, or not applying — especially when the guard reports the deployed commit is missing on GitHub. Points at the diagnosis script and shows how to dig into what actually changed with jj.
+description: Use when a host's NixOS auto-upgrade (nixos-upgrade.service) is stuck, skipped, or not applying — especially when the guard reports the deployed commit is missing on GitHub. Points at the diagnosis script and shows how to dig into what actually changed.
 ---
 
 # NixOS upgrade doctor
@@ -28,28 +28,17 @@ and the fix. Usually that's the whole answer.
   Relaunch the plain `claude` binary (not `claude-bwrap`) and re-run. To analyse a
   known rev without SSH: `scripts/nixos-upgrade-doctor.sh --rev <sha> <host>`.
 
-## When the output is unclear: dig with jj
+## When the output is unclear
 
-The repo is jj-over-git, so a deployed git hash that 404s on GitHub usually still
-resolves to a jj *change*, and jj knows what became of it. To see exactly what
-changed (the script only summarises):
+A deployed hash that 404s on GitHub was usually rewritten (amend, rebase, squash
+merge) after it was switched. To see exactly what changed (the script only
+summarises):
 
 ```bash
 rev=<deployed-sha>
-jj log -r "$rev"                       # is it hidden (rewritten)? what change is it?
-jj evolog -r "$rev"                    # the rewrite history: which op orphaned it (squash/rebase/…)
-jj log -r "<change_id>"                # the change's current, visible commit
-jj diff --from "$rev" --to "<change_id>"   # what actually differs between deployed and current
-git merge-base --is-ancestor <current-commit> origin/main && echo "content is on main"
+git diff "$rev" origin/main          # what differs between deployed and main
+git branch -r --contains "$rev"      # which pushed branch it lives on, if any
 ```
-
-Interpretation:
-- **hidden, current commit is on main** → deployed a pre-rewrite snapshot; content
-  landed on main under a new hash. → `just switch <host>`.
-- **visible, not on main** → a local commit switched but never pushed; the host
-  already runs it. → `jj bookmark set main -r <rev> && jj git push` (no redeploy).
-- **git object absent locally** → deployed from a commit this checkout never had.
-- **`ahead`** → on an unmerged branch/PR; merge it.
 
 `just switch <host>` changes a live machine — report the diagnosis and recommend the
 fix; run it only when the user asks.

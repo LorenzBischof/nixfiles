@@ -67,13 +67,13 @@ desc="$(git log --format=%s -1 "$rev" 2>/dev/null)"; desc="${desc:-(no message)}
 status="$(curl -s "https://api.github.com/repos/$slug/compare/HEAD...$rev" | jq -r '.status // .message // "no-response"')"
 case "$status" in
   identical) report "$host runs $sha \"$desc\" — identical to main; auto-upgrade healthy, nothing to do." ;;
-  behind)    report "$host runs $sha \"$desc\" — behind main; the next timer run will upgrade. Healthy." ;;
+  behind|diverged) report "$host runs $sha \"$desc\" — $status relative to main; the next timer run will upgrade. Healthy." ;;
   ahead)     : ;;  # exists on remote but unmerged — analyse below
   404|"Not Found") : ;;  # not on remote — analyse below
   *)         report "$host runs $sha \"$desc\" — GitHub compare inconclusive ($status: rate-limited or bad rev)." ;;
 esac
 
-# ---- 3. local jj/git forensics on the orphan --------------------------------
+# ---- 3. local git forensics on the orphan -----------------------------------
 head="$host runs $sha \"$desc\" — not on GitHub."
 
 if ! git cat-file -t "$rev" >/dev/null 2>&1; then
@@ -81,29 +81,25 @@ if ! git cat-file -t "$rev" >/dev/null 2>&1; then
          "redeploy from up-to-date main:  just switch $host"
 fi
 
-hidden="$(jj log --no-graph -r "$rev" -T 'if(hidden,"y","n")' 2>/dev/null)"
+# Content on main under a new hash (amend, rebase, squash merge): every file the
+# deployed commit changed since it forked from main reads the same on main.
+git fetch -q origin main 2>/dev/null ||
+  report "$head" "couldn't fetch origin/main, so comparing against it could give wrong advice." \
+         "restore access to the remote and re-run."
+base="$(git merge-base "$rev" origin/main 2>/dev/null)"
+# --no-renames lists a rename's source too, so a deletion missing from main counts.
+mapfile -t touched < <(git diff --no-renames --name-only "$base" "$rev" 2>/dev/null)
 
-if [ "$hidden" = y ]; then
-  change_id="$(jj log --no-graph -r "$rev" -T 'change_id' 2>/dev/null)"
-  cur="$(jj log --no-graph -r "$change_id" -T 'commit_id' 2>/dev/null)"
-  curdesc="$(jj log --no-graph -r "$change_id" -T 'description.first_line()' 2>/dev/null)"; curdesc="${curdesc:-(no message)}"
-  # the verb of the op that rewrote it, e.g. "squash" / "rebase" / "describe"
-  op="$(jj evolog --no-graph -r "$rev" 2>/dev/null | sed -nE 's/.*operation [0-9a-f]+ ([a-z]+).*/\1/p' | head -1)"
-  if [ -n "$cur" ] && git merge-base --is-ancestor "$cur" origin/main 2>/dev/null; then
-    report "$head" \
-      "you deployed a pre-${op:-rewrite} snapshot; jj later rewrote that change into ${cur:0:7} \"$curdesc\" (now on main), orphaning the deployed hash — so the guard skips every run." \
-      "redeploy from up-to-date main:  just switch $host"
-  else
-    report "$head" \
-      "jj rewrote this commit into ${cur:0:7} \"$curdesc\", which isn't on main yet." \
-      "publish it, then redeploy:  jj bookmark set main -r ${cur:0:7} && jj git push ; just switch $host"
-  fi
+if [ -n "$base" ] && [ "${#touched[@]}" -gt 0 ] && git diff --quiet "$rev" origin/main -- "${touched[@]}"; then
+  report "$head" \
+    "its changes are already on main under a different hash, orphaning the deployed one — so the guard skips every run." \
+    "redeploy from up-to-date main:  just switch $host"
 elif [ "$status" = "ahead" ]; then
   report "$host runs $sha \"$desc\" — on the remote but ahead of main (unmerged)." \
     "it lives on a branch/PR that never merged." \
     "merge that PR; no redeploy needed since $host already runs this commit."
 else
   report "$head" \
-    "it's a real local commit you switched onto $host but never pushed; $host already runs this content." \
-    "publish it — no redeploy needed:  jj bookmark set main -r $sha && jj git push"
+    "its changes aren't on main: a local commit you switched onto $host but never pushed (or main has since changed the same files)." \
+    "if it should land, push it and merge it into main (no redeploy needed); otherwise redeploy from main:  just switch $host"
 fi

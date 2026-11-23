@@ -34,8 +34,7 @@ even reachable.
 Requires `nix`, `curl`, `git`, and authenticated `gh`. The cache under
 `$XDG_CACHE_HOME/package-health` has no expiry and includes the inventory: use
 `--no-cache` for a fresh sweep or after configuration changes; reuse it for analysis
-of the same sweep. Run `jj st` after edits before evaluating the flake, and note
-that `.agents/skills` needs the Bash sandbox disabled to write.
+of the same sweep. `.agents/skills` needs the Bash sandbox disabled to write.
 
 Read the `Package health review` note in Basic Memory before a sweep to see what was
 outstanding. It is a worklist of packages only: it carries no method and no history,

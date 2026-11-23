@@ -5,28 +5,11 @@ modules for both system and home-manager config.
 
 ## Version control
 
-This repository uses jj (Jujutsu) with a colocated git repo; jj owns the working
-copy. Use jj for status, diffs, history, commits and publishing — not `git
-status`, `git diff`, `git add`, `git commit` or `git stash`. The `jujutsu` skill
-holds the workflow: work in an empty `@`, `jj absorb`, splitting one change into
-several, and the reach of `jj undo`.
+Commit messages are `scope: message` (lowercase scope, imperative wording).
 
-Run jj with the sandbox disabled — a sandboxed jj writes 0-byte deny stubs into
-the repository root, and they get snapshotted into the change. Check `jj diff -r
-<change> --summary` before considering a change final.
-
-A change is not done until it has a description. Give it one with `jj describe
--m "scope: message"` (lowercase scope, imperative wording) rather than handing
-back a "(no description set)" change; descriptions are cheap to rewrite as the
-work grows.
-
-jj owning the working copy also means **nix reads the git tree, not your edits**.
-`nix build` / `nixos-rebuild --flake .#host` build from the git index, which jj
-only refreshes when a jj command runs. Editing a file and going straight to `just
-switch` can therefore build stale content: nix produces an identical derivation,
-deploys nothing, and the service never restarts — looking exactly like "the change
-didn't apply". Run any jj command (`jj st` will do) after editing and before
-switching.
+Nix only sees files git tracks: a new file is absent from `nix build` / `just
+switch` until it is `git add`ed. The build still succeeds; the failure shows up at
+runtime.
 
 ## Layout and module pattern
 
