@@ -1,6 +1,6 @@
 # Environment
 
-You are running as the `agent` user on a NixOS machine. This whole environment is defined in [nixfiles](https://github.com/LorenzBischof/nixfiles) (forked to `lorenzbischof-agents/nixfiles`, and cloned to `~/nixfiles`). That includes the installed packages, git config, secrets, this file, and tools such as `codex` and `hc` (herdr-core). The `agent` user itself is defined in `hosts/vps/ovis.nix`, this file in `hosts/vps/agent-instructions.md`, and the Claude Code and Codex wrappers (with their skills, plugins and MCP servers) in `modules/nixos/agents/`.
+You are running as the `agent` user on a NixOS machine. This whole environment is defined in [nixfiles](https://github.com/LorenzBischof/nixfiles) (forked to `lorenzbischof-agents/nixfiles`, and cloned to `~/nixfiles`). That includes the installed packages, git config, secrets, this file, and tools such as `codex` and `hc` (herdr-core). The `agent` user itself is defined in `hosts/vps/agents.nix`, this file in `hosts/vps/agent-instructions.md`, and the Claude Code and Codex wrappers (with their skills, plugins and MCP servers) in `modules/nixos/agents/`.
 
 If you need a tool that isn't installed, use `nix-shell`. Don't install anything permanently (`nix profile install`, `npm -g`, etc.):
 
@@ -72,8 +72,10 @@ When a change alters something you can see — a UI, a bar or desktop element, a
 Have a screenshotter capture them:
 
 ```bash
-hc run --bg screenshotter "Capture CHANGE from BRANCH in REPO_PATH. WHERE_IT_SHOWS. Report with hc send $HC_TERMINAL_ID."
+hc-run-hidden --name screenshotter screenshotter "Capture CHANGE from BRANCH in REPO_PATH. WHERE_IT_SHOWS. Report with hc send $HC_TERMINAL_ID."   # note the address it prints, e.g. t7
 ```
+
+The name is for showing only. A finished terminal's name can pass to a new one, so send, wait for, read and remove helpers by the address `hc-run-hidden` prints. If a name is still taken, add a suffix, e.g. `screenshotter-2`.
 
 It reports local image paths first. Look at each image for anything private, because a pushed image is public and can't be taken back. Then `hc send ADDRESS push`, and it pushes the images to `media/BRANCH` on the fork (never the PR branch) and replies with links for the PR body. Keep the `media/` branch: deleting it breaks the images once GitHub garbage-collects the commit. Recapture only when what the images show has changed. When you hand over a compare link, capture first and put the image links in its `body`; once the user opens the PR you can't add them.
 
@@ -82,9 +84,9 @@ It reports local image paths first. Look at each image for anything private, bec
 Have the change reviewed first, for bugs, for what it could do without and for security:
 
 ```bash
-hc run --bg bug-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."     # note the address each prints, e.g. t7
-hc run --bg simplifier "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."
-hc run --bg security-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."
+hc-run-hidden --name bug-reviewer bug-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."     # note the address each prints
+hc-run-hidden --name simplifier simplifier "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."
+hc-run-hidden --name security-reviewer security-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."
 hc wait --children all
 ```
 
@@ -94,13 +96,16 @@ Read their findings files and fix what holds up. Review once. Fixes for their fi
 
 ### After giving a compare link
 
-Don't stop at the link. From the clone, watch for the PR in the background; `pr-watch` waits up to 2 hours for the user to open it and for its checks to finish, then prints gh's check table once. Its exit wakes you:
+Don't stop at the link. From the clone, watch for the PR in the background; `pr-watch` waits up to 2 hours for the user to open it and for its checks to finish, then prints gh's check table once. Start it as a hidden pane beside yours, then wait for it:
 
 ```bash
-hc run --bg pr-watch OWNER/REPO BRANCH   # note the address it prints, e.g. t7
+hc-run-hidden --no-notify --name pr-watch pr-watch OWNER/REPO BRANCH   # note the address it prints
+hc wait ADDRESS --timeout 1500
 ```
 
-When it exits, `hc read ADDRESS`, then `hc rm ADDRESS`, and tell the user the result. If it stopped on a gh error (network, rate limit), start it again. For a failed GitHub Actions check, the link ends in `/actions/runs/RUN/job/JOB`: read its log with `gh run view -R OWNER/REPO --job JOB --log-failed`, find the cause and propose a fix. Push the fix only to a fork of a `LorenzBischof` repo; for anyone else's repo, show the change and wait for the user to say push.
+`--timeout 1500` returns every 25 minutes, so the prompt cache stays warm through a long wait. Its output says why it returned: until that is `"reason":"exit"`, handle what came and wait again. In Claude Code, run the wait with `run_in_background`: a foreground command stops after 10 minutes, and the wait ending wakes you. In Codex, check on the running wait with empty polls of `yield_time_ms` 300000, not shorter: each poll is a turn.
+
+When `pr-watch` exits, `hc read ADDRESS`, then `hc rm ADDRESS`, and tell the user the result. If it stopped on a gh error (network, rate limit), start it again. For a failed GitHub Actions check, the link ends in `/actions/runs/RUN/job/JOB`: read its log with `gh run view -R OWNER/REPO --job JOB --log-failed`, find the cause and propose a fix. Push the fix only to a fork of a `LorenzBischof` repo; for anyone else's repo, show the change and wait for the user to say push.
 
 # Basic Memory
 
