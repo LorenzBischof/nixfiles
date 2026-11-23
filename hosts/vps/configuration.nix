@@ -92,6 +92,14 @@
     wget
   ];
 
+  # Starship for every interactive bash (no home-manager on this host). Bash has
+  # no right prompt, so not the home config's right-prompt layout. The agents
+  # start under `bash -li`, so they inherit its STARSHIP_* env vars; harmless.
+  programs.starship = {
+    enable = true;
+    settings.add_newline = false;
+  };
+
   # Enable the OpenSSH daemon.
   services.openssh = {
     enable = true;
