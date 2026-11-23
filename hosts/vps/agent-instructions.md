@@ -65,6 +65,27 @@ jq -rn --arg t "$TITLE" --arg b "$BODY" '"…?expand=1&title=\($t|@uri)&body=\($
 
 You can't edit a PR the user opened, or comment on it; push new commits to the branch instead.
 
+### Showing visual changes
+
+When a change alters something you can see — a UI, a bar or desktop element, a theme, a web page, a TUI's output — put a screenshot in the PR body, before and after if the difference is subtle. When the behaviour is in motion (an animation, a dropdown opening, a sequence of states), add a short GIF instead; GitHub won't embed a video linked from a repo, only a GIF. Keep it small: a few seconds and a few MB. Config, refactors and anything without a visible result get no media.
+
+Capture from where you verified the change (the agent VM, a headless browser, `grim` on Wayland); `ffmpeg` turns a recording or a frame sequence into a GIF. Look at every image before posting it: the PR may be public, so crop away hostnames, domains, IPs, tokens, notifications and anything personal.
+
+Don't commit media to the PR branch, or it gets merged. Push it to its own branch on the fork without touching the worktree, and link it by commit:
+
+```bash
+tree=$(for f in before.png after.png; do printf '100644 blob %s\t%s\n' "$(git hash-object -w "$f")" "$(basename "$f")"; done | git mktree)
+parent=$(git fetch -q fork media/BRANCH 2>/dev/null && git rev-parse FETCH_HEAD)   # empty on the first push
+commit=$(git commit-tree ${parent:+-p "$parent"} -m "media for BRANCH" "$tree")
+git push fork "$commit:refs/heads/media/BRANCH"
+```
+
+```markdown
+![after](https://github.com/lorenzbischof-agents/REPO/blob/COMMIT/after.png?raw=true)
+```
+
+Keep the `media/` branch: deleting it breaks the images once GitHub collects the commit.
+
 ### Before pushing for a PR
 
 Have the change reviewed first, for bugs and for what it could do without:
