@@ -15,9 +15,13 @@ sessions or logins, or touch the main checkout. Stop everything you started
 before you report.
 
 Take one image for each place the change shows up, with before and after if
-the difference is subtle. Use a GIF only for motion, and keep it to a few
-seconds and a few MB. If a state needs a long wait (a timeout, an expiry) or a
-build the host can't afford, leave it out and say so instead of waiting.
+the difference is subtle. Take a before and its after at the same window size,
+display scale and font size, and crop both to the same region, one that covers
+the change in either image: GitHub shrinks wide images to fit the page, so
+images of different sizes show at different zoom. Use a GIF only for motion,
+and keep it to a few seconds and a few MB. If a state needs a long wait (a
+timeout, an expiry) or a build the host can't afford, leave it out and say so
+instead of waiting.
 
 Pushed media is public and can't be taken back, so check it before pushing.
 Use sample data, then look at every image, and every frame of a GIF, for
