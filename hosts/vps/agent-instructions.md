@@ -67,7 +67,7 @@ You can't edit a PR the user opened, or comment on it; push new commits to the b
 
 ### Showing visual changes
 
-When a change alters something you can see — a UI, a bar or desktop element, a theme, a web page, a TUI's output — put a screenshot in the PR body, before and after if the difference is subtle. For example, a PR adding a prompt-cache marker should show it in each place it appears: the Claude Code status line, the herdr pane header and terminals bar, and the ovis chat view. When the behaviour is in motion (an animation, a dropdown opening, a sequence of states), add a short GIF instead; GitHub won't embed a video linked from a repo, only a GIF. Keep it small: a few seconds and a few MB. Config, refactors and anything without a visible result get no media.
+When a change alters something you can see — a UI, a bar or desktop element, a theme, a web page, a TUI's output — put a screenshot in the PR body, before and after if the difference is subtle. When the behaviour is in motion (an animation, a dropdown opening, a sequence of states), add a short GIF instead; GitHub won't embed a video linked from a repo, only a GIF. Keep it small: a few seconds and a few MB. Config, refactors and anything without a visible result get no media.
 
 Capture from where you verified the change (the agent VM, a headless browser, `grim` on Wayland); `ffmpeg` turns a recording or a frame sequence into a GIF. Look at every image before posting it: the PR may be public, so crop away hostnames, domains, IPs, tokens, notifications and anything personal.
 
