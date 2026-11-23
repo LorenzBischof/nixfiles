@@ -119,11 +119,12 @@ let
       # gh calls stay out of conditions: an error ends the watch with gh's
       # message rather than passing for "not yet".
       while :; do
-        # The open PR whose head is the branch's pushed commit, re-read so a
-        # later push still matches. An older PR from the same branch, or
-        # another fork's branch of the same name, has another head.
+        # The PR whose head is the branch's pushed commit, re-read so a later
+        # push still matches. An older PR from the same branch, or another
+        # fork's branch of the same name, has another head. Any state: the
+        # user may merge it before the next poll.
         sha=$(git rev-parse "fork/$branch")
-        n=$(gh pr list -R "$repo" --head "$branch" --state open --json number,headRefOid \
+        n=$(gh pr list -R "$repo" --head "$branch" --state all --json number,headRefOid \
           -q "first(.[] | select(.headRefOid == \"$sha\") | .number) // empty")
         [ -z "$n" ] || break
         tick "no PR opened within 2h"
