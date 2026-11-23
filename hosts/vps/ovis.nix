@@ -246,6 +246,13 @@ in
   # Both MCP servers run locally, so no DNS, TLS or nginx hop is needed.
   my.programs.agents = {
     enable = true;
+    # Local to this host over stdio, with no network service: the graph lives
+    # in ~agent/basic-memory and only the agents here use it. A shared server
+    # was tried and reverted (2026-11-13) for its unauthenticated REST API.
+    basicMemory = {
+      enable = true;
+      reflect.user = user;
+    };
     mcpServers = {
       cooklang = {
         type = "http";

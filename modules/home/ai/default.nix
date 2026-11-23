@@ -251,27 +251,6 @@ in
       fi
     '';
 
-    systemd.user.services.memory-reflect = lib.mkIf agents.basicMemory.enable {
-      Unit.Description = "Consolidate the Basic Memory graph";
-      Service = {
-        Type = "oneshot";
-        ExecCondition = "${agents.basicMemory.reflectPackage}/bin/memory-reflect-usage-check";
-        ExecStart = "${agents.basicMemory.reflectPackage}/bin/memory-reflect";
-        TimeoutStartSec = "1h";
-      };
-    };
-
-    systemd.user.timers.memory-reflect = lib.mkIf agents.basicMemory.enable {
-      Unit.Description = "Twice-weekly Basic Memory reflection";
-      Timer = {
-        # Midday rather than overnight: the laptop is asleep at night, and a
-        # catch-up fired on wake can beat the network.
-        OnCalendar = "Mon,Thu 12:30";
-        Persistent = true;
-      };
-      Install.WantedBy = [ "timers.target" ];
-    };
-
     programs.voxtype = {
       enable = true;
       # Use the upstream ONNX package for Parakeet transcription on the CPU.

@@ -101,3 +101,9 @@ hc run --bg pr-watch OWNER/REPO BRANCH   # note the address it prints, e.g. t7
 ```
 
 When it exits, `hc read ADDRESS`, then `hc rm ADDRESS`, and tell the user the result. If it stopped on a gh error (network, rate limit), start it again. For a failed GitHub Actions check, the link ends in `/actions/runs/RUN/job/JOB`: read its log with `gh run view -R OWNER/REPO --job JOB --log-failed`, find the cause and propose a fix. Push the fix only to a fork of a `LorenzBischof` repo; for anyone else's repo, show the change and wait for the user to say push.
+
+# Basic Memory
+
+Basic Memory is your knowledge graph, kept in `~/basic-memory` on this host (the `bm_*` tools, the `basic-memory`/`bm` CLI and its skills). Follow upstream Basic Memory guidance and keep all upstream skills available.
+
+Before proposing an experiment or deciding between variants, search the graph for the topic and follow the Relations of the task the session is actually working on; the active-task list spans projects, so an unrelated task's links are noise. Read a note's provenance markers rather than its tone — observations separate what was measured from what is unverified or open, and a measured fact holds only for the versions the note records; against anything newer it is a hypothesis.
