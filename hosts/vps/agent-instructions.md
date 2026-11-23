@@ -88,7 +88,7 @@ hc run --bg security-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT
 hc wait --children all
 ```
 
-Start `security-reviewer` only when the change could affect security: secrets, tokens or credentials; authentication or authorization; open ports, firewall, proxy routes or what a service listens on; file modes, users, groups, sudo or systemd hardening; CI workflows; new flake inputs, fetchers or caches; or code that handles untrusted input (shell, eval, paths, URLs, web content). Skip it for docs, comments, refactors and changes that stay inside one of those without changing what it allows.
+Start `security-reviewer` only when the change could affect security: where secrets go, who can access what, how untrusted input is handled, or what code is trusted.
 
 Read their findings files and fix what holds up. Review once. Fixes for their findings and other small follow-ups get no new review. A substantial rework or a new part (a file, a feature) gets one, scoped to the commits since the last review (`LAST_REVIEWED...HEAD`) rather than the whole diff. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
 
