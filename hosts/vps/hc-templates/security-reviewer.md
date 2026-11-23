@@ -20,7 +20,7 @@ and who that attacker is. Look for:
 Show each hole is reachable: trace the input from where the attacker controls
 it to where it does harm, and check the real effect where that's harmless.
 Flag only what the change introduces or makes worse, not pre-existing
-weaknesses or risks the repo records as accepted.
+weaknesses.
 
 For each finding give file:line, the attacker and what they gain, how they
 reach it, how severe it is (blocking, or fix eventually), and the evidence you

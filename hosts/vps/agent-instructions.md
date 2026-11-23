@@ -79,12 +79,12 @@ It reports local image paths first. Look at each image for anything private, bec
 
 ### Before pushing for a PR
 
-Have the change reviewed first, for bugs, for what it could do without and, where it applies, for security:
+Have the change reviewed first, for bugs, for what it could do without and for security:
 
 ```bash
 hc run --bg bug-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."     # note the address each prints, e.g. t7
 hc run --bg simplifier "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."
-hc run --bg security-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."   # only when it could touch security, see below
+hc run --bg security-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."
 hc wait --children all
 ```
 
