@@ -5,8 +5,8 @@
 #
 # Inside a herdr-core terminal it also keeps the expiry in the terminal's
 # `claude.cache_expires` label (epoch seconds, removed while cold), where the
-# Herdr app's mods read it. It writes only on a change, so a render costs no
-# hc call.
+# Herdr app's mods read it. It writes only on a change, so a render usually
+# costs no hc call.
 {
   writeShellApplication,
   jq,
@@ -33,13 +33,21 @@ writeShellApplication {
       fi
     fi
 
-    # hc is on PATH inside herdr-core terminals; elsewhere there is nothing to label.
-    [[ -n ''${HC_TERMINAL_ID-} ]] && command -v hc >/dev/null || exit 0
-    state=''${XDG_RUNTIME_DIR:-/tmp}/claude-statusline
-    mkdir -p "$state"
-    last=$state/$HC_TERMINAL_ID
-    [[ $(cat "$last" 2>/dev/null) == "$expires" ]] && exit 0
-    if hc label "$HC_TERMINAL_ID" "claude.cache_expires=$expires" >/dev/null 2>&1; then
+    # Outside a herdr-core terminal there is nothing to label.
+    [[ -n ''${HC_TERMINAL_ID-} ]] || exit 0
+    label() { hc label "$HC_TERMINAL_ID" "claude.cache_expires=$expires" >/dev/null 2>&1; }
+    # The last value written is kept only in the private runtime directory, never a shared /tmp.
+    if [[ -z ''${XDG_RUNTIME_DIR-} ]]; then
+      label || true
+      exit 0
+    fi
+    mkdir -p "$XDG_RUNTIME_DIR/claude-statusline"
+    last=$XDG_RUNTIME_DIR/claude-statusline/$HC_TERMINAL_ID
+    [[ -e $last && $(<"$last") == "$expires" ]] && exit 0
+    # Claude Code cancels a run when the next one starts: forget the old value
+    # first, so a run cut off after labelling makes the next one label again.
+    rm -f "$last"
+    if label; then
       printf '%s' "$expires" >"$last"
     fi
   '';
