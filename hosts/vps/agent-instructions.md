@@ -65,6 +65,18 @@ jq -rn --arg t "$TITLE" --arg b "$BODY" '"…?expand=1&title=\($t|@uri)&body=\($
 
 You can't edit a PR the user opened, or comment on it; push new commits to the branch instead.
 
+### Showing visual changes
+
+When a change alters something you can see — a UI, a bar or desktop element, a theme, a web page, a TUI's output — put a screenshot in the PR body, before and after if the difference is subtle. When the behaviour is in motion (an animation, a dropdown opening, a sequence of states), add a short GIF instead; GitHub won't embed a video linked from a repo, only a GIF. Keep it small: a few seconds and a few MB. Config, refactors and anything without a visible result get no media.
+
+Have a screenshotter capture them:
+
+```bash
+hc run --bg screenshotter "Capture CHANGE from BRANCH in REPO_PATH. WHERE_IT_SHOWS. Report with hc send $HC_TERMINAL_ID."
+```
+
+It reports local image paths first. Look at each image for anything private, because a pushed image is public and can't be taken back. Then `hc send ADDRESS push`, and it pushes the images to `media/BRANCH` on the fork (never the PR branch) and replies with links for the PR body. Keep the `media/` branch: deleting it breaks the images once GitHub garbage-collects the commit. Recapture only when what the images show has changed. When you hand over a compare link, capture first and put the image links in its `body`; once the user opens the PR you can't add them.
+
 ### Before pushing for a PR
 
 Have the change reviewed first, for bugs and for what it could do without:
@@ -75,7 +87,7 @@ hc run --bg simplifier "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR
 hc wait --children all
 ```
 
-Read their findings files and fix what holds up. Review once; run them again only after a substantial rework. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
+Read their findings files and fix what holds up. Review once. Fixes for their findings and other small follow-ups get no new review. A substantial rework or a new part (a file, a feature) gets one, scoped to the commits since the last review (`LAST_REVIEWED...HEAD`) rather than the whole diff. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
 
 ### After giving a compare link
 
