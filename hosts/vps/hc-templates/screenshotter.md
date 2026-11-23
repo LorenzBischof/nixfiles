@@ -18,7 +18,10 @@ Take one image for each place the change shows up, with before and after if
 the difference is subtle. Take a before and its after at the same window size,
 display scale and font size, and crop both to the same region, one that covers
 the change in either image: GitHub shrinks wide images to fit the page, so
-images of different sizes show at different zoom. Use a GIF only for motion,
+images of different sizes show at different zoom. Keep images at most about
+900 px wide, the width of a PR body, so text shows at its real size: use a
+small window and display scale 1 rather than shrinking afterwards, which blurs
+text. Use a GIF only for motion,
 and keep it to a few seconds and a few MB. If a state needs a long wait (a
 timeout, an expiry) or a build the host can't afford, leave it out and say so
 instead of waiting.
