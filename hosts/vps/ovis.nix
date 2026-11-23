@@ -24,8 +24,17 @@ let
     # https://github.com/devswha/ovis/issues/4321, no upstream fix yet (still
     # the whole-screen check on main and in v0.5.9 as of 2026-11). Drop once
     # ovis ships a fix for it.
+    #
+    # TODO: chat mode shows no prompt cache state. The second patch reads until
+    # when the Claude prompt cache stays warm from the transcript, beside the
+    # context ring it already reads there, and shows that time next to the ring.
+    # No upstream issue or PR (none on devswha/ovis as of 2026-11). Drop once
+    # ovis shows the cache state itself.
     ovis-unwrapped = llmAgents.ovis.unwrapped.overrideAttrs (old: {
-      patches = (old.patches or [ ]) ++ [ ./ovis-claude-suggestion.patch ];
+      patches = (old.patches or [ ]) ++ [
+        ./ovis-claude-suggestion.patch
+        ./ovis-cache-mark.patch
+      ];
     });
   };
   port = 7317;

@@ -100,6 +100,10 @@ in
         spinnerTipsEnabled = false;
         prefersReducedMotion = true;
         feedbackSurveyRate = 0;
+        statusLine = {
+          type = "command";
+          command = lib.getExe (pkgs.callPackage ./claude-statusline.nix { });
+        };
       };
       codex.config.tui.animations = lib.mkDefault false;
     };

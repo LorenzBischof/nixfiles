@@ -1,0 +1,181 @@
+diff --git a/server/conversation-metadata.test.ts b/server/conversation-metadata.test.ts
+index c70dd8c..9a8faa3 100644
+--- a/server/conversation-metadata.test.ts
++++ b/server/conversation-metadata.test.ts
+@@ -189,6 +189,22 @@ describe("context use", () => {
+     expect(long.context).toEqual({ used: 30_003, window: 1_000_000 });
+   });
+ 
++  it("keeps until when Claude's prompt cache stays warm, with the lifetime its last write named", () => {
++    const at = (timestamp: string, usage: Record<string, unknown>) =>
++      ({ type: "assistant", timestamp, message: { role: "assistant", model: "claude-opus-5-5", usage } });
++    const written = parseConversationMetadata(jsonl(
++      at("2026-11-23T12:00:00.000Z", { input_tokens: 3, cache_creation_input_tokens: 900, cache_creation: { ephemeral_1h_input_tokens: 900, ephemeral_5m_input_tokens: 0 } }),
++    ), "claude-transcript");
++    expect(written.cache).toEqual({ expires_at: Date.parse("2026-11-23T13:00:00.000Z"), ttl: 3_600_000 });
++    // a later fold that only reads the cache keeps the lifetime it was written with
++    const read = parseConversationMetadata(jsonl(at("2026-11-23T12:10:00.000Z", { input_tokens: 3, cache_read_input_tokens: 900 })), "claude-transcript", written);
++    expect(read.cache).toEqual({ expires_at: Date.parse("2026-11-23T13:10:00.000Z"), ttl: 3_600_000 });
++    // a request with no cache tokens leaves nothing cached to report, and 5m writes are read as such
++    expect(parseConversationMetadata(jsonl(at("2026-11-23T12:20:00.000Z", { input_tokens: 3 })), "claude-transcript", read).cache).toBeUndefined();
++    expect(parseConversationMetadata(jsonl(at("2026-11-23T12:00:00.000Z", { input_tokens: 3, cache_creation_input_tokens: 9, cache_creation: { ephemeral_5m_input_tokens: 9 } })), "claude-transcript").cache)
++      .toEqual({ expires_at: Date.parse("2026-11-23T12:05:00.000Z"), ttl: 300_000 });
++  });
++
+   it("reads omp's usage shape, with no window to go by", () => {
+     const entry = { type: "message", message: { role: "assistant", model: "gpt-6", usage: { input: 2, output: 7_000, cacheRead: 10_000, cacheWrite: 22_000 } } };
+     expect(parseConversationMetadata(jsonl(entry), "omo-transcript").context).toEqual({ used: 32_002, window: null });
+diff --git a/server/conversation-metadata.ts b/server/conversation-metadata.ts
+index 68f9071..eb80290 100644
+--- a/server/conversation-metadata.ts
++++ b/server/conversation-metadata.ts
+@@ -142,7 +142,7 @@ export function parseConversationMetadata(text: string, source: ConversationResp
+   for (const line of text.split("\n")) {
+     let entry: RecordValue;
+     try { entry = record(JSON.parse(line)); } catch { continue; }
+-    if (isContextClear(entry, source)) { metadata.model = null; metadata.reasoning_effort = null; piProvider = null; delete metadata.context; delete metadata.provider; continue; }
++    if (isContextClear(entry, source)) { metadata.model = null; metadata.reasoning_effort = null; piProvider = null; delete metadata.context; delete metadata.provider; delete metadata.cache; continue; }
+     if (source === "grok-transcript") {
+       const update = record(record(entry.params).update);
+       if (entry.method === "session/update" && update.sessionUpdate === "user_message_chunk") {
+@@ -213,6 +213,13 @@ export function parseConversationMetadata(text: string, source: ConversationResp
+       if (entry.type === "assistant" && entry.isSidechain !== true && label(message.model)) {
+         const usage = record(message.usage);
+         metadata.context = contextOf(count(usage.input_tokens) + count(usage.cache_creation_input_tokens) + count(usage.cache_read_input_tokens), metadata.model, null, metadata.context);
++        // a write names its lifetime; a request that only reads keeps the one the cache was written with
++        const written = record(usage.cache_creation);
++        const ttl = count(written.ephemeral_1h_input_tokens) > 0 ? 3_600_000
++          : count(written.ephemeral_5m_input_tokens) > 0 ? 300_000 : metadata.cache?.ttl;
++        const at = typeof entry.timestamp === "string" ? Date.parse(entry.timestamp) : NaN;
++        if (ttl !== undefined && Number.isFinite(at) && count(usage.cache_creation_input_tokens) + count(usage.cache_read_input_tokens) > 0) metadata.cache = { expires_at: at + ttl, ttl };
++        else delete metadata.cache;
+       }
+     }
+   }
+diff --git a/shared/protocol.ts b/shared/protocol.ts
+index 7798c4c..3313e7c 100644
+--- a/shared/protocol.ts
++++ b/shared/protocol.ts
+@@ -784,6 +784,11 @@ export interface ConversationMetadata {
+    * response reports its usage. `window` is null when the transcript does not say it.
+    */
+   context?: PaneContext;
++  /**
++   * Claude Code: until when (ms since the epoch) the prompt cache its last request wrote or read
++   * stays warm, and that cache's lifetime in ms; absent until a request reports cache tokens.
++   */
++  cache?: { expires_at: number; ttl: number };
+   /**
+    * The provider the conversation runs at, as omp, omo, gjc and pi name it (`anthropic`,
+    * `openai-codex`): set by a model change and by each answer, absent when none is named.
+diff --git a/src/components/Composer.css b/src/components/Composer.css
+index c81726b..3a51c80 100644
+--- a/src/components/Composer.css
++++ b/src/components/Composer.css
+@@ -297,6 +297,12 @@
+   stroke-linecap: round;
+ }
+ 
++.composer-cache {
++  flex: none;
++  color: var(--text-dim);
++  font-variant-numeric: tabular-nums;
++}
++
+ .composer-context.is-low {
+   color: var(--status-blocked);
+ }
+diff --git a/src/components/Composer.tsx b/src/components/Composer.tsx
+index 341f993..d39462d 100644
+--- a/src/components/Composer.tsx
++++ b/src/components/Composer.tsx
+@@ -167,6 +167,22 @@ function ContextRing({ context }: { context: NonNullable<ConversationMetadata["c
+   </span>;
+ }
+ 
++/** Until when the Claude prompt cache stays warm; gone once it has gone cold. */
++function CacheMark({ cache }: { cache: NonNullable<ConversationMetadata["cache"]> }) {
++  const t = useT();
++  const [now, setNow] = useState(() => Date.now());
++  useEffect(() => {
++    const left = cache.expires_at - Date.now();
++    setNow(Date.now());
++    if (left <= 0) return;
++    const timer = setTimeout(() => setNow(Date.now()), left);
++    return () => clearTimeout(timer);
++  }, [cache.expires_at]);
++  if (cache.expires_at <= now) return null;
++  const until = new Date(cache.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
++  return <span className="composer-cache" title={t("Prompt cache warm until {time}", { time: until })}>{until}</span>;
++}
++
+ function useMediaQuery(query: string): boolean {
+   const [matches, setMatches] = useState(() => window.matchMedia?.(query).matches === true);
+   useEffect(() => {
+@@ -1097,7 +1113,7 @@ export function Composer({
+     return () => observer.disconnect();
+   }, [strip?.branch, strip?.folder, strip?.path, worktree, facesLoaded, t]);
+   useLayoutEffect(fitStatus, [fitStatus, agent, metadata?.model, metadata?.reasoning_effort,
+-    metadata?.context?.window, mobile, usageCaption, usage?.problem, hintText, dictation.shown, backgroundTasks,
++    metadata?.context?.window, metadata?.cache !== undefined, mobile, usageCaption, usage?.problem, hintText, dictation.shown, backgroundTasks,
+     plan?.done, plan?.total, plan?.current, statusCompact, facesLoaded, t]);
+   const menuId = `composer-menu-${paneId}`;
+   const menuClose = (
+@@ -1455,6 +1471,7 @@ export function Composer({
+                 </span>
+               </span>}
+               {metadata?.context && <ContextRing context={metadata.context} />}
++              {metadata?.cache && <CacheMark cache={metadata.cache} />}
+               {usage !== undefined && isCurrent(usage) && usageLimit !== undefined && <span
+                 className={`composer-usage${usageLimit.used_percent >= HIGH_PERCENT ? " is-high" : ""}${usage.recorded ? " is-recorded" : ""}`}
+                 title={`${usageName(usage)}${usageRecorded ? `\n${usageRecorded.join("\n")}` : ""}\n${usageDetail}`}
+diff --git a/src/lib/i18n/composer.ja.ts b/src/lib/i18n/composer.ja.ts
+index 64ebc4d..a96a895 100644
+--- a/src/lib/i18n/composer.ja.ts
++++ b/src/lib/i18n/composer.ja.ts
+@@ -7,6 +7,7 @@
+  * Register and fixed terms follow ../i18n.ja.ts; a key another feature also uses goes there.
+  */
+ export const COMPOSER_JA: Record<string, string> = {
++  "Prompt cache warm until {time}": "プロンプトキャッシュは {time} まで有効",
+   "Next question": "次の質問",
+   "Edit queued message": "キュー内のメッセージを編集",
+   "Sent to Pi · waiting for transcript": "Pi に送信済み · 会話への記録を待っています",
+diff --git a/src/lib/i18n/composer.ko.ts b/src/lib/i18n/composer.ko.ts
+index d533486..c1e2b9b 100644
+--- a/src/lib/i18n/composer.ko.ts
++++ b/src/lib/i18n/composer.ko.ts
+@@ -7,6 +7,7 @@
+  * Register and fixed terms follow ../i18n.ko.ts; a key another feature also uses goes there.
+  */
+ export const COMPOSER_KO: Record<string, string> = {
++  "Prompt cache warm until {time}": "프롬프트 캐시 유지: {time}까지",
+   "Next question": "다음 질문",
+   "Edit queued message": "대기 중인 메시지 편집",
+   "Sent to Pi · waiting for transcript": "Pi로 보냄 · 대화 기록을 기다리는 중",
+diff --git a/src/lib/i18n/composer.zh.ts b/src/lib/i18n/composer.zh.ts
+index 5b62f22..8792ebc 100644
+--- a/src/lib/i18n/composer.zh.ts
++++ b/src/lib/i18n/composer.zh.ts
+@@ -7,6 +7,7 @@
+  * Register and fixed terms follow ../i18n.zh.ts; a key another feature also uses goes there.
+  */
+ export const COMPOSER_ZH: Record<string, string> = {
++  "Prompt cache warm until {time}": "提示缓存保持至 {time}",
+   "Next question": "下一个问题",
+   "Edit queued message": "编辑排队消息",
+   "Sent to Pi · waiting for transcript": "已发送到 Pi · 正在等待写入对话记录",
+diff --git a/src/lib/useChatCallbacks.ts b/src/lib/useChatCallbacks.ts
+index 94d3b61..253599a 100644
+--- a/src/lib/useChatCallbacks.ts
++++ b/src/lib/useChatCallbacks.ts
+@@ -93,7 +93,8 @@ export function useChatCallbacks(deps: ChatCallbacksDeps) {
+       && previous.value?.reasoning_effort === value?.reasoning_effort
+       && previous.value?.provider === value?.provider
+       && previous.value?.context?.used === value?.context?.used
+-      && previous.value?.context?.window === value?.context?.window ? previous : { pane, value });
++      && previous.value?.context?.window === value?.context?.window
++      && previous.value?.cache?.expires_at === value?.cache?.expires_at ? previous : { pane, value });
+   }, []);
+ 
+   return { conversationPushes, setConversationPushes, onConversationWatch, chatOutputRef, onTerminalOutput, chatSent, setChatSent, chatUnsent, setChatUnsent, chatMetadata, redrawGreeting, onChatRead, greetingRoom, setGreetingRoom, greetingRef, chatPrompt, promptRefresh, setPromptRefresh, chatSuggestion, chatRestored, pendingAnswer, setPendingAnswer, promptDock, setPromptDock, onPromptAnswered, clearPendingAnswer, onChatPrompt, onChatMetadata, onChatSuggestion, onChatRestored };

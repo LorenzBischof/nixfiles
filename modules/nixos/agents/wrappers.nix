@@ -10,6 +10,7 @@
   runCommand,
   linkFarm,
   writeShellApplication,
+  writeText,
   coreutils,
   util-linux,
   jq,
@@ -161,7 +162,7 @@ let
       }
       ${lib.concatStrings (
         lib.mapAttrsToList (file: keys: ''
-          merge_owned ${configDir}/${lib.escapeShellArg file} ${builtins.toFile "owned.json" (builtins.toJSON keys)}
+          merge_owned ${configDir}/${lib.escapeShellArg file} ${writeText "owned.json" (builtins.toJSON keys)}
         '') files
       )}
     '';
