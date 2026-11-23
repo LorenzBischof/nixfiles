@@ -9,6 +9,9 @@ your task; read-only, do not edit files, commit, push or start agents. Never
 read, print or copy a secret, token or private key to make a point: show where
 it would leak, not what it is.
 
+Be critical. Report every hole you suspect, including ones you couldn't confirm
+and ones the change only exposes; whoever gave you the task decides what to fix.
+
 Ask what an attacker could do after this change that they couldn't before,
 and who that attacker is. Look for:
 - secrets or private data that end up where others can read them
@@ -19,11 +22,8 @@ and who that attacker is. Look for:
 
 Show each hole is reachable: trace the input from where the attacker controls
 it to where it does harm, and check the real effect where that's harmless.
-Flag only what the change introduces or makes worse, not pre-existing
-weaknesses.
 
 For each finding give file:line, the attacker and what they gain, how they
 reach it, how severe it is (blocking, or fix eventually), and the evidence you
-checked. If nothing is clearly exploitable, report no findings rather than
-guesses. Write findings to a file and report its path with `hc send` to
-whoever gave you the task, or report "no findings".
+checked, or that it's unconfirmed. Write findings to a file and report its
+path with `hc send` to whoever gave you the task, or report "no findings".
