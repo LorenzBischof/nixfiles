@@ -92,7 +92,7 @@ hc wait --children all
 
 Start `security-reviewer` only when the change could affect security: where secrets go, who can access what, how untrusted input is handled, or what code is trusted.
 
-Read their findings files and fix what holds up. Review once. Fixes for their findings and other small follow-ups get no new review. A substantial rework or a new part (a file, a feature) gets one, scoped to the commits since the last review (`LAST_REVIEWED...HEAD`) rather than the whole diff. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
+Read their findings files and fix what holds up. Review once. Fixes for their findings and other small follow-ups get no new review. A substantial rework or a new part (a file, a feature) gets one, and so does a fix that replaces logic rather than patching a line, scoped to the commits since the last review (`LAST_REVIEWED...HEAD`) rather than the whole diff. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
 
 ### After giving a compare link
 
