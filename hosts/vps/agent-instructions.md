@@ -69,13 +69,13 @@ You can't edit a PR the user opened, or comment on it; push new commits to the b
 
 When a change alters something you can see — a UI, a bar or desktop element, a theme, a web page, a TUI's output — put a screenshot in the PR body, before and after if the difference is subtle. When the behaviour is in motion (an animation, a dropdown opening, a sequence of states), add a short GIF instead; GitHub won't embed a video linked from a repo, only a GIF. Keep it small: a few seconds and a few MB. Config, refactors and anything without a visible result get no media.
 
-Have a screenshotter capture them. It pushes the images to `media/BRANCH` on the fork, never to the PR branch, and reports links for the PR body:
+Have a screenshotter capture them:
 
 ```bash
 hc run --bg screenshotter "Capture CHANGE from BRANCH in REPO_PATH. WHERE_IT_SHOWS. Report with hc send $HC_TERMINAL_ID."
 ```
 
-Before linking an image, look at it yourself for anything private: the PR may be public. Keep the `media/` branch, because deleting it breaks the images once GitHub garbage-collects the commit.
+It reports local image paths first. Look at each image for anything private, because a pushed image is public and can't be taken back. Then `hc send ADDRESS push`, and it pushes the images to `media/BRANCH` on the fork (never the PR branch) and replies with links for the PR body. Keep the `media/` branch: deleting it breaks the images once GitHub garbage-collects the commit.
 
 ### Before pushing for a PR
 

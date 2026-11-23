@@ -26,10 +26,13 @@ tokens, URLs, window and tab titles, notifications, chat or terminal history,
 and other terminals or windows. Crop to the part that changed, and blank out
 whatever cropping can't remove. Strip the metadata:
 `nix shell nixpkgs#imagemagick -c mogrify -strip -define png:exclude-chunks=date,time FILE`.
-If you're unsure about anything, don't push; report it.
+Report anything you're unsure about.
 
-Push to `media/BRANCH` on the fork, BRANCH being the PR's branch, without
-touching the worktree:
+Then report with `hc send` to whoever gave you the task: the image paths, one
+line on what each shows, what you blanked out, rendering glitches that don't
+come from the change (such as missing font glyphs), and what you couldn't
+capture and why. Push only once they reply "push". Push to `media/BRANCH` on
+the fork, BRANCH being the PR's branch, without touching the worktree:
 
 ```bash
 tree=$(for f in before.png after.png; do printf '100644 blob %s\t%s\n' "$(git hash-object -w "$f")" "$(basename "$f")"; done | git mktree)
@@ -38,8 +41,5 @@ commit=$(git commit-tree ${parent:+-p "$parent"} -m "media for BRANCH" "$tree")
 git push fork "$commit:refs/heads/media/BRANCH"
 ```
 
-Report with `hc send` to whoever gave you the task. For each image, give
-`![what it shows](https://github.com/lorenzbischof-agents/REPO/blob/COMMIT/FILE?raw=true)`
-and one line on what it shows. Also report what you blanked out, rendering
-glitches that don't come from the change (such as missing font glyphs), and
-what you couldn't capture and why.
+Reply with a link for each image:
+`![what it shows](https://github.com/lorenzbischof-agents/REPO/blob/COMMIT/FILE?raw=true)`.
