@@ -104,6 +104,10 @@ in
           type = "command";
           command = lib.getExe (pkgs.callPackage ./claude-statusline.nix { });
         };
+        # After 5 auto-mode denials Claude Code opens a "Teach auto mode about
+        # your environment?" dialog, which blocks an agent in an hc terminal
+        # until someone answers it. "off" turns the whole setup feature off.
+        skillOverrides."auto-mode-setup" = "off";
       };
       codex.config.tui.animations = lib.mkDefault false;
     };
