@@ -86,11 +86,16 @@ fi
 git fetch -q origin main 2>/dev/null ||
   report "$head" "couldn't fetch origin/main, so comparing against it could give wrong advice." \
          "restore access to the remote and re-run."
+git merge-base --is-ancestor "$rev" origin/main &&
+  report "$head" "but it is on origin/main locally, so the GitHub compare is wrong (repo slug \"$slug\"?)." \
+         "check that origin points at the repo the guard queries."
 base="$(git merge-base "$rev" origin/main 2>/dev/null)"
 # --no-renames lists a rename's source too, so a deletion missing from main counts.
-mapfile -t touched < <(git diff --no-renames --name-only "$base" "$rev" 2>/dev/null)
+# -z and literal pathspecs keep unusual file names (non-ASCII, glob characters) intact.
+mapfile -d '' -t touched < <(git diff -z --no-renames --name-only "$base" "$rev" 2>/dev/null)
 
-if [ -n "$base" ] && [ "${#touched[@]}" -gt 0 ] && git diff --quiet "$rev" origin/main -- "${touched[@]}"; then
+if [ -n "$base" ] && [ "${#touched[@]}" -gt 0 ] &&
+  git --literal-pathspecs diff --quiet "$rev" origin/main -- "${touched[@]}"; then
   report "$head" \
     "its changes are already on main under a different hash, orphaning the deployed one — so the guard skips every run." \
     "redeploy from up-to-date main:  just switch $host"
