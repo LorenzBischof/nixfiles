@@ -105,13 +105,10 @@ that would turn it back on. `state`, `visible`, `focus` and `opacity` are the
 same trap. Rename to the domain word (`powered`, `present`) rather than reaching
 for `final`.
 
-## A new .qml file has to be `git add`ed before it exists
+## A new .qml file has to be `git add`ed
 
-`nix build` reads the flake's git tree, which excludes untracked files. A newly
-created component is therefore **absent from the built config** while every
-edit to a tracked file is picked up, and the failure is confusing: the build
-succeeds, and the bar fails at runtime with `<Name> was not found`. `git add` it
-before building or switching.
+Nix doesn't see untracked files, so the build succeeds and the bar fails at
+runtime with `<Name> was not found`.
 
 ## Icon glyphs
 

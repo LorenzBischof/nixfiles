@@ -67,7 +67,7 @@ desc="$(git log --format=%s -1 "$rev" 2>/dev/null)"; desc="${desc:-(no message)}
 status="$(curl -s "https://api.github.com/repos/$slug/compare/HEAD...$rev" | jq -r '.status // .message // "no-response"')"
 case "$status" in
   identical) report "$host runs $sha \"$desc\" — identical to main; auto-upgrade healthy, nothing to do." ;;
-  behind)    report "$host runs $sha \"$desc\" — behind main; the next timer run will upgrade. Healthy." ;;
+  behind|diverged) report "$host runs $sha \"$desc\" — $status relative to main; the next timer run will upgrade. Healthy." ;;
   ahead)     : ;;  # exists on remote but unmerged — analyse below
   404|"Not Found") : ;;  # not on remote — analyse below
   *)         report "$host runs $sha \"$desc\" — GitHub compare inconclusive ($status: rate-limited or bad rev)." ;;
@@ -81,15 +81,15 @@ if ! git cat-file -t "$rev" >/dev/null 2>&1; then
          "redeploy from up-to-date main:  just switch $host"
 fi
 
-# A commit on main with the same tree: the content landed under a new hash
-# (amend, rebase or squash merge after switching).
-tree="$(git rev-parse "$rev^{tree}")"
-cur="$(git log origin/main --format='%H %T' -n 500 | awk -v t="$tree" '$2 == t { print $1; exit }')"
+# Content on main under a new hash (amend, rebase, squash merge): every file the
+# deployed commit changed since it forked from main reads the same on main.
+git fetch -q origin main 2>/dev/null || true
+base="$(git merge-base "$rev" origin/main 2>/dev/null)"
+mapfile -t touched < <(git diff --name-only "$base" "$rev" 2>/dev/null)
 
-if [ -n "$cur" ]; then
-  curdesc="$(git log --format=%s -1 "$cur")"
+if [ -n "$base" ] && [ "${#touched[@]}" -gt 0 ] && git diff --quiet "$rev" origin/main -- "${touched[@]}"; then
   report "$head" \
-    "the same content is on main as ${cur:0:7} \"$curdesc\" (rewritten by an amend, rebase or squash merge), orphaning the deployed hash — so the guard skips every run." \
+    "its changes are already on main under a different hash, orphaning the deployed one — so the guard skips every run." \
     "redeploy from up-to-date main:  just switch $host"
 elif [ "$status" = "ahead" ]; then
   report "$host runs $sha \"$desc\" — on the remote but ahead of main (unmerged)." \
@@ -97,6 +97,6 @@ elif [ "$status" = "ahead" ]; then
     "merge that PR; no redeploy needed since $host already runs this commit."
 else
   report "$head" \
-    "it's a real local commit you switched onto $host but never pushed; $host already runs this content." \
-    "push it and merge it into main; no redeploy needed."
+    "its changes aren't on main: a local commit you switched onto $host but never pushed (or main has since changed the same files)." \
+    "if it should land, push it and merge it into main (no redeploy needed); otherwise redeploy from main:  just switch $host"
 fi

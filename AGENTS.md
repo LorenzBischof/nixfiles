@@ -5,12 +5,11 @@ modules for both system and home-manager config.
 
 ## Version control
 
-Commit messages are `scope: message` (lowercase scope, imperative wording), e.g.
-`vps: add a security-reviewer`.
+Commit messages are `scope: message` (lowercase scope, imperative wording).
 
 Nix only sees files git tracks: a new file is absent from `nix build` / `just
-switch` until it is `git add`ed. The build still succeeds and the failure shows up
-at runtime, looking like "the change didn't apply".
+switch` until it is `git add`ed. The build still succeeds; the failure shows up at
+runtime.
 
 ## Layout and module pattern
 
