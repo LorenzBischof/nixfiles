@@ -272,11 +272,14 @@ in
     "L+ /home/${user}/.config/git/config - - - - ${gitConfig}"
     "L+ /home/${user}/CLAUDE.md - - - - ${./agent-instructions.md}"
     "L+ /home/${user}/.codex/AGENTS.md - - - - ${./agent-instructions.md}"
-    # hc templates (`hc run reviewer "…"`), linked one by one so the folder
+    # hc templates (`hc run bug-reviewer "…"`), linked one by one so the folder
     # stays writable for templates still being tried out.
     "d /home/${user}/.config/herdr-core 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/herdr-core/templates 0755 ${user} ${config.users.users.${user}.group} -"
-    "L+ /home/${user}/.config/herdr-core/templates/reviewer.md - - - - ${./hc-templates/reviewer.md}"
+    # Removes the link left from when bug-reviewer was called reviewer; drop
+    # once the vps has switched past this.
+    "r /home/${user}/.config/herdr-core/templates/reviewer.md"
+    "L+ /home/${user}/.config/herdr-core/templates/bug-reviewer.md - - - - ${./hc-templates/bug-reviewer.md}"
     "L+ /home/${user}/.config/herdr-core/templates/simplifier.md - - - - ${./hc-templates/simplifier.md}"
     "L+ /home/${user}/.config/herdr-core/templates/screenshotter.md - - - - ${./hc-templates/screenshotter.md}"
     "L+ /home/${user}/.config/herdr-core/templates/security-reviewer.md - - - - ${./hc-templates/security-reviewer.md}"

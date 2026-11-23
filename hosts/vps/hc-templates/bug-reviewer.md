@@ -1,5 +1,5 @@
 ---
-name: reviewer
+name: bug-reviewer
 description: Read-only code reviewer that hunts for correctness bugs in a diff
 command: claude --model opus
 ---
