@@ -253,14 +253,15 @@ in
   # instructions describe the GitHub setup above, so they are generated next
   # to it: Claude Code reads ~/CLAUDE.md as a parent of every working
   # directory, Codex reads only $CODEX_HOME/AGENTS.md (~/.codex, 0700 for its
-  # auth.json) and the repo it works in.
+  # auth.json) and the repo it works in. ~/CLAUDE.md is the file itself: an
+  # `@AGENTS.md` import in a linked file resolves next to its target in
+  # /nix/store and loads nothing.
   systemd.tmpfiles.rules = [
     "d /home/${user}/.config 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/git 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.codex 0700 ${user} ${config.users.users.${user}.group} -"
     "L+ /home/${user}/.config/git/config - - - - ${gitConfig}"
-    "L+ /home/${user}/AGENTS.md - - - - ${./agent-instructions.md}"
-    "L+ /home/${user}/CLAUDE.md - - - - ${pkgs.writeText "CLAUDE.md" "@AGENTS.md\n"}"
+    "L+ /home/${user}/CLAUDE.md - - - - ${./agent-instructions.md}"
     "L+ /home/${user}/.codex/AGENTS.md - - - - ${./agent-instructions.md}"
     # hc templates (`hc run reviewer "…"`), linked one by one so the folder
     # stays writable for templates still being tried out.
