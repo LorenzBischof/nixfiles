@@ -75,7 +75,7 @@ Have a screenshotter capture them:
 hc run --bg screenshotter "Capture CHANGE from BRANCH in REPO_PATH. WHERE_IT_SHOWS. Report with hc send $HC_TERMINAL_ID."
 ```
 
-It reports local image paths first. Look at each image for anything private, because a pushed image is public and can't be taken back. Then `hc send ADDRESS push`, and it pushes the images to `media/BRANCH` on the fork (never the PR branch) and replies with links for the PR body. Keep the `media/` branch: deleting it breaks the images once GitHub garbage-collects the commit. Recapture only when what the images show has changed.
+It reports local image paths first. Look at each image for anything private, because a pushed image is public and can't be taken back. Then `hc send ADDRESS push`, and it pushes the images to `media/BRANCH` on the fork (never the PR branch) and replies with links for the PR body. Keep the `media/` branch: deleting it breaks the images once GitHub garbage-collects the commit. Recapture only when what the images show has changed. When you hand over a compare link, capture first and put the image links in its `body`; once the user opens the PR you can't add them.
 
 ### Before pushing for a PR
 
