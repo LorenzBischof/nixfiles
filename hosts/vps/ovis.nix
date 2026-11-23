@@ -279,6 +279,7 @@ in
     "L+ /home/${user}/.config/herdr-core/templates/reviewer.md - - - - ${./hc-templates/reviewer.md}"
     "L+ /home/${user}/.config/herdr-core/templates/simplifier.md - - - - ${./hc-templates/simplifier.md}"
     "L+ /home/${user}/.config/herdr-core/templates/screenshotter.md - - - - ${./hc-templates/screenshotter.md}"
+    "L+ /home/${user}/.config/herdr-core/templates/security-reviewer.md - - - - ${./hc-templates/security-reviewer.md}"
   ];
 
   my.homelab.ports = [ port ];

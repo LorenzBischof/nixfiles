@@ -79,13 +79,16 @@ It reports local image paths first. Look at each image for anything private, bec
 
 ### Before pushing for a PR
 
-Have the change reviewed first, for bugs and for what it could do without:
+Have the change reviewed first, for bugs, for what it could do without and, where it applies, for security:
 
 ```bash
 hc run --bg reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."     # note the address each prints, e.g. t7
 hc run --bg simplifier "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."
+hc run --bg security-reviewer "Review git diff BASE...HEAD in REPO_PATH. WHAT_IT_IS_FOR. Report with hc send $HC_TERMINAL_ID."   # only when it could touch security, see below
 hc wait --children all
 ```
+
+Start `security-reviewer` only when the change could affect security: secrets, tokens or credentials; authentication or authorization; open ports, firewall, proxy routes or what a service listens on; file modes, users, groups, sudo or systemd hardening; CI workflows; new flake inputs, fetchers or caches; or code that handles untrusted input (shell, eval, paths, URLs, web content). Skip it for docs, comments, refactors and changes that stay inside one of those without changing what it allows.
 
 Read their findings files and fix what holds up. Review once. Fixes for their findings and other small follow-ups get no new review. A substantial rework or a new part (a file, a feature) gets one, scoped to the commits since the last review (`LAST_REVIEWED...HEAD`) rather than the whole diff. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
 
