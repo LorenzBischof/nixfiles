@@ -109,10 +109,67 @@ let
     '';
   };
 
+  # `hc run --bg` with the same arguments, in a hidden pane; prints the
+  # address. The pane goes beside the caller's own, or, for a caller that is
+  # itself a hidden worker, beside its nearest ancestor in the window. With
+  # none in the window it stays a plain hidden worker.
+  #
+  # Why a labeled pane rather than a plain `hc run --bg`: the Herdr app hides
+  # unlabeled workers, but Ovis opens each one as a tab of its own. Labeled
+  # with the caller's space and tab, it joins that tab instead, and Ovis on
+  # the phone shows a tab's panes as numbers to switch between.
+  #
+  # TODO: the app shows a labeled terminal too, so the pane is first written
+  # into the app's layout document as hidden, then labeled; in that order the
+  # app never shows it. The app has no command to hide a pane:
+  # https://github.com/herdrdev/herdr-app/issues/1301 (open as of 2026-11). A
+  # hidden pane still makes its tab act as split (frame, move grip, a zoom
+  # that does nothing):
+  # https://github.com/herdrdev/herdr-app/issues/1251 (open as of 2026-11).
+  # Drop the document write once the app ships a hide command; drop the whole
+  # script if Ovis stops giving unlabeled workers tabs (no upstream issue yet).
+  hcRunHidden = pkgs.writeShellApplication {
+    name = "hc-run-hidden";
+    runtimeInputs = [
+      llmAgents.herdr-core
+      pkgs.jq
+    ];
+    text = ''
+      t=$(hc run --bg "$@" | jq -r .address)
+      echo "$t"
+      # The nearest of the caller and its ancestors that is in the window.
+      at=''${HC_TERMINAL_ID:-} labels=()
+      while [ -n "$at" ]; do
+        info=$(hc get "$at" 2>/dev/null) || exit 0
+        mapfile -t labels < <(jq -r '.labels // {} | select(."herdr.tab") | "herdr.space=\(."herdr.space")", "herdr.tab=\(."herdr.tab")"' <<<"$info")
+        [ ''${#labels[@]} -eq 0 ] || break
+        at=$(jq -r '.parent // empty' <<<"$info")
+      done
+      [ ''${#labels[@]} -gt 0 ] || exit 0
+      # A write the app got in first is refused as a conflict: read again.
+      # Anything else (no document, $at not in it) leaves it unlabeled.
+      for _ in 1 2 3 4 5; do
+        if ! reply=$(echo '{"id":1,"method":"doc.get","params":{"name":"herdr-app"}}' | hc connect |
+          jq -c --arg me "$at" --arg t "$t" 'if any(.result.value | ..; .content?.terminal? == $me) then
+            {id: 1, method: "doc.set", params: {name: "herdr-app", version: .result.version,
+              value: (.result.value | (.. | objects | select(any(.children[]?; .content.terminal == $me)) | .children) += [{type: "block", id: "p-\($t)", content: {terminal: $t}, hidden: true}])}}
+            else error("\($me) is not in the herdr-app layout") end' | hc connect); then
+          break
+        fi
+        if jq -e .result >/dev/null <<<"$reply"; then
+          hc label "$t" "''${labels[@]}" >/dev/null
+          exit 0
+        fi
+        jq -e '.error.data.kind == "conflict"' >/dev/null <<<"$reply" || break
+      done
+      echo "hc-run-hidden: $t stays an unlabeled hidden worker ''${reply:-}" >&2
+    '';
+  };
+
   # Waits for the user to open the PR from a compare link the agent gave them,
   # then for its checks, and prints gh's check table once at the end. Run from
-  # the clone, after pushing BRANCH to the `fork` remote. Agents run it as an
-  # hc background terminal, whose exit wakes them (see agent-instructions.md).
+  # the clone, after pushing BRANCH to the `fork` remote. Agents start it with
+  # hc-run-hidden and wait for it (see agent-instructions.md).
   prWatch = pkgs.writeShellApplication {
     name = "pr-watch";
     runtimeInputs = [
@@ -178,6 +235,7 @@ in
       llmAgents.herdr-core
       gh
       prWatch
+      hcRunHidden
       pkgs.git
       pkgs.jq
       pkgs.ripgrep
@@ -262,6 +320,15 @@ in
         type = "http";
         url = "http://127.0.0.1:3002/mcp";
       };
+    };
+    # What `--approve-for-me` sets: commands outside the workspace-write
+    # sandbox go to Codex's automatic reviewer rather than wait for a person
+    # who may not be watching. hc needs that too: its socket is a network
+    # connection to the sandbox, and network access stays off.
+    codex.config = {
+      approvals_reviewer = "auto_review";
+      approval_policy = "on-request";
+      sandbox_mode = "workspace-write";
     };
   };
 
