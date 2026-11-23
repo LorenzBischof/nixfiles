@@ -83,9 +83,12 @@ fi
 
 # Content on main under a new hash (amend, rebase, squash merge): every file the
 # deployed commit changed since it forked from main reads the same on main.
-git fetch -q origin main 2>/dev/null || true
+git fetch -q origin main 2>/dev/null ||
+  report "$head" "couldn't fetch origin/main, so comparing against it could give wrong advice." \
+         "restore access to the remote and re-run."
 base="$(git merge-base "$rev" origin/main 2>/dev/null)"
-mapfile -t touched < <(git diff --name-only "$base" "$rev" 2>/dev/null)
+# --no-renames lists a rename's source too, so a deletion missing from main counts.
+mapfile -t touched < <(git diff --no-renames --name-only "$base" "$rev" 2>/dev/null)
 
 if [ -n "$base" ] && [ "${#touched[@]}" -gt 0 ] && git diff --quiet "$rev" origin/main -- "${touched[@]}"; then
   report "$head" \
