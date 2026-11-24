@@ -58,8 +58,14 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" -f state=pending \
             -f context="vm/$GITHUB_RUN_ID" -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             -f description="$(dumbpipe generate-ticket 2>/dev/null)" >/dev/null
-          # The machine is gone once the listener is; 124 is the lifetime running out.
-          timeout "${MINUTES}m" dumbpipe listen-tcp --host 127.0.0.1:2222 2>"$dir/dumbpipe.log" || [ $? -eq 124 ]
+          # TODO: dumbpipe 0.39 exits when it fails to accept one connection, and
+          # anyone can try one with the public ticket. Restarted with the same
+          # secret, it keeps its ticket. Fixed upstream in 0.40.1
+          # (https://github.com/n0-computer/dumbpipe/pull/112); nixpkgs still has
+          # 0.39.0 as of 2026-11. Drop the loop once it ships 0.40.1.
+          # 124 is the lifetime running out.
+          timeout "${MINUTES}m" bash -c 'while :; do dumbpipe listen-tcp --host 127.0.0.1:2222; sleep 1; done' \
+            >>"$dir/dumbpipe.log" 2>&1 || [ $? -eq 124 ]
       - name: Mark stopped
         if: always()
         env:

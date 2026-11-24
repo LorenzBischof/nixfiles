@@ -288,10 +288,16 @@ let
         [[ $ticket =~ ^endpoint[a-z0-9]+$ ]] || fail "never came up"
         # The pipe is authenticated to the runner's endpoint, so pinning the
         # host key it first shows is enough.
+        #
+        # TODO: dumbpipe 0.39 logs to stdout, which is the ssh stream here: one
+        # error that iroh logs mid-connection corrupts it ("message
+        # authentication code incorrect") and the connection dies. Fixed upstream
+        # in 0.40.1 (https://github.com/n0-computer/dumbpipe/pull/116); nixpkgs
+        # still has 0.39.0 as of 2026-11. Drop RUST_LOG=off once it ships 0.40.1.
         cat >"$dir/ssh_config" <<EOF
       Host $name
         User runner
-        ProxyCommand dumbpipe connect $ticket 2>>$dir/dumbpipe.log
+        ProxyCommand env RUST_LOG=off dumbpipe connect $ticket 2>>$dir/dumbpipe.log
         IdentityFile $key
         IdentitiesOnly yes
         UserKnownHostsFile $dir/known_hosts
