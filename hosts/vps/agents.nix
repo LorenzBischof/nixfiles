@@ -121,7 +121,11 @@ let
   #
   # TODO: the app shows a labeled terminal too, so the pane is first written
   # into the app's layout document as hidden, then labeled; in that order the
-  # app never shows it. The app has no command to hide a pane:
+  # app never shows it. The app adds a labeled terminal to that document only
+  # while it runs, so a caller labeled while it was closed (one Ovis started)
+  # is not there yet: then the worker is only labeled, and the app, when it
+  # next starts, places both, the worker as a visible pane if it still runs.
+  # The app has no command to hide a pane:
   # https://github.com/herdrdev/herdr-app/issues/1301 (open as of 2026-11). A
   # hidden pane still makes its tab act as split (frame, move grip, a zoom
   # that does nothing):
@@ -147,20 +151,24 @@ let
       done
       [ ''${#labels[@]} -gt 0 ] || exit 0
       # A write the app got in first is refused as a conflict: read again.
-      # Anything else (no document, $at not in it) leaves it unlabeled.
+      # Any other failure leaves it unlabeled.
       for _ in 1 2 3 4 5; do
-        if ! reply=$(echo '{"id":1,"method":"doc.get","params":{"name":"herdr-app"}}' | hc connect |
-          jq -c --arg me "$at" --arg t "$t" 'if any(.result.value | ..; .content?.terminal? == $me) then
-            {id: 1, method: "doc.set", params: {name: "herdr-app", version: .result.version,
-              value: (.result.value | (.. | objects | select(any(.children[]?; .content.terminal == $me)) | .children) += [{type: "block", id: "p-\($t)", content: {terminal: $t}, hidden: true}])}}
-            else error("\($me) is not in the herdr-app layout") end' | hc connect); then
-          break
+        doc=$(echo '{"id":1,"method":"doc.get","params":{"name":"herdr-app"}}' | hc connect) || break
+        jq -e .result >/dev/null <<<"$doc" || break
+        # A caller not in the document yet is labeled only: see above.
+        req=$(jq -c --arg me "$at" --arg t "$t" 'if any(.result.value | ..; .content?.terminal? == $me) then
+          {id: 1, method: "doc.set", params: {name: "herdr-app", version: .result.version,
+            value: (.result.value | (.. | objects | select(any(.children[]?; .content.terminal == $me)) | .children) += [{type: "block", id: "p-\($t)", content: {terminal: $t}, hidden: true}])}}
+          else empty end' <<<"$doc")
+        if [ -n "$req" ]; then
+          reply=$(hc connect <<<"$req") || break
+          if ! jq -e .result >/dev/null <<<"$reply"; then
+            jq -e '.error.data.kind == "conflict"' >/dev/null <<<"$reply" && continue
+            break
+          fi
         fi
-        if jq -e .result >/dev/null <<<"$reply"; then
-          hc label "$t" "''${labels[@]}" >/dev/null
-          exit 0
-        fi
-        jq -e '.error.data.kind == "conflict"' >/dev/null <<<"$reply" || break
+        hc label "$t" "''${labels[@]}" >/dev/null
+        exit 0
       done
       echo "hc-run-hidden: $t stays an unlabeled hidden worker ''${reply:-}" >&2
     '';
