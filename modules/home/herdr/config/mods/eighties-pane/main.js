@@ -3,13 +3,12 @@
 // A pane's header, for layouts that frame their panes:
 //   { "tab": "active", "pane": { "header": { "content": { "mod": "pane" } } } }
 // Shows the program's icon (the app's program table), the agent's name or
-// the terminal's title, the folder, the agent's status and until when its
-// prompt cache stays warm; buttons split, zoom and close this pane. Props from
-// the app: { pane, terminal }. Click: focus the pane.
+// the terminal's title, the folder, and the agent's status; buttons split, zoom and close
+// this pane. Props from the app: { pane, terminal }. Click: focus the pane.
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { panes, terminals, props, run, theme, home, layout } from "herdr";
+import { panes, props, run, theme, home, layout } from "herdr";
 
 // Match the first visible tab frame, including the active child of a stack.
 function paneFrame(node) {
@@ -36,13 +35,6 @@ function folder(cwd) {
   if (!cwd) return "";
   const h = home();
   return cwd === h ? "~" : cwd.startsWith(h + "/") ? "~" + cwd.slice(h.length) : cwd;
-}
-
-// Until when the agent's prompt cache stays warm, as "HH:MM", or null: the
-// claude.cache_expires label the Claude status line keeps (epoch seconds).
-function cacheUntil(terminal) {
-  const at = Number(terminals().find((x) => x.address === terminal)?.labels?.["claude.cache_expires"]);
-  return at * 1000 > Date.now() ? new Date(at * 1000).toTimeString().slice(0, 5) : null;
 }
 
 export default class Pane extends View {
@@ -73,7 +65,6 @@ export default class Pane extends View {
     const name = ((p.program?.agent || p.program?.shell) && p.program.name) || p.title || p.program?.name || "shell";
     const pic = icon(p.program, 14, t.dim);
     const st = p.status;
-    const warm = st !== "working" && cacheUntil(p.terminal);
     const pane = p.pane;
     const bottom = paneFrame(layout())?.header?.position === "bottom";
     return h_flex()
@@ -92,7 +83,6 @@ export default class Pane extends View {
       .when(Boolean(pic), (el) => el.child(pic))
       .child(div().flex_none().truncate().max_w(260).font_medium().text_color(p.focused ? t.accent : t.foreground).child(name))
       .child(div().flex_1().truncate().text_color(t.dim).child(folder(p.cwd)))
-      .when(Boolean(warm), el => el.child(div().flex_none().text_size(11).text_color(t.dim).child(`cache ${warm}`)))
       .when(st === "working", el => el.child(svg("mods/eighties-pane/spinner.svg").size(12).flex_none().text_color(t.working).spin(900)))
       .when(st === "blocked", el => el.child(div().flex_none().px(6).h(18).flex().items_center().rounded(5).bg(t.blocked + "26").text_size(10.5).font_semibold().text_color(t.blocked).child("Needs you")))
       .when(st === "done", el => el.child(div().size(7).flex_none().rounded(4).bg(t.done)))
