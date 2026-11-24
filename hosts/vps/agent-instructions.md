@@ -42,16 +42,10 @@ git -C ~/REPO worktree add ~/.herdr/worktrees/REPO/BRANCH -b BRANCH origin/main
 When the user raises a task unrelated to the one you're on, don't take it up in this chat: start a new agent in its own worktree and tab, tell the user its terminal name, and carry on with your own task.
 
 ```bash
-at=$HC_TERMINAL_ID space=
-while [ -n "$at" ] && [ -z "$space" ]; do   # your space, or your nearest ancestor's
-  info=$(hc get "$at") || break
-  space=$(jq -r '.labels."herdr.space" // empty' <<<"$info") at=$(jq -r '.parent // empty' <<<"$info")
-done
-hc run --bg --no-parent --name FOLDER --cwd ~/.herdr/worktrees/REPO/FOLDER \
-  --label herdr.space="$space" --label herdr.tab=FOLDER claude "TASK"
+hc run --bg --name NAME --cwd ~/.herdr/worktrees/REPO/FOLDER claude "TASK"
 ```
 
-`FOLDER` is the worktree's folder name, lowercased and cut to 32 characters (hc names allow only 1-32 of `a-z 0-9 - _ .`). `--no-parent` makes it the user's agent: it outlives you and doesn't report to you, so give it the task in the user's words.
+Started without labels, it opens in a new tab. `NAME` is the worktree's folder name, lowercased and cut to 32 characters (hc names allow only 1-32 of `a-z 0-9 - _ .`).
 
 If the new task touches files you are changing, tell the user instead of starting it.
 
