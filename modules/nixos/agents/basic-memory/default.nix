@@ -59,31 +59,31 @@ let
   # active exactly as long as the run. The hc terminal and the tab id are the
   # date. The last three runs stay open; older ones are closed before a new one.
   #
-  # Exits 75 (EX_TEMPFAIL) without running when the 5h or weekly window has
-  # less than 10% left, which the unit below retries hourly. If the usage
-  # can't be read, the run goes ahead.
+  # Exits 75 (EX_TEMPFAIL) without running when every account has less than
+  # 10% left of its 5h or weekly window, which the unit below retries hourly.
+  # If the usage is unknown, the run goes ahead.
   #
   # It starts in an empty folder of its own, not the notes folder, where a note
   # named CLAUDE.md would become instructions; Herdr names the space after it.
-  # That folder has to be trusted for Claude once (start `claude` there and
-  # accept): hc doesn't type the task in while the trust dialog shows.
+  # That folder has to be trusted once per account (start
+  # `CLAUDE_CONFIG_DIR=~/.claude-NAME claude` there and accept): hc doesn't
+  # type the task in while the trust dialog shows.
   reflectDir = "~/.local/state/memory-reflect";
   memoryReflect = pkgs.writeShellApplication {
     name = "memory-reflect";
     runtimeInputs = [
-      pkgs.curl
       pkgs.jq
       llmAgents.herdr-core
     ];
     text = ''
-      if token="$(jq -r .claudeAiOauth.accessToken ~/.claude/.credentials.json)" &&
-        usage="$(curl -fsS -H @- -H 'anthropic-beta: oauth-2025-04-20' \
-          https://api.anthropic.com/api/oauth/usage <<<"Authorization: Bearer $token")"; then
-        reset="$(jq -r '[.five_hour, .seven_day | select(.utilization > 90) | .resets_at] | max // empty' <<<"$usage")"
-        if [ -n "$reset" ]; then
-          echo "Less than 10% usage left until $reset"
-          exit 75
-        fi
+      # An account without a rate-limits.json counts as unused.
+      if reset="$(for dir in ~/.claude-*/; do
+        if [ -f "$dir.credentials.json" ]; then cat "$dir/rate-limits.json" 2>/dev/null || echo '{}'; fi
+      done | jq -ser '
+        map([.five_hour, .seven_day | select(.used_percentage > 90 and .resets_at > now) | .resets_at] | max)
+        | if length > 0 and all(. != null) then min | todate else empty end' 2>/dev/null)"; then
+        echo "Less than 10% usage left until $reset"
+        exit 75
       fi
 
       today="$(date +%F)"
