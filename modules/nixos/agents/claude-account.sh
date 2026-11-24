@@ -14,20 +14,20 @@
 # a folder can as well rewrite a listed account's sign-in, or ~/.claude's hooks
 # and skills. Should the bwrap wrappers ever keep sessions out of the account
 # folders while ~/.claude stays writable, list the accounts in Nix instead and
-# keep their sign-ins out of the sandbox's reach. ~/.claude holds no
-# sign-in: sessions, memory, plugins and the rest live there once, and every
-# account folder links to them, so a session resumes and remembers the same
-# on any account. Other files stay per account, among them the sign-in (.credentials.json, and
-# .claude.json, which names its account and the folders it trusts),
-# history.jsonl, which Claude Code refuses to read through a link (2.1.331),
-# and settings.json, which the wrapper rewrites at every launch.
+# keep their sign-ins out of the sandbox's reach. Once the accounts have moved
+# out of it, ~/.claude holds no sign-in: sessions, memory, plugins and the rest
+# live there once, and every account folder links to them, so a session
+# resumes and remembers the same on any account. Files stay per account, among
+# them the sign-in (.credentials.json, and .claude.json, which names its
+# account and the folders it trusts), history.jsonl, which Claude Code refuses
+# to read through a link (2.1.331), and settings.json, which the wrapper
+# rewrites at every launch.
 
 set -euo pipefail
 shopt -s nullglob dotglob
 
 shared=$HOME/.claude
 cache=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/claude-account
-fresh=300
 
 dirs() {
   local dir
@@ -37,17 +37,22 @@ dirs() {
   return 0
 }
 
-# Asks api/oauth/usage for one account and caches the answer, or null when
-# there is none: no token, an expired one, or a failed request. Read only: the
+# Asks api/oauth/usage for one account and caches the answer. Read only: the
 # token is never refreshed here, since Claude Code rotates refresh tokens and
-# a refresh it did not make signs it out; the next session on that account
-# refreshes it.
+# a refresh it did not make signs it out. An access token lasts about 8 hours,
+# so an account nobody used since is cached as {"expired": true}, and the next
+# session on it refreshes the token. No token, or a failed request, is null.
 fetch() {
   local dir=$1 file token body=null
   file=$cache/${dir##*/}.json
-  token=$(jq -r '.claudeAiOauth | select((.expiresAt // 0) > now * 1000) | .accessToken // empty' \
-    "$dir/.credentials.json" 2>/dev/null) || token=""
-  if [ -n "$token" ]; then
+  token=$(jq -r '.claudeAiOauth |
+      if (.accessToken // "") == "" then ""
+      elif (.expiresAt // 0) > now * 1000 then .accessToken
+      elif (.refreshToken // "") != "" then "expired"
+      else "" end' "$dir/.credentials.json" 2>/dev/null) || token=""
+  if [ "$token" = expired ]; then
+    body='{"expired":true}'
+  elif [ -n "$token" ]; then
     # The header goes in on stdin, so the token is never in an argument list.
     body=$(curl -fsS -m 5 -H @- -H 'anthropic-beta: oauth-2025-04-20' -H 'accept: application/json' \
       https://api.anthropic.com/api/oauth/usage <<<"Authorization: Bearer $token" 2>/dev/null |
@@ -57,11 +62,20 @@ fetch() {
   mv -f "$file.tmp.$$" "$file"
 }
 
-# Fetches every account whose answer is older than $fresh, all at once. One
-# refresh at a time: in the background a refresh already running is left to
-# finish; with \`wait\` it is waited for, up to 20 seconds.
+# Whether an account's cached answer is due again: an answer after 5 minutes,
+# no answer or an expired token after 1, as a session may have refreshed it.
+old() {
+  local file=$1 keep
+  [ -f "$file" ] || return 0
+  keep=$(jq -r 'if type == "object" and (has("expired") | not) then 300 else 60 end' "$file" 2>/dev/null) || keep=0
+  [ $(($(date +%s) - $(stat -c %Y "$file"))) -ge "$keep" ]
+}
+
+# Fetches every account whose answer is due, all at once. One refresh at a
+# time: in the background a refresh already running is left to finish; with
+# `wait` it is waited for, up to 20 seconds.
 refresh() {
-  local dir file lock
+  local dir lock
   install -d -m 700 "$cache"
   exec {lock}>"$cache/lock"
   if [ "${1:-}" = wait ]; then
@@ -70,8 +84,7 @@ refresh() {
     flock -n "$lock" || return 0
   fi
   for dir in $(dirs); do
-    file=$cache/${dir##*/}.json
-    if [ ! -f "$file" ] || [ $(($(date +%s) - $(stat -c %Y "$file"))) -ge "$fresh" ]; then
+    if old "$cache/${dir##*/}.json"; then
       fetch "$dir" &
     fi
   done
@@ -79,12 +92,9 @@ refresh() {
 }
 
 stale() {
-  local dir file
+  local dir
   for dir in $(dirs); do
-    file=$cache/${dir##*/}.json
-    if [ ! -f "$file" ] || [ $(($(date +%s) - $(stat -c %Y "$file"))) -ge "$fresh" ]; then
-      return 0
-    fi
+    old "$cache/${dir##*/}.json" && return 0
   done
   return 1
 }
@@ -93,8 +103,9 @@ stale() {
 # window (5-hour, weekly, or a model's weekly) goes last, the one that frees up
 # first ahead of the others. The rest are ranked by what is left of their week
 # per hour until it resets, so usage that would otherwise lapse unused at the
-# reset goes first. An account without an answer goes after those with one:
-# it may be signed out.
+# reset goes first. An account whose token expired counts as a fresh week:
+# it was likely idle, and a session there is what refreshes the token. One
+# without an answer goes after those with one: it may be signed out.
 ranked() {
   local dir file
   for dir in $(dirs); do
@@ -105,7 +116,7 @@ ranked() {
     def ts: try (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601) catch null;
     now as $now
     | map(
-        (.usage // {}) as $u
+        (if .usage.expired == true then {} else .usage // {} end) as $u
         | ([$u.five_hour, $u.seven_day, $u.seven_day_opus, $u.seven_day_sonnet]
             | map(select((.utilization // 0) >= 100) | (.resets_at | ts) // ($now + 3600))) as $full
         | (((($u.seven_day.resets_at | ts) // ($now + 7 * 86400)) - $now) / 3600) as $hours
@@ -117,15 +128,16 @@ ranked() {
 }
 
 # Links the folders, and CLAUDE.md, which home-manager writes and Claude Code
-# only reads. Other files are left per account: one Claude Code replaces by a
-# rename would turn its link back into a file.
+# only reads. Other files stay per account: one that Claude Code replaces by a
+# rename would turn its link back into a file. So do backups/, copies of the
+# account's .claude.json, and cache/, what Claude Code read for its plan.
 link() {
   local dir=$1 src name dst apart=() warned
   for src in "$shared"/*/ "$shared"/CLAUDE.md; do
     src=${src%/}
     [ -e "$src" ] || continue
     name=${src##*/}
-    [ "$name" = backups ] && continue
+    case $name in backups | cache | daemon*) continue ;; esac
     dst=$dir/$name
     if [ -L "$dst" ]; then
       continue
@@ -138,7 +150,7 @@ link() {
   # Something the account made before ~/.claude had it stays the account's
   # own until it is moved into ~/.claude by hand. Said once per boot.
   warned=$cache/${dir##*/}.warned
-  if [ ${#apart[@]} -gt 0 ] && [ ! -e "$warned" ] && install -d -m 700 "$cache"; then
+  if [ ${#apart[@]} -gt 0 ] && [ ! -e "$warned" ] && install -d -m 700 "$cache" 2>/dev/null; then
     echo "claude-account: not shared with $shared, as $dir has its own: ${apart[*]}" >&2
     touch "$warned"
   fi
