@@ -31,10 +31,10 @@ if [ -z "$dir" ]; then
     done | jq -rs '
       def hours($w): if ($w.resets_at // 0) > now then ($w.resets_at - now) / 3600 else null end;
       def left($w): if hours($w) then 100 - ($w.used_percentage // 0) else 100 end;
-      map(.limits as $l | . + {
+      map(.limits as $l | . + (try {
         full: (left($l.five_hour) <= 0 or left($l.seven_day) <= 0),
         score: (left($l.seven_day) / ([hours($l.seven_day) // 168, 1] | max))
-      })
+      } catch {full: false, score: 0}))
       | sort_by(.full, -.score) | .[0].dir // empty'
   )
 fi
@@ -43,8 +43,10 @@ case $dir in
   "$HOME"/.claude-*)
     for src in "$HOME"/.claude/*/ "$HOME/.claude/CLAUDE.md"; do
       src=${src%/} name=${src##*/}
-      case $name in backups | cache) continue ;; esac
-      [ -e "$dir/$name" ] || [ -L "$dir/$name" ] || ln -s "$src" "$dir/$name"
+      case $name in backups | cache | daemon*) continue ;; esac
+      # -n: a launch racing this one may have just made the link, which plain
+      # ln would follow and link inside ~/.claude.
+      [ ! -e "$src" ] || [ -e "$dir/$name" ] || ln -sfn "$src" "$dir/$name" 2>/dev/null || true
     done
     ;;
 esac
