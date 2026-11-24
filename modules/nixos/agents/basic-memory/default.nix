@@ -78,7 +78,7 @@ let
     text = ''
       # An account without a rate-limits.json counts as unused.
       if reset="$(for dir in ~/.claude-*/; do
-        [ -f "$dir.credentials.json" ] && { cat "$dir/rate-limits.json" 2>/dev/null || echo '{}'; }
+        if [ -f "$dir.credentials.json" ]; then cat "$dir/rate-limits.json" 2>/dev/null || echo '{}'; fi
       done | jq -ser '
         map([.five_hour, .seven_day | select(.used_percentage > 90 and .resets_at > now) | .resets_at] | max)
         | if length > 0 and all(. != null) then min | todate else empty end' 2>/dev/null)"; then

@@ -190,7 +190,7 @@ in
             if (.five_hour.resets_at // 0) > now and .five_hour.used_percentage >= 100 then 0
             elif (.seven_day.resets_at // 0) > now
             then (100 - .seven_day.used_percentage) / ([(.seven_day.resets_at - now) / 3600, 1] | max)
-            else 100 / 168 end' "$dir/rate-limits.json" 2>/dev/null) || score=0.6
+            else 100 / 168 end' "$dir/rate-limits.json" 2>/dev/null) && [ -n "$score" ] || score=0.6
           if jq -en "$score > $best" >/dev/null; then
             best=$score
             export CLAUDE_CONFIG_DIR=''${dir%/}
