@@ -10,6 +10,7 @@
     ./alloy-validate.nix
     ./autoupgrade.nix
     ./common.nix
+    ./llm-agents.nix
     ./loopback-clients.nix
     ./monitoring-client.nix
     ./nginx.nix

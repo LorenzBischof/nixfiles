@@ -2,12 +2,10 @@
   config,
   pkgs,
   lib,
-  inputs,
   ...
 }:
 let
   cfg = config.my.programs.herdr;
-  herdr = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
 
   # $mod+direction moves between Herdr panes and only leaves the window at the
   # pane edge; $mod+Ctrl+direction always moves between Sway windows. Run
@@ -41,8 +39,8 @@ in
 
   config = lib.mkIf cfg.enable {
     home.packages = [
-      herdr.herdr-app
-      herdr.herdr-core
+      pkgs.llm-agents.herdr-app
+      pkgs.llm-agents.herdr-core
       swayHerdrNav
     ];
 

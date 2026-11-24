@@ -9,7 +9,7 @@
 }:
 let
   cfg = config.my.programs.agents;
-  llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  llmAgents = pkgs.llm-agents;
 
   wrappers = pkgs.callPackage ./wrappers.nix {
     claude-code = llmAgents.claude-code;
