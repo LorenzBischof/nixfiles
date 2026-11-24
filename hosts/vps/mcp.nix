@@ -11,11 +11,11 @@ let
   alloyPort = 12345;
 in
 {
-  # The MCP servers here bind loopback with no auth of their own, and only
-  # members of this group may connect to their ports (loopbackClients): the
-  # agents, Open WebUI, and nginx for claude.ai's public name below.
+  # The MCP servers here bind loopback with no auth of their own, so each
+  # service file lets only their clients connect (loopbackClients): the agents
+  # and nginx (for claude.ai's public name below) by uid, and Open WebUI, a
+  # DynamicUser, through this group.
   users.groups.mcp = { };
-  users.users.${config.services.nginx.user}.extraGroups = [ "mcp" ];
 
   # claude.ai's name for every MCP server here: each service file adds its own
   # `locations."= /<name>"`, so a new server needs no DNS record, cert change
