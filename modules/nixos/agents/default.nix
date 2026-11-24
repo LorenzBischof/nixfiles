@@ -89,6 +89,8 @@ in
     my.programs.agents = {
       plugins.egm = inputs.egm;
       claude.settings = lib.mapAttrs (_: lib.mkDefault) {
+        # Without a model set, Claude Code uses the account default (Fable).
+        model = "opus";
         attribution = {
           commit = "";
           pr = "";
