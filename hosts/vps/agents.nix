@@ -244,6 +244,12 @@ let
         [[ ''${1-} =~ ^gha-[0-9]+$ && -d $state/$1 ]] || { echo "gha-vm: no machine ''${1-}" >&2; exit 1; }
         dir=$state/$1 id=''${1#gha-}
       }
+      # Cancels run $id and forgets $dir; keeps it when the run may still be up.
+      stop() {
+        gh run cancel "$id" -R "$repo" >/dev/null 2>&1 ||
+          [ "$(gh run view "$id" -R "$repo" --json status -q .status)" = completed ] || return 1
+        rm -r "$dir"
+      }
       case ''${1-} in
       up)
         mkdir -p "$state"
@@ -255,22 +261,31 @@ let
           { echo "gha-vm: gh gave no run URL" >&2; exit 1; }
         id=''${url##*/} name=gha-''${url##*/}
         echo "gha-vm: $name is $url" >&2
-        fail() { echo "gha-vm: $name $1" >&2; gh run cancel "$id" -R "$repo" >/dev/null 2>&1 || true; exit 1; }
-        sha=$(gh run view "$id" -R "$repo" --json headSha -q .headSha)
+        # From here on `down` can find it, and any failure stops it.
+        dir=$state/$name
+        mkdir "$dir"
+        trap 'stop || echo "gha-vm: $name may still be running: gha-vm down $name" >&2' EXIT
+        fail() { echo "gha-vm: $name $1" >&2; exit 1; }
+        # A new run takes a few seconds to show up in the API.
+        sha=""
+        for _ in $(seq 30); do
+          sha=$(gh run view "$id" -R "$repo" --json headSha -q .headSha 2>/dev/null) && break
+          sleep 2
+        done
+        [ -n "$sha" ] || fail "never showed up"
         ticket=""
         for _ in $(seq 120); do
           # Set by that run itself, not by anyone else who can write statuses.
+          # The newest one counts: a stopped run follows its pending status.
           ticket=$(gh api "repos/$repo/commits/$sha/statuses?per_page=100" -q "first(.[] | select(
-            .context == \"vm/$id\" and .state == \"pending\" and .target_url == \"$url\"
-            and .creator.login == \"github-actions[bot]\") | .description) // empty")
+            .context == \"vm/$id\" and .creator.login == \"github-actions[bot]\")) |
+            select(.state == \"pending\" and .target_url == \"$url\") | .description")
           [ -z "$ticket" ] || break
           [ "$(gh run view "$id" -R "$repo" --json status -q .status)" != completed ] || fail "ended before it came up"
           sleep 5
         done
         # It becomes part of a ProxyCommand.
         [[ $ticket =~ ^endpoint[a-z0-9]+$ ]] || fail "never came up"
-        dir=$state/$name
-        mkdir "$dir"
         # The pipe is authenticated to the runner's endpoint, so pinning the
         # host key it first shows is enough.
         cat >"$dir/ssh_config" <<EOF
@@ -282,6 +297,7 @@ let
         UserKnownHostsFile $dir/known_hosts
         StrictHostKeyChecking accept-new
       EOF
+        trap - EXIT
         echo "$name"
         ;;
       ssh)
@@ -295,8 +311,7 @@ let
         ;;
       down)
         vm "''${2-}"
-        gh run cancel "$id" -R "$repo" || true
-        rm -r "$dir"
+        stop || { echo "gha-vm: could not cancel run $id" >&2; exit 1; }
         ;;
       ls)
         # Machines whose run has ended are gone: forget them.
