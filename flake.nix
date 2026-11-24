@@ -66,7 +66,7 @@
     # Pinned to a release tag: main carries release candidates. Dependabot bumps
     # the tag in this URL like basic-memory's and egm's, and skips pre-releases.
     voxtype = {
-      url = "github:peteonrails/voxtype/v1.3.1";
+      url = "github:peteonrails/voxtype/v1.3.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Ryzen AI NPU stack (XRT + xdna plugin + FastFlowLM). Deliberately not
