@@ -42,12 +42,12 @@ git -C ~/REPO worktree add ~/.herdr/worktrees/REPO/BRANCH -b BRANCH origin/main
 When the user raises a task unrelated to the one you're on, don't take it up in this chat. Create its worktree as above, start a new agent there in a tab of its own, tell the user the tab's name, and carry on with your own task. A tangent of your current task stays with you.
 
 ```bash
-space=$(hc get "$HC_TERMINAL_ID" | jq -r '.labels."herdr.space"')
-hc run --bg --no-parent --name BRANCH --cwd ~/.herdr/worktrees/REPO/BRANCH \
-  --label herdr.space="$space" --label herdr.tab=BRANCH claude "TASK"
+space=$(hc get "$HC_TERMINAL_ID" | jq -r '.labels."herdr.space" // empty')
+hc run --bg --no-parent --name FOLDER --cwd ~/.herdr/worktrees/REPO/FOLDER \
+  --label herdr.space="$space" --label herdr.tab=FOLDER claude "TASK"
 ```
 
-The labels make the app and Ovis open it as a new tab in your space. If your terminal has no `herdr.space` label, take your nearest ancestor's (`hc get` shows its `.parent`). `--no-parent` makes it the user's agent, not your helper: it outlives you and doesn't report to you, so give it the task in the user's words.
+`FOLDER` is the worktree's folder name, in lowercase (hc names allow only `a-z 0-9 - _`). The labels make the app and Ovis open it as a new tab in your space. If `$space` comes out empty, your terminal has no `herdr.space` label: take your nearest ancestor's (`hc get` shows its `.parent`). `--no-parent` makes it the user's agent, not your helper: it outlives you and doesn't report to you, so give it the task in the user's words.
 
 Separate worktrees don't stop two agents from changing the same files. If the new task touches what you are changing, tell the user rather than both editing it; conflicts elsewhere are fine and get resolved when merging.
 
