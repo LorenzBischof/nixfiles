@@ -356,16 +356,23 @@ in
     ];
   };
 
-  # A runaway agent must not take the rest of the box (4 cores, 23G, no swap)
-  # down with it. On the whole slice rather than a unit, because hc creates its
-  # units at runtime.
+  # The agents are most of what this box (4 cores, 23G, no swap) is for, so
+  # they may use nearly all of it - but a runaway agent must not starve the
+  # services beside it (cook-server, galaxus-mcp, nginx, which together need
+  # about 1G). The memory ceiling leaves those ~3G; the low CPU and IO weights
+  # let agents use every core when the box is idle and make them yield the
+  # moment another service wants it. A cap at 6G once throttled the slice so
+  # hard that hc stopped answering with ~10 Claude sessions open, each with
+  # its own basic-memory MCP. On the whole slice rather than a unit, because
+  # hc creates its units at runtime.
   systemd.slices."user-${toString uid}" = {
     overrideStrategy = "asDropin";
     sliceConfig = {
-      MemoryHigh = "6G";
-      MemoryMax = "8G";
-      TasksMax = 1024;
-      CPUQuota = "300%";
+      MemoryHigh = "19G";
+      MemoryMax = "20G";
+      TasksMax = 4096;
+      CPUWeight = 20;
+      IOWeight = 20;
     };
   };
 
