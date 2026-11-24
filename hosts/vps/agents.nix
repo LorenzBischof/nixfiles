@@ -254,9 +254,8 @@ let
       up)
         mkdir -p "$state"
         [ -f "$key" ] || ssh-keygen -q -t ed25519 -N "" -C gha-vm -f "$key"
-        # The runner takes openssh and dumbpipe from our nixpkgs revision. Its
-        # dumbpipe can be older than ours (the overlay further down): both speak iroh
-        # 1.x, whose wire format stays compatible within 1.x.
+        # The runner builds openssh and dumbpipe from our nixpkgs revision, so
+        # both ends run the same dumbpipe.
         url=$(gh workflow run vm.yml -R "$repo" -f ssh_key="$(<"$key.pub")" -f minutes="''${2:-60}" \
           -f nixpkgs=${inputs.nixpkgs.rev} | grep -o "https://github.com/$repo/actions/runs/[0-9]*$") ||
           { echo "gha-vm: gh gave no run URL" >&2; exit 1; }
@@ -332,27 +331,10 @@ let
   };
 in
 {
-  # TODO: dumbpipe 0.39 logs to stdout, which on the `connect` side is the ssh
-  # stream: one error that iroh logs mid-connection corrupts it ("message
-  # authentication code incorrect") and gha-vm's connection dies. 0.40.1 logs to
-  # stderr (https://github.com/n0-computer/dumbpipe/pull/116). nixpkgs still has
-  # 0.39.0 as of 2026-11; nixpkgs-update has timed out on every attempt to bump
-  # it since at least 2026-02. Drop this once nixpkgs ships 0.40.1 or later.
+  # The runner builds the same file: see there.
   nixpkgs.overlays = [
     (_final: prev: {
-      dumbpipe = prev.dumbpipe.overrideAttrs (finalAttrs: _: {
-        version = "0.40.2";
-        src = prev.fetchFromGitHub {
-          owner = "n0-computer";
-          repo = "dumbpipe";
-          tag = "v${finalAttrs.version}";
-          hash = "sha256-/TEc0l2PpGgF17FQwpcSKhyLm3lsLY/9X8Ar7Jy3S9s=";
-        };
-        cargoDeps = prev.rustPlatform.fetchCargoVendor {
-          inherit (finalAttrs) src;
-          hash = "sha256-RXiYFMfH9SaTXf6MbwPJCl4JkGphfMUdUtOLyoZ1hNI=";
-        };
-      });
+      dumbpipe = prev.callPackage ../../packages/dumbpipe.nix { inherit (prev) dumbpipe; };
     })
   ];
 
