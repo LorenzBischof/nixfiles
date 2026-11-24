@@ -121,6 +121,8 @@ Start `security-reviewer` only when the change could affect security: where secr
 
 Read their findings files and fix what holds up. Review once. Fixes for their findings and other small follow-ups get no new review. A substantial rework or a new part (a file, a feature) gets one, and so does a fix that replaces logic rather than patching a line, scoped to the commits since the last review (`LAST_REVIEWED...HEAD`) rather than the whole diff. Then `hc kill ADDRESS; hc rm ADDRESS` for each.
 
+Right before pushing to an existing PR's branch or running `gh pr edit` on it, check `gh pr view N -R OWNER/REPO --json state`: the user may have merged or closed it since you last looked. If it is no longer `OPEN`, put the commits on a new branch from `origin/main` and open a new PR.
+
 ### After giving a compare link
 
 Don't stop at the link. From the clone, watch for the PR in the background; `pr-watch` waits up to 2 hours for the user to open it and for its checks to finish, then prints gh's check table once. Start it as a hidden pane beside yours, then wait for it:
