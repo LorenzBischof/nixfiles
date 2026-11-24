@@ -78,7 +78,13 @@ def main():
             except BlockingIOError:
                 return 0
             navigate(Desktop(), args.direction)
-    except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        RuntimeError,
+        subprocess.SubprocessError,
+    ) as error:
         print(f"sway-herdr-nav: {error}", file=sys.stderr)
         return 1
     return 0
