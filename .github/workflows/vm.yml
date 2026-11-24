@@ -30,11 +30,45 @@ jobs:
       # Also opens /dev/kvm, makes runner a trusted user, and so gives the
       # daemon the kvm system feature.
       - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
+      # TODO: the vps's dumbpipe, from packages/dumbpipe.nix (see there). Drop
+      # these steps with that file, and take dumbpipe from nixpkgs below again.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: packages/dumbpipe.nix
+          sparse-checkout-cone-mode: false
+      - name: Find dumbpipe
+        id: dumbpipe
+        env:
+          NIXPKGS: ${{ inputs.nixpkgs }}
+        run: |
+          # It goes into a Nix expression and into $GITHUB_OUTPUT.
+          [[ $NIXPKGS =~ ^[0-9a-f]{40}$ ]]
+          expr="(builtins.getFlake \"github:NixOS/nixpkgs/$NIXPKGS\").legacyPackages.x86_64-linux.callPackage ./packages/dumbpipe.nix { }"
+          echo "expr=$expr" >>"$GITHUB_OUTPUT"
+          echo "out=$(nix eval --impure --raw --expr "$expr")" >>"$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: cache
+        with:
+          path: ~/dumbpipe-cache
+          key: ${{ steps.dumbpipe.outputs.out }}
+      - name: Build dumbpipe
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          EXPR: ${{ steps.dumbpipe.outputs.expr }}
+        run: |
+          nix copy --impure --to "file://$HOME/dumbpipe-cache" --expr "$EXPR"
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/dumbpipe-cache
+          key: ${{ steps.dumbpipe.outputs.out }}
       - name: Serve
         env:
           SSH_KEY: ${{ inputs.ssh_key }}
           MINUTES: ${{ inputs.minutes }}
           NIXPKGS: ${{ inputs.nixpkgs }}
+          DUMBPIPE: ${{ steps.dumbpipe.outputs.out }}
           GH_TOKEN: ${{ github.token }}
         run: |
           dir=$RUNNER_TEMP/vm
@@ -48,7 +82,10 @@ jobs:
           PidFile none
           SetEnv PATH=/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin
           EOF
-          nix profile add "github:NixOS/nixpkgs/$NIXPKGS#openssh" "github:NixOS/nixpkgs/$NIXPKGS#dumbpipe"
+          # Unsigned: this trusts whatever can write this repository's Actions
+          # cache, a gha-vm runner included, not only the step above.
+          nix copy --no-check-sigs --from "file://$HOME/dumbpipe-cache" "$DUMBPIPE"
+          nix profile add "github:NixOS/nixpkgs/$NIXPKGS#openssh" "$DUMBPIPE"
           # Unprivileged, so it can only log in as runner, and without the token.
           env -u GH_TOKEN "$(command -v sshd)" -f "$dir/sshd_config" -E "$dir/sshd.log"
           # Whoever holds this secret can pose as the runner: keep it out of the log.
