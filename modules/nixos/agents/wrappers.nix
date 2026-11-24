@@ -185,8 +185,7 @@ in
     ];
     text = ''
       ${pathPrefix}
-      # Signing in goes where it was asked to; anything else runs on the
-      # account claude-account picks.
+      # Signing in stays where it was asked; anything else gets an account.
       case "''${1:-}" in
         auth | setup-token) ;;
         *) dir=$(${lib.getExe claudeAccount}) && [ -n "$dir" ] && export CLAUDE_CONFIG_DIR="$dir" ;;

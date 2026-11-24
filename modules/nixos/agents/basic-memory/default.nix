@@ -59,17 +59,15 @@ let
   # active exactly as long as the run. The hc terminal and the tab id are the
   # date. The last three runs stay open; older ones are closed before a new one.
   #
-  # Exits 75 (EX_TEMPFAIL) without running when the account the run would get
-  # has less than 10% left of its 5h or weekly window, which the unit below
-  # retries hourly. Only this scheduled run waits. If the usage isn't known,
-  # the run goes ahead.
+  # Exits 75 (EX_TEMPFAIL) without running when the account it would get has
+  # less than 10% left of its 5h or weekly window, which the unit below
+  # retries hourly. If the usage is unknown, the run goes ahead.
   #
   # It starts in an empty folder of its own, not the notes folder, where a note
   # named CLAUDE.md would become instructions; Herdr names the space after it.
-  # That folder has to be trusted for Claude once on each account (start
+  # That folder has to be trusted once per account (start
   # `CLAUDE_CONFIG_DIR=~/.claude-NAME claude` there and accept): hc doesn't
-  # type the task in while the trust dialog shows, and trust is kept in each
-  # account's own .claude.json.
+  # type the task in while the trust dialog shows.
   reflectDir = "~/.local/state/memory-reflect";
   memoryReflect = pkgs.writeShellApplication {
     name = "memory-reflect";
