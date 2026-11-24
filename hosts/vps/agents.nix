@@ -344,8 +344,6 @@ in
     # The user manager, and so ovis and every terminal, start at boot and
     # outlive every SSH session. hc would enable this itself if it were off.
     linger = true;
-    # May connect to the MCP servers' loopback ports - see mcp.nix.
-    extraGroups = [ "mcp" ];
     # For `hc attach`.
     openssh.authorizedKeys.keys = config.users.users.lbischof.openssh.authorizedKeys.keys ++ [
       # The Herdr phone app, which reaches hc over SSH (`hc connect`).
@@ -491,5 +489,5 @@ in
 
   my.homelab.ports = [ port ];
   # ovis: nginx only.
-  my.homelab.loopbackClients.${toString port} = "nginx-only";
+  my.homelab.loopbackClients.${toString port}.users = [ config.services.nginx.user ];
 }

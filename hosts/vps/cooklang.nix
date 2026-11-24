@@ -267,11 +267,20 @@ in
     uiPort
   ];
   my.homelab.loopbackClients = {
-    ${toString mcpPort} = "mcp";
+    # The same clients as every MCP server here - see mcp.nix.
+    ${toString mcpPort} = {
+      users = [
+        "agent"
+        config.services.nginx.user
+      ];
+      groups = [ "mcp" ];
+    };
     # cook-server has no auth of its own: only nginx (the browser UI) and the
     # MCP server may connect to it.
-    ${toString uiPort} = "cook";
+    ${toString uiPort} = {
+      users = [ config.services.nginx.user ];
+      groups = [ "cook" ];
+    };
   };
   users.groups.cook = { };
-  users.users.${config.services.nginx.user}.extraGroups = [ "cook" ];
 }

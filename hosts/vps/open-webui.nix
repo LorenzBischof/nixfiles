@@ -85,19 +85,14 @@ in
   # The trusted header is only as trustworthy as whoever can reach the port, and
   # every process here can reach loopback - the agents included. So only nginx,
   # which only ever sends a login tailscaled vouched for, may connect to it.
-  my.homelab.loopbackClients.${toString port} = "nginx-only";
-  # Only nginx is in it: the nginx group itself also holds acme and alloy.
-  users.groups.nginx-only = { };
+  my.homelab.loopbackClients.${toString port}.users = [ config.services.nginx.user ];
 
   # The helper only, not `services.nginx.tailscaleAuth`: that one puts its
   # subrequest at `/auth`, which is a page of Open WebUI's own, so reloading it
   # would 404. It refuses tagged devices - this host is `tag:server`, so the
   # agents here cannot sign in as anyone by going through nginx either.
   services.tailscaleAuth.enable = true;
-  users.users.${config.services.nginx.user}.extraGroups = [
-    config.services.tailscaleAuth.group
-    "nginx-only"
-  ];
+  users.users.${config.services.nginx.user}.extraGroups = [ config.services.tailscaleAuth.group ];
 
   # Tailnet only: no listen address of its own.
   services.nginx.virtualHosts.${chatDomain} = {

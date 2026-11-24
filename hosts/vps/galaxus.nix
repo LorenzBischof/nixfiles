@@ -129,5 +129,12 @@ in
   };
 
   my.homelab.ports = [ mcpPort ];
-  my.homelab.loopbackClients.${toString mcpPort} = "mcp";
+  # The same clients as every MCP server here - see mcp.nix.
+  my.homelab.loopbackClients.${toString mcpPort} = {
+    users = [
+      "agent"
+      config.services.nginx.user
+    ];
+    groups = [ "mcp" ];
+  };
 }
