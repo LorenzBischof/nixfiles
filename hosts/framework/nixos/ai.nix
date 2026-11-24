@@ -142,6 +142,17 @@ in
   # https://github.com/NixOS/nixpkgs/issues/441531
   systemd.services.llama-cpp.environment.XDG_CACHE_HOME = "/var/cache/llama-cpp";
 
+  # TODO: fastflowlm 1.0.13's versionCheckHook fails on our CI runners: `flm
+  # --version` and `flm --help` print nothing there, though upstream's cachix
+  # holds a passing build of the identical derivation. No upstream issue as of
+  # 2026-11. On the next fastflowlm bump, remove this and keep it out if CI
+  # builds framework.
+  nixpkgs.overlays = [
+    (_: prev: {
+      fastflowlm = prev.fastflowlm.overrideAttrs { dontVersionCheck = true; };
+    })
+  ];
+
   # Ryzen AI NPU (XDNA2). The module loads amdxdna, installs XRT + FastFlowLM
   # and grants /dev/accel + unlimited memlock to @video/@render. llama-cpp above
   # keeps the iGPU: the NPU decodes at roughly iGPU speed while drawing a
