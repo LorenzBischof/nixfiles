@@ -102,9 +102,9 @@ Have a screenshotter capture them:
 hc-run-hidden --name screenshotter screenshotter "Capture CHANGE from BRANCH in REPO_PATH. WHERE_IT_SHOWS. Report with hc send $HC_TERMINAL_ID."   # note the address it prints, e.g. t7
 ```
 
-The name is for showing only. A finished terminal's name can pass to a new one, so send, wait for, read and remove helpers by the address `hc-run-hidden` prints. If a name is still taken, add a suffix, e.g. `screenshotter-2`.
+The name is for showing only. A finished terminal's name can pass to a new one, so send, wait for, read and remove helpers by the address `hc-run-hidden` prints. Once you have read a helper's report, `hc kill ADDRESS; hc rm ADDRESS`: an idle one still holds its memory. If a name is still taken, add a suffix, e.g. `screenshotter-2`.
 
-It checks the images for anything private itself, pushes them to `media/BRANCH` on the fork (never the PR branch) and reports links for the PR body. Once it has reported, `hc kill ADDRESS; hc rm ADDRESS`. Keep the `media/` branch: deleting it breaks the images once GitHub garbage-collects the commit. Recapture only when what the images show has changed. When you hand over a compare link, capture first and put the image links in its `body`; once the user opens the PR you can't add them.
+It pushes the images to `media/BRANCH` on the fork, so fork the repo before starting it, and reports links for the PR body. Keep the `media/` branch: deleting it breaks the images once GitHub garbage-collects the commit. Recapture only when what the images show has changed. When you hand over a compare link, capture first and put the image links in its `body`; once the user opens the PR you can't add them.
 
 ### Before pushing for a PR
 
@@ -119,7 +119,7 @@ hc wait --children all
 
 Start `security-reviewer` only when the change could affect security: where secrets go, who can access what, how untrusted input is handled, or what code is trusted.
 
-Read their findings files, then `hc kill ADDRESS; hc rm ADDRESS` for each before fixing anything: an idle reviewer still holds its memory. Fix what holds up. Review once. Fixes for their findings and other small follow-ups get no new review. A substantial rework or a new part (a file, a feature) gets one, and so does a fix that replaces logic rather than patching a line, scoped to the commits since the last review (`LAST_REVIEWED...HEAD`) rather than the whole diff.
+Read their findings files and remove each reviewer before fixing anything. Fix what holds up. Review once. Fixes for their findings and other small follow-ups get no new review. A substantial rework or a new part (a file, a feature) gets one, and so does a fix that replaces logic rather than patching a line, scoped to the commits since the last review (`LAST_REVIEWED...HEAD`) rather than the whole diff.
 
 Right before pushing to an existing PR's branch or running `gh pr edit` on it, check `gh pr view N -R OWNER/REPO --json state`: the user may have merged or closed it since you last looked. If it is no longer `OPEN`, put the commits on a new branch from `origin/main` and open a new PR.
 
