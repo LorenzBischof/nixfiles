@@ -197,9 +197,8 @@ in
       case "''${1:-}" in
         auth | setup-token) ;;
         *)
-          if [ -z "''${CLAUDE_CONFIG_DIR:-}" ]; then
-            dir=$(${lib.getExe claudeAccount} pick 2>/dev/null) || dir=""
-            [ -z "$dir" ] || export CLAUDE_CONFIG_DIR="$dir"
+          if [ -z "''${CLAUDE_CONFIG_DIR:-}" ] && dir=$(${lib.getExe claudeAccount} pick) && [ -n "$dir" ]; then
+            export CLAUDE_CONFIG_DIR="$dir"
           fi
           ;;
       esac

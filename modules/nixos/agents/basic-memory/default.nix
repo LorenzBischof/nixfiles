@@ -67,8 +67,10 @@ let
   #
   # It starts in an empty folder of its own, not the notes folder, where a note
   # named CLAUDE.md would become instructions; Herdr names the space after it.
-  # That folder has to be trusted for Claude once (start `claude` there and
-  # accept): hc doesn't type the task in while the trust dialog shows.
+  # That folder has to be trusted for Claude once on each account (start
+  # `CLAUDE_CONFIG_DIR=~/.claude-NAME claude` there and accept): hc doesn't
+  # type the task in while the trust dialog shows, and trust is kept in each
+  # account's own .claude.json.
   reflectDir = "~/.local/state/memory-reflect";
   memoryReflect = pkgs.writeShellApplication {
     name = "memory-reflect";
@@ -78,7 +80,7 @@ let
     ];
     text = ''
       if usage="$(${lib.getExe agents.wrappers.claude-account} usage)"; then
-        reset="$(jq -r '.[0].usage // {} | [.five_hour, .seven_day | select(.utilization > 90) | .resets_at] | max // empty' <<<"$usage")"
+        reset="$(jq -r '.[0].usage | [.five_hour, .seven_day | select(.utilization > 90) | .resets_at] | max // empty' <<<"$usage")"
         if [ -n "$reset" ]; then
           echo "Less than 10% usage left until $reset"
           exit 75

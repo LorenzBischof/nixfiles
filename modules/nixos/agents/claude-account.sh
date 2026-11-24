@@ -1,23 +1,35 @@
 # Chooses the Claude Code account a new session runs on, and keeps every
 # account's folder sharing one state with the others.
 #
-#   claude-account pick       prints the config folder to run in, or nothing
-#   claude-account usage      prints every account with its usage and rank, as JSON
-#   claude-account link DIR   links DIR's shared entries to ~/.claude
+#   claude-account pick       prints the config folder to run in; reads only
+#                             the cache, so it never waits, and refreshes the
+#                             cache in the background when it is stale
+#   claude-account usage      refreshes the cache and prints every account with
+#                             its usage, best first, as JSON
+#   claude-account link DIR   links DIR's shared folders to ~/.claude
 #
-# An account is a ~/.claude-*/ folder holding a .credentials.json. ~/.claude
-# holds no sign-in: sessions, memory, plugins and the rest live there once, and
-# each account folder links to them, so a session resumes and remembers the
-# same on any account. Only the sign-in and what Claude Code refuses to read
-# through a link stay per account (see `own` below).
+# An account is any ~/.claude-*/ folder holding a .credentials.json, so a
+# sign-in made through Ovis (which creates one) is used without a change here.
+# Trusting whatever turns up in ~ costs nothing today: whatever can create such
+# a folder can as well rewrite a listed account's sign-in, or ~/.claude's hooks
+# and skills. Should the bwrap wrappers ever keep sessions out of the account
+# folders while ~/.claude stays writable, list the accounts in Nix instead and
+# keep their sign-ins out of the sandbox's reach. ~/.claude holds no
+# sign-in: sessions, memory, plugins and the rest live there once, and every
+# account folder links to them, so a session resumes and remembers the same
+# on any account. Other files stay per account, among them the sign-in (.credentials.json, and
+# .claude.json, which names its account and the folders it trusts),
+# history.jsonl, which Claude Code refuses to read through a link (2.1.331),
+# and settings.json, which the wrapper rewrites at every launch.
 
 set -euo pipefail
-shopt -s nullglob
+shopt -s nullglob dotglob
 
 shared=$HOME/.claude
 cache=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/claude-account
+fresh=300
 
-accounts() {
+dirs() {
   local dir
   for dir in "$HOME"/.claude-*/; do
     [ -f "$dir.credentials.json" ] && echo "${dir%/}"
@@ -25,84 +37,95 @@ accounts() {
   return 0
 }
 
-# One account's answer from api/oauth/usage, or null when there is none: no
-# token, an expired one, or a failed request. Read only: the token is never
-# refreshed here, since Claude Code rotates refresh tokens and a refresh it
-# did not make signs it out. An expired token is refreshed by the next session
-# on that account. Answers are kept 5 minutes, failures 1, and parallel
-# launches wait for one request rather than each making their own.
-usage_of() {
-  local dir=$1 file lock age token body ok
+# Asks api/oauth/usage for one account and caches the answer, or null when
+# there is none: no token, an expired one, or a failed request. Read only: the
+# token is never refreshed here, since Claude Code rotates refresh tokens and
+# a refresh it did not make signs it out; the next session on that account
+# refreshes it.
+fetch() {
+  local dir=$1 file token body=null
   file=$cache/${dir##*/}.json
-  mkdir -p "$cache" && chmod 700 "$cache"
-  exec {lock}>"$file.lock"
-  flock "$lock"
-  if [ -f "$file" ]; then
-    age=$(($(date +%s) - $(stat -c %Y "$file")))
-    if [ "$age" -lt "$(jq -r 'if .usage == null then 60 else 300 end' "$file" 2>/dev/null || echo 0)" ]; then
-      jq -c .usage "$file"
-      exec {lock}>&-
-      return
-    fi
-  fi
-  body=null
   token=$(jq -r '.claudeAiOauth | select((.expiresAt // 0) > now * 1000) | .accessToken // empty' \
-    "$dir/.credentials.json" 2>/dev/null || true)
+    "$dir/.credentials.json" 2>/dev/null) || token=""
   if [ -n "$token" ]; then
     # The header goes in on stdin, so the token is never in an argument list.
-    if ok=$(curl -fsS -m 5 -H @- -H 'anthropic-beta: oauth-2025-04-20' -H 'accept: application/json' \
-      https://api.anthropic.com/api/oauth/usage <<<"Authorization: Bearer $token" 2>/dev/null) &&
-      jq -e 'type == "object"' >/dev/null 2>&1 <<<"$ok"; then
-      body=$ok
-    fi
+    body=$(curl -fsS -m 5 -H @- -H 'anthropic-beta: oauth-2025-04-20' -H 'accept: application/json' \
+      https://api.anthropic.com/api/oauth/usage <<<"Authorization: Bearer $token" 2>/dev/null |
+      jq -ce objects) || body=null
   fi
-  jq -n -c --argjson usage "$body" '{usage: $usage}' >"$file.tmp"
-  mv -f "$file.tmp" "$file"
-  jq -c . <<<"$body"
-  exec {lock}>&-
+  echo "$body" >"$file.tmp.$$"
+  mv -f "$file.tmp.$$" "$file"
 }
 
-# Ranks the accounts, best first. An account whose 5-hour or weekly window is
-# used up goes last, the one that frees up first ahead of the others. The rest
-# are ranked by what is left of their week per hour until it resets, so usage
-# that would otherwise lapse unused at the reset goes first. An account
-# without an answer counts as a fresh week: plenty left, no hurry.
-usage() {
-  local dir
-  for dir in $(accounts); do
-    jq -n -c --arg dir "$dir" --argjson usage "$(usage_of "$dir")" '{dir: $dir, usage: $usage}'
+# Fetches every account whose answer is older than $fresh, all at once. One
+# refresh at a time: in the background a refresh already running is left to
+# finish; with \`wait\` it is waited for, up to 20 seconds.
+refresh() {
+  local dir file lock
+  install -d -m 700 "$cache"
+  exec {lock}>"$cache/lock"
+  if [ "${1:-}" = wait ]; then
+    flock -w 20 "$lock" || return 0
+  else
+    flock -n "$lock" || return 0
+  fi
+  for dir in $(dirs); do
+    file=$cache/${dir##*/}.json
+    if [ ! -f "$file" ] || [ $(($(date +%s) - $(stat -c %Y "$file"))) -ge "$fresh" ]; then
+      fetch "$dir" &
+    fi
+  done
+  wait
+}
+
+stale() {
+  local dir file
+  for dir in $(dirs); do
+    file=$cache/${dir##*/}.json
+    if [ ! -f "$file" ] || [ $(($(date +%s) - $(stat -c %Y "$file"))) -ge "$fresh" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Ranks the accounts from the cache, best first. An account with a used-up
+# window (5-hour, weekly, or a model's weekly) goes last, the one that frees up
+# first ahead of the others. The rest are ranked by what is left of their week
+# per hour until it resets, so usage that would otherwise lapse unused at the
+# reset goes first. An account without an answer goes after those with one:
+# it may be signed out.
+ranked() {
+  local dir file
+  for dir in $(dirs); do
+    file=$cache/${dir##*/}.json
+    jq -n -c --arg dir "$dir" '{dir: $dir, usage: ((try input catch null) // null)}' "$file" 2>/dev/null ||
+      jq -n -c --arg dir "$dir" '{dir: $dir, usage: null}'
   done | jq -s '
-    def ts: if type == "string" then sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601 else null end;
+    def ts: try (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601) catch null;
     now as $now
     | map(
         (.usage // {}) as $u
-        | ([$u.five_hour, $u.seven_day] | map(select((.utilization // 0) >= 100) | (.resets_at | ts) // $now)) as $full
-        | ((($u.seven_day.resets_at | ts) // ($now + 7 * 86400)) - $now) / 3600 as $hours
+        | ([$u.five_hour, $u.seven_day, $u.seven_day_opus, $u.seven_day_sonnet]
+            | map(select((.utilization // 0) >= 100) | (.resets_at | ts) // ($now + 3600))) as $full
+        | (((($u.seven_day.resets_at | ts) // ($now + 7 * 86400)) - $now) / 3600) as $hours
         | . + {
             score: ((100 - ($u.seven_day.utilization // 0)) / ([$hours, 1] | max)),
             full_until: (if $full == [] then null else ($full | max) end)
           })
-    | sort_by([.full_until != null, .full_until // 0, -.score])'
+    | sort_by([.full_until != null, .full_until // 0, .usage == null, -.score])'
 }
 
-# Kept per account: the sign-in (.credentials.json, and .claude.json, which
-# names the account it belongs to), history.jsonl, which Claude Code refuses
-# to read or write through a link (2.1.331), settings.json, which the wrapper
-# replaces with a file at every launch, and backups of .claude.json.
-own() {
-  case $1 in
-    .credentials.json | .claude.json | history.jsonl | settings.json | backups | \
-      stats-cache.json | mcp-needs-auth-cache.json | daemon*) return 0 ;;
-  esac
-  return 1
-}
-
+# Links the folders, and CLAUDE.md, which home-manager writes and Claude Code
+# only reads. Other files are left per account: one Claude Code replaces by a
+# rename would turn its link back into a file.
 link() {
-  local dir=$1 src name dst apart=()
-  mkdir -p "$shared"
-  for src in "$shared"/* "$shared"/.[!.]*; do
+  local dir=$1 src name dst apart=() warned
+  for src in "$shared"/*/ "$shared"/CLAUDE.md; do
+    src=${src%/}
+    [ -e "$src" ] || continue
     name=${src##*/}
-    own "$name" && continue
+    [ "$name" = backups ] && continue
     dst=$dir/$name
     if [ -L "$dst" ]; then
       continue
@@ -113,15 +136,26 @@ link() {
     fi
   done
   # Something the account made before ~/.claude had it stays the account's
-  # own until it is moved into ~/.claude by hand.
-  if [ ${#apart[@]} -gt 0 ]; then
+  # own until it is moved into ~/.claude by hand. Said once per boot.
+  warned=$cache/${dir##*/}.warned
+  if [ ${#apart[@]} -gt 0 ] && [ ! -e "$warned" ] && install -d -m 700 "$cache"; then
     echo "claude-account: not shared with $shared, as $dir has its own: ${apart[*]}" >&2
+    touch "$warned"
   fi
 }
 
 case ${1:-} in
-  pick) usage | jq -r '.[0].dir // empty' ;;
-  usage) usage ;;
+  pick)
+    if stale; then
+      setsid "$0" refresh </dev/null >/dev/null 2>&1 &
+    fi
+    ranked | jq -r '.[0].dir // empty' || dirs | head -n 1
+    ;;
+  refresh) refresh ;;
+  usage)
+    refresh wait
+    ranked
+    ;;
   link) link "${2:?usage: claude-account link DIR}" ;;
   *)
     echo "usage: claude-account pick | usage | link DIR" >&2
