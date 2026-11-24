@@ -489,6 +489,13 @@ in
     # Removes the link left from when bug-reviewer was called reviewer; drop
     # once the vps has switched past this.
     "r /home/${user}/.config/herdr-core/templates/reviewer.md"
+    # Removes the SessionStart hook standalone herdr 0.9.5 installed by hand
+    # (dead under herdr-core, which never sets HERDR_ENV), and its folder if
+    # nothing else is in it. Its settings.json entry was removed by hand, as
+    # owning `hooks` here would wipe hooks added later. Drop once the vps has
+    # switched past this.
+    "r /home/${user}/.claude/hooks/herdr-agent-state.sh"
+    "r /home/${user}/.claude/hooks"
     "L+ /home/${user}/.config/herdr-core/templates/bug-reviewer.md - - - - ${./hc-templates/bug-reviewer.md}"
     "L+ /home/${user}/.config/herdr-core/templates/simplifier.md - - - - ${./hc-templates/simplifier.md}"
     "L+ /home/${user}/.config/herdr-core/templates/screenshotter.md - - - - ${./hc-templates/screenshotter.md}"
