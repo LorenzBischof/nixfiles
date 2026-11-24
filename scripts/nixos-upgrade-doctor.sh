@@ -83,7 +83,7 @@ fi
 
 # Content on main under a new hash (amend, rebase, squash merge): every file the
 # deployed commit changed since it forked from main reads the same on main.
-git fetch -q origin main 2>/dev/null ||
+git fetch -q origin +refs/heads/main:refs/remotes/origin/main 2>/dev/null ||
   report "$head" "couldn't fetch origin/main, so comparing against it could give wrong advice." \
          "restore access to the remote and re-run."
 git merge-base --is-ancestor "$rev" origin/main &&
