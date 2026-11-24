@@ -10,9 +10,13 @@ on:
 # Jobs that write declare their own permissions block, which replaces this one.
 permissions:
   contents: read
+# Cancel a superseded PR build, but let a main build finish: only a
+# completed run fills the S3 and GitHub Actions caches that later runs and
+# PRs substitute from. Queued main runs still replace each other, so only
+# the newest one waits.
 concurrency:
   group: ${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
     runs-on: ${{ matrix.target == 'vps' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
