@@ -79,8 +79,7 @@ let
     ];
     text = ''
       if dir="$(${lib.getExe agents.wrappers.claude-account})" &&
-        reset="$(jq -r '[.five_hour, .seven_day | select(.used_percentage > 90 and .resets_at > now) | .resets_at] | max // empty | todate' "$dir/rate-limits.json" 2>/dev/null)" &&
-        [ -n "$reset" ]; then
+        reset="$(jq -er '[.five_hour, .seven_day | select(.used_percentage > 90 and .resets_at > now) | .resets_at] | max // empty | todate' "$dir/rate-limits.json" 2>/dev/null)"; then
         echo "Less than 10% usage left until $reset"
         exit 75
       fi

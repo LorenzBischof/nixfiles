@@ -27,7 +27,7 @@ if [ -z "$dir" ]; then
     for d in "$HOME"/.claude-*/; do
       [ -f "$d.credentials.json" ] || continue
       jq -c --arg dir "${d%/}" '{dir: $dir, limits: .}' "$d/rate-limits.json" 2>/dev/null ||
-        jq -nc --arg dir "${d%/}" '{dir: $dir, limits: {}}'
+        jq -nc --arg dir "${d%/}" '{dir: $dir}'
     done | jq -rs '
       def hours($w): if ($w.resets_at // 0) > now then ($w.resets_at - now) / 3600 else null end;
       def left($w): if hours($w) then 100 - ($w.used_percentage // 0) else 100 end;
@@ -35,16 +35,16 @@ if [ -z "$dir" ]; then
         full: (left($l.five_hour) <= 0 or left($l.seven_day) <= 0),
         score: (left($l.seven_day) / ([hours($l.seven_day) // 168, 1] | max))
       })
-      | sort_by([.full, -.score]) | .[0].dir // empty'
+      | sort_by(.full, -.score) | .[0].dir // empty'
   )
 fi
 
 case $dir in
   "$HOME"/.claude-*)
     for src in "$HOME"/.claude/*/ "$HOME/.claude/CLAUDE.md"; do
-      src=${src%/}
-      case ${src##*/} in backups | cache) continue ;; esac
-      [ -e "$dir/${src##*/}" ] || [ -L "$dir/${src##*/}" ] || ln -s "$src" "$dir/${src##*/}"
+      src=${src%/} name=${src##*/}
+      case $name in backups | cache) continue ;; esac
+      [ -e "$dir/$name" ] || [ -L "$dir/$name" ] || ln -s "$src" "$dir/$name"
     done
     ;;
 esac
