@@ -1,6 +1,5 @@
 {
   config,
-  lib,
   ...
 }:
 let
@@ -12,15 +11,18 @@ let
   alloyPort = 12345;
 in
 {
-  # One pair of names for every MCP server here: each service file adds its own
-  # `locations."= /<name>"` to both, so a new server needs no DNS record, cert
-  # change or nginx block. Auth is a property of the name, not the server - the
-  # servers bind loopback with no auth of their own, so the public name carries
-  # the token check and the tailnet name needs none.
-  #
-  # `listenAddresses` is a list and would concatenate into duplicate `listen`
-  # directives, so the vhosts are opened once here and left otherwise empty.
+  # The MCP servers here bind loopback with no auth of their own, and only
+  # members of this group may connect to their ports (loopbackClients): the
+  # agents, Open WebUI, and nginx for claude.ai's public name below.
+  users.groups.mcp = { };
+  users.users.${config.services.nginx.user}.extraGroups = [ "mcp" ];
 
+  # claude.ai's name for every MCP server here: each service file adds its own
+  # `locations."= /<name>"`, so a new server needs no DNS record, cert change
+  # or nginx block. It carries the token check the servers don't have.
+  # `listenAddresses` is a list and would concatenate into duplicate `listen`
+  # directives, so the vhost is opened once here and left otherwise empty.
+  #
   # The only name needing an explicit A record - `*.<domain>` points at the
   # tailnet address instead.
   services.nginx.virtualHosts."mcp.${domain}" = {
@@ -42,8 +44,6 @@ in
       limit_req_status 429;
       auth_request /_mcp_auth;
 
-      # In extraConfig, not `locations`: the tailnet vhost copies `locations`
-      # wholesale and has no auth_request to call this one.
       location = /_mcp_auth {
         internal;
         if ($mcpAuthorized = 0) {
@@ -105,19 +105,6 @@ in
 
   # A rekey does not change nginx's unit text, so nothing would reload it.
   systemd.services.nginx.restartTriggers = [ config.age.secrets.mcp-nginx-auth.file ];
-
-  # The same servers for agents on the tailnet. No listen address of its own, so
-  # it answers only on the tailnet address from configuration.nix - that address
-  # is the entire access control, hence no allow/deny and no token.
-  services.nginx.virtualHosts."mcp-tnet.${domain}" = {
-    forceSSL = true;
-    useACMEHost = domain;
-    # Copied wholesale, so a service file states its path and port once.
-    # `_module` is submodule bookkeeping, not an option to set again.
-    locations = lib.mapAttrs (
-      _: location: removeAttrs location [ "_module" ]
-    ) config.services.nginx.virtualHosts."mcp.${domain}".locations;
-  };
 
   # A rejected token is otherwise silent - the MCP servers never see the request.
   # Alloy tails the log into counters the nas scrapes, no Loki involved. Here

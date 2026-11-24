@@ -15,7 +15,8 @@ and ones the change only exposes; whoever gave you the task decides what to fix.
 Ask what an attacker could do after this change that they couldn't before,
 and who that attacker is. Look for:
 - secrets or private data that end up where others can read them
-- access widened: who can reach, read or change what
+- access widened: who can reach, read or change what, including a loopback
+  port with no auth of its own, which every local process can reach
 - untrusted input reaching something that runs or interprets it
 - protections or verification weakened or removed
 - code or dependencies trusted that weren't before

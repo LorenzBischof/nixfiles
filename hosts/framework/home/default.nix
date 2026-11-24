@@ -321,13 +321,10 @@ in
     if [[ -r /run/agenix/github-token ]]; then
       export GH_TOKEN=$(grep -oP '(?<=github\.com=)\S+' /run/agenix/github-token)
     fi
-    # The tailnet-only name for the MCP servers on vps, which .mcp.json reads.
-    # Exported rather than written into .mcp.json because that file is checked
-    # into a public repo and the domain is a nix-secrets value. No token: the
-    # bearer check is on the public name only, and that name is not this one.
-    export MCP_BASE_URL=https://mcp-tnet.${secrets.vps-domain}
-    # Home Assistant's mcp_server, for .mcp.json. It authenticates with a
-    # long-lived access token of its own, unlike the vps servers above.
+    # Home Assistant's mcp_server, for .mcp.json. Exported rather than written
+    # into .mcp.json because that file is checked into a public repo and the
+    # domain is a nix-secrets value. It authenticates with a long-lived access
+    # token.
     export HA_MCP_URL=https://homeassistant.${secrets.prod-domain}/api/mcp
     if [[ -r /run/agenix/homeassistant-mcp-token ]]; then
       export HA_MCP_TOKEN=$(</run/agenix/homeassistant-mcp-token)

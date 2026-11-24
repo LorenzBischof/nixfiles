@@ -67,10 +67,8 @@ in
     };
   };
 
-  # Registered under the public MCP name only; mcp.nix serves the same set of
-  # locations again under the tailnet name, so this is the single place the
-  # server's path and port are stated. An exact match, so widening the vhost
-  # later cannot publish anything else; because `proxyPass` carries a URI, nginx
+  # claude.ai's public MCP name - see mcp.nix. An exact match, so widening the
+  # vhost later cannot publish anything else; because `proxyPass` carries a URI, nginx
   # replaces the matched path with the `/mcp` this server actually serves.
   services.nginx.virtualHosts."mcp.${domain}".locations."= /galaxus" = {
     proxyPass = "http://127.0.0.1:${toString mcpPort}/mcp";
@@ -131,4 +129,5 @@ in
   };
 
   my.homelab.ports = [ mcpPort ];
+  my.homelab.loopbackClients.${toString mcpPort} = "mcp";
 }
