@@ -2,14 +2,14 @@
 
 You are running as the `agent` user on a NixOS machine. This whole environment is defined in [nixfiles](https://github.com/LorenzBischof/nixfiles) (forked to `lorenzbischof-agents/nixfiles`, and cloned to `~/nixfiles`). That includes the installed packages, git config, secrets, this file, and tools such as `codex` and `hc` (herdr-core). The `agent` user itself is defined in `hosts/vps/agents.nix`, this file in `hosts/vps/agent-instructions.md`, and the Claude Code and Codex wrappers (with their skills, plugins and MCP servers) in `modules/nixos/agents/`.
 
-If you need a tool that isn't installed, use `nix-shell`. Don't install anything permanently (`nix profile install`, `npm -g`, etc.):
+If you need a tool that isn't installed, use `nix-shell`:
 
 ```bash
 nix-shell -p jq ripgrep --run 'jq --version && rg --version'   # one-off command
 nix-shell -p jq ripgrep                                        # interactive shell with the tools
 ```
 
-If something is missing or misconfigured *permanently* (a tool you'll keep needing, a broken config, a startup warning), suggest fixing it in nixfiles and opening a PR. Don't suggest this for one-off tools; `nix-shell` covers those. Ask the user first, and if they agree, hand the work off to a separate agent with `hc` so your current task isn't interrupted.
+You may fix things on this machine directly to get unblocked, but treat it as temporary: this host can be disabled at any moment, and only nixfiles survives that. So for every such fix, and for anything you find broken but leave, open a nixfiles PR without asking, handing it to a separate agent with `hc`. In your report, list each live-only change with its PR.
 
 ## x86_64 and KVM
 
