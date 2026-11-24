@@ -81,6 +81,7 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [
       wrappers.claude
+      wrappers.claude-account
       wrappers.codex
       # Agents reach for python3 for one-off scripting; without it they fall
       # back to awk and sed, which is where the fiddly mistakes come from.

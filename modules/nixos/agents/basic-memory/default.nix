@@ -59,9 +59,11 @@ let
   # active exactly as long as the run. The hc terminal and the tab id are the
   # date. The last three runs stay open; older ones are closed before a new one.
   #
-  # Exits 75 (EX_TEMPFAIL) without running when the 5h or weekly window has
-  # less than 10% left, which the unit below retries hourly. If the usage
-  # can't be read, the run goes ahead.
+  # Exits 75 (EX_TEMPFAIL) without running when the 5h or weekly window of
+  # the account the run would get (claude-account's first) has less than 10%
+  # left, which the unit below retries hourly. Only this scheduled run waits;
+  # a session started by hand or by an agent always gets an account. If the
+  # usage can't be read, the run goes ahead.
   #
   # It starts in an empty folder of its own, not the notes folder, where a note
   # named CLAUDE.md would become instructions; Herdr names the space after it.
@@ -71,15 +73,12 @@ let
   memoryReflect = pkgs.writeShellApplication {
     name = "memory-reflect";
     runtimeInputs = [
-      pkgs.curl
       pkgs.jq
       llmAgents.herdr-core
     ];
     text = ''
-      if token="$(jq -r .claudeAiOauth.accessToken ~/.claude/.credentials.json)" &&
-        usage="$(curl -fsS -H @- -H 'anthropic-beta: oauth-2025-04-20' \
-          https://api.anthropic.com/api/oauth/usage <<<"Authorization: Bearer $token")"; then
-        reset="$(jq -r '[.five_hour, .seven_day | select(.utilization > 90) | .resets_at] | max // empty' <<<"$usage")"
+      if usage="$(${lib.getExe agents.wrappers.claude-account} usage)"; then
+        reset="$(jq -r '.[0].usage // {} | [.five_hour, .seven_day | select(.utilization > 90) | .resets_at] | max // empty' <<<"$usage")"
         if [ -n "$reset" ]; then
           echo "Less than 10% usage left until $reset"
           exit 75

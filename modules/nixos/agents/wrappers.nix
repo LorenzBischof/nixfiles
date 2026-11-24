@@ -14,6 +14,7 @@
   coreutils,
   util-linux,
   jq,
+  curl,
   claude-code,
   codex,
   # In nixpkgs' installAgentSkills layout; their bin/ goes on PATH.
@@ -166,8 +167,21 @@ let
         '') files
       )}
     '';
+
+  claudeAccount = writeShellApplication {
+    name = "claude-account";
+    runtimeInputs = [
+      coreutils
+      util-linux
+      jq
+      curl
+    ];
+    text = builtins.readFile ./claude-account.sh;
+  };
 in
 {
+  claude-account = claudeAccount;
+
   claude = writeShellApplication {
     name = "claude";
     runtimeInputs = [
@@ -177,6 +191,21 @@ in
     ];
     text = ''
       ${pathPrefix}
+      # A session started without a config folder runs on the account
+      # claude-account ranks first; a folder chosen by hand or by Ovis's sign-in
+      # stays. Signing in picks none, so it goes where it was asked to.
+      case "''${1:-}" in
+        auth | setup-token) ;;
+        *)
+          if [ -z "''${CLAUDE_CONFIG_DIR:-}" ]; then
+            dir=$(${lib.getExe claudeAccount} pick 2>/dev/null) || dir=""
+            [ -z "$dir" ] || export CLAUDE_CONFIG_DIR="$dir"
+          fi
+          ;;
+      esac
+      case "''${CLAUDE_CONFIG_DIR:-}" in
+        "$HOME"/.claude-*) ${lib.getExe claudeAccount} link "$CLAUDE_CONFIG_DIR" || true ;;
+      esac
       ${ownedSettings ''"''${CLAUDE_CONFIG_DIR:-$HOME/.claude}"'' {
         "settings.json" = claudeSettings;
       }}
