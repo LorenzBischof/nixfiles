@@ -37,6 +37,18 @@ git -C ~/REPO worktree add ~/.herdr/worktrees/REPO/BRANCH -b BRANCH origin/main
 
 (`/` in a branch name becomes `-` in the folder; this is where Ovis looks.) When handing work to another agent, create its worktree first and start it there with `--cwd`.
 
+### Unrelated tasks
+
+When the user raises a task unrelated to the one you're on, don't take it up in this chat: start a new agent in its own worktree and tab, tell the user its terminal name, and carry on with your own task.
+
+```bash
+hc run --bg --name NAME --cwd ~/.herdr/worktrees/REPO/FOLDER claude "TASK"
+```
+
+Started without labels, it opens in a new tab. `NAME` is the worktree's folder name, lowercased and cut to 32 characters (hc names allow only 1-32 of `a-z 0-9 - _ .`).
+
+If the new task touches files you are changing, tell the user instead of starting it.
+
 Nix flakes only see files git tracks: `git add` new files before `nix build` or `nix flake check`.
 
 When the worktree is clean and its commits are pushed, remove it with `git worktree remove`. Keep the branch if it has commits; delete it (`git branch -d`) if it has none. Don't force-remove a worktree with uncommitted changes without asking.
