@@ -216,6 +216,104 @@ let
       gh pr checks "$n" -R "$repo"
     '';
   };
+
+  # A throwaway x86_64 machine with KVM, from .github/workflows/vm.yml: see
+  # there for how it is reached. It is for testing; two rules keep what it
+  # sends back from reaching the vps's own store:
+  # - `agent` stays an untrusted nix user, so the daemon refuses unsigned paths
+  #   and a client-set `builders`;
+  # - `gha-vm nix` builds in the machine's store (`--store ssh-ng://`) and
+  #   copies nothing back.
+  ghaVm = pkgs.writeShellApplication {
+    name = "gha-vm";
+    runtimeInputs = [
+      gh
+      pkgs.dumbpipe
+      pkgs.openssh
+      pkgs.coreutils
+    ];
+    text = ''
+      repo=lorenzbischof-agents/nixfiles
+      state=''${XDG_STATE_HOME:-$HOME/.local/state}/gha-vm
+      key=$state/id_ed25519
+      usage() {
+        echo "usage: gha-vm up [MINUTES] | ssh NAME [ARGS...] | nix NAME COMMAND [ARGS...] | down NAME | ls" >&2
+        exit 2
+      }
+      vm() {
+        [[ ''${1-} =~ ^gha-[0-9]+$ && -d $state/$1 ]] || { echo "gha-vm: no machine ''${1-}" >&2; exit 1; }
+        dir=$state/$1 id=''${1#gha-}
+      }
+      case ''${1-} in
+      up)
+        mkdir -p "$state"
+        [ -f "$key" ] || ssh-keygen -q -t ed25519 -N "" -C gha-vm -f "$key"
+        # The runner's dumbpipe comes from the same nixpkgs as ours: iroh's
+        # wire format changes between 0.x releases.
+        url=$(gh workflow run vm.yml -R "$repo" -f ssh_key="$(<"$key.pub")" -f minutes="''${2:-60}" \
+          -f nixpkgs=${inputs.nixpkgs.rev} | grep -o "https://github.com/$repo/actions/runs/[0-9]*$") ||
+          { echo "gha-vm: gh gave no run URL" >&2; exit 1; }
+        id=''${url##*/} name=gha-''${url##*/}
+        echo "gha-vm: $name is $url" >&2
+        fail() { echo "gha-vm: $name $1" >&2; gh run cancel "$id" -R "$repo" >/dev/null 2>&1 || true; exit 1; }
+        sha=$(gh run view "$id" -R "$repo" --json headSha -q .headSha)
+        ticket=""
+        for _ in $(seq 120); do
+          # Set by that run itself, not by anyone else who can write statuses.
+          ticket=$(gh api "repos/$repo/commits/$sha/statuses?per_page=100" -q "first(.[] | select(
+            .context == \"vm/$id\" and .state == \"pending\" and .target_url == \"$url\"
+            and .creator.login == \"github-actions[bot]\") | .description) // empty")
+          [ -z "$ticket" ] || break
+          [ "$(gh run view "$id" -R "$repo" --json status -q .status)" != completed ] || fail "ended before it came up"
+          sleep 5
+        done
+        # It becomes part of a ProxyCommand.
+        [[ $ticket =~ ^endpoint[a-z0-9]+$ ]] || fail "never came up"
+        dir=$state/$name
+        mkdir "$dir"
+        # The pipe is authenticated to the runner's endpoint, so pinning the
+        # host key it first shows is enough.
+        cat >"$dir/ssh_config" <<EOF
+      Host $name
+        User runner
+        ProxyCommand dumbpipe connect $ticket 2>>$dir/dumbpipe.log
+        IdentityFile $key
+        IdentitiesOnly yes
+        UserKnownHostsFile $dir/known_hosts
+        StrictHostKeyChecking accept-new
+      EOF
+        echo "$name"
+        ;;
+      ssh)
+        vm "''${2-}"
+        exec ssh -F "$dir/ssh_config" "''${@:2}"
+        ;;
+      nix)
+        vm "''${2-}"
+        [ -n "''${3-}" ] || usage
+        NIX_SSHOPTS="-F $dir/ssh_config" exec nix "$3" --eval-store auto --store "ssh-ng://$2" "''${@:4}"
+        ;;
+      down)
+        vm "''${2-}"
+        gh run cancel "$id" -R "$repo" || true
+        rm -r "$dir"
+        ;;
+      ls)
+        # Machines whose run has ended are gone: forget them.
+        for dir in "$state"/gha-*/; do
+          [ -d "$dir" ] || continue
+          name=$(basename "$dir")
+          if [ "$(gh run view "''${name#gha-}" -R "$repo" --json status -q .status)" = completed ]; then
+            rm -r "$dir"
+          else
+            echo "$name"
+          fi
+        done
+        ;;
+      *) usage ;;
+      esac
+    '';
+  };
 in
 {
   users.users.${user} = {
@@ -236,6 +334,7 @@ in
       gh
       prWatch
       hcRunHidden
+      ghaVm
       pkgs.git
       pkgs.jq
       pkgs.ripgrep
