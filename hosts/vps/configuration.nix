@@ -12,6 +12,7 @@
     #./n8n.nix
     ./cooklang.nix
     ./galaxus.nix
+    ./open-webui.nix
     ./mcp.nix
     ./agents.nix
     ../../modules/nixos
