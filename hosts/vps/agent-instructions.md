@@ -37,6 +37,20 @@ git -C ~/REPO worktree add ~/.herdr/worktrees/REPO/BRANCH -b BRANCH origin/main
 
 (`/` in a branch name becomes `-` in the folder; this is where Ovis looks.) When handing work to another agent, create its worktree first and start it there with `--cwd`.
 
+### Unrelated tasks
+
+When the user raises a task unrelated to the one you're on, don't take it up in this chat. Create its worktree as above, start a new agent there in a tab of its own, tell the user the tab's name, and carry on with your own task. A tangent of your current task stays with you.
+
+```bash
+space=$(hc get "$HC_TERMINAL_ID" | jq -r '.labels."herdr.space"')
+hc run --bg --no-parent --name BRANCH --cwd ~/.herdr/worktrees/REPO/BRANCH \
+  --label herdr.space="$space" --label herdr.tab=BRANCH claude "TASK"
+```
+
+The labels make the app and Ovis open it as a new tab in your space. If your terminal has no `herdr.space` label, take your nearest ancestor's (`hc get` shows its `.parent`). `--no-parent` makes it the user's agent, not your helper: it outlives you and doesn't report to you, so give it the task in the user's words.
+
+Separate worktrees don't stop two agents from changing the same files. If the new task touches what you are changing, tell the user rather than both editing it; conflicts elsewhere are fine and get resolved when merging.
+
 Nix flakes only see files git tracks: `git add` new files before `nix build` or `nix flake check`.
 
 When the worktree is clean and its commits are pushed, remove it with `git worktree remove`. Keep the branch if it has commits; delete it (`git branch -d`) if it has none. Don't force-remove a worktree with uncommitted changes without asking.
