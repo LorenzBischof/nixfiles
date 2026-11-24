@@ -9,7 +9,7 @@
 }:
 let
   cfg = config.my.programs.agents;
-  llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  llmAgents = import ../../../packages/llm-agents.nix { inherit inputs pkgs; };
 
   wrappers = pkgs.callPackage ./wrappers.nix {
     claude-code = llmAgents.claude-code;

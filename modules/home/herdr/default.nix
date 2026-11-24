@@ -7,7 +7,7 @@
 }:
 let
   cfg = config.my.programs.herdr;
-  herdr = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  herdr = import ../../../packages/llm-agents.nix { inherit inputs pkgs; };
 
   # $mod+direction moves between Herdr panes and only leaves the window at the
   # pane edge; $mod+Ctrl+direction always moves between Sway windows. Run

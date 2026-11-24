@@ -11,7 +11,7 @@
 let
   agents = config.my.programs.agents;
   cfg = agents.basicMemory;
-  llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  llmAgents = import ../../../../packages/llm-agents.nix { inherit inputs pkgs; };
 
   basicMemory = pkgs.callPackage ./plugin.nix {
     basicMemory = pkgs.callPackage ../../../../packages/basic-memory { inherit inputs; };

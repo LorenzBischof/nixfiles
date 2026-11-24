@@ -6,7 +6,7 @@
 }:
 let
   domain = config.my.homelab.domain;
-  llmAgents = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  llmAgents = import ../../packages/llm-agents.nix { inherit inputs pkgs; };
 
   # Coding agents driven from a phone over the tailnet, through ovis's web UI.
   # It runs on herdr-core (`hc`) rather than herdr's own TUI server: hc keeps
