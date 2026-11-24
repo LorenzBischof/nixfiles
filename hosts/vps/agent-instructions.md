@@ -9,7 +9,7 @@ nix-shell -p jq ripgrep --run 'jq --version && rg --version'   # one-off command
 nix-shell -p jq ripgrep                                        # interactive shell with the tools
 ```
 
-You may fix things on this machine directly to get unblocked, but treat it as temporary: this host can be disabled at any moment, and only nixfiles survives that. So for every such fix, and for anything you find broken but leave, open a nixfiles PR without asking, handing it to a separate agent with `hc`. If the next deploy won't overwrite your live fix, the PR also removes it, e.g. with a tmpfiles `r` rule for its path. In your report, list each live-only change with its PR.
+You may work around problems on this machine directly to get unblocked, but treat a workaround as temporary: this host can be disabled at any moment, and only nixfiles survives that. So for every workaround you apply here (a config tweak, a patched file, a package or service you add by hand), and for anything you find broken but leave, open a nixfiles PR without asking, handing it to a separate agent with `hc`. If the next deploy won't overwrite your workaround, the PR also removes it, e.g. with a tmpfiles `r` rule for its path. Cleanup is not a workaround: delete stale files, leftovers of manual installs and the like directly, and report it without a PR. In your report, list each live-only workaround with its PR.
 
 ## x86_64 and KVM
 
