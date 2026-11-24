@@ -208,7 +208,7 @@ let
   };
   piBwrap = mkBwrapTool {
     name = "pi-bwrap";
-    executable = lib.getExe inputs.llm-agents.packages.${system}.pi;
+    executable = lib.getExe pkgs.llm-agents.pi;
     configDirName = ".pi";
   };
   renderedAgentsMd = builtins.readFile cfg.agentsFile;
@@ -235,7 +235,7 @@ in
       codexBwrap
       claudeBwrap
       piBwrap
-      inputs.llm-agents.packages.${system}.pi
+      pkgs.llm-agents.pi
       #inputs.nix-ai-tools.packages.${system}.openclaw
     ];
 
@@ -316,7 +316,7 @@ in
 
     programs.opencode = {
       enable = true;
-      package = inputs.llm-agents.packages.${system}.opencode;
+      package = pkgs.llm-agents.opencode;
     };
 
     home.file = {
