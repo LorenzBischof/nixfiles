@@ -144,18 +144,25 @@
     }@inputs:
     let
       system = "x86_64-linux";
-      lib = nixpkgs.lib;
-      pkgs = import nixpkgs {
-        inherit system;
-        config = {
-          allowUnfree = true;
-        };
-        overlays = [
-          neovim-config.overlays.default
-        ];
-      };
+      # Tooling outputs (formatter, checks, packages) also build on aarch64,
+      # where vps runs.
+      forAllSystems = nixpkgs.lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      pkgsFor = forAllSystems (
+        system:
+        import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+          overlays = [ neovim-config.overlays.default ];
+        }
+      );
+      pkgs = pkgsFor.${system};
 
-      treefmtEval = treefmt-nix.lib.evalModule pkgs ./treefmt.nix;
+      treefmtEval = forAllSystems (
+        system: treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix
+      );
     in
     {
       nixosConfigurations = {
@@ -242,16 +249,25 @@
           ];
         };
       };
-      formatter.${system} = treefmtEval.config.build.wrapper;
-      packages.${system} = {
-        basic-memory = pkgs.callPackage ./packages/basic-memory { inherit inputs; };
-        # Exposed for CI: the auto-fix job hands this store path to
-        # claude-code-action instead of letting it run its own install.
-        claude-code = inputs.llm-agents.packages.${system}.claude-code;
-        cooklang-mcp = pkgs.callPackage ./packages/cooklang-mcp { };
-        cook-cli-server = pkgs.callPackage ./packages/cook-cli-server.nix { };
-        galaxus-mcp = pkgs.callPackage ./packages/galaxus-mcp { src = inputs.galaxus-mcp; };
-      };
+      formatter = forAllSystems (system: treefmtEval.${system}.config.build.wrapper);
+      checks = forAllSystems (system: {
+        formatting = treefmtEval.${system}.config.build.check self;
+      });
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor.${system};
+        in
+        {
+          basic-memory = pkgs.callPackage ./packages/basic-memory { inherit inputs; };
+          # Exposed for CI: the auto-fix job hands this store path to
+          # claude-code-action instead of letting it run its own install.
+          claude-code = inputs.llm-agents.packages.${system}.claude-code;
+          cooklang-mcp = pkgs.callPackage ./packages/cooklang-mcp { };
+          cook-cli-server = pkgs.callPackage ./packages/cook-cli-server.nix { };
+          galaxus-mcp = pkgs.callPackage ./packages/galaxus-mcp { src = inputs.galaxus-mcp; };
+        }
+      );
       apps.${system}.framework-agent-vm =
         (nixos-agent-test-vm.mkAgentVm {
           inherit pkgs;
