@@ -18,7 +18,7 @@ on:
         type: number
         default: 60
       nixpkgs:
-        description: The vps's nixpkgs revision, for openssh and dumbpipe
+        description: nixpkgs revision for openssh and dumbpipe, the vps's own
         type: string
         required: true
 permissions:
@@ -30,10 +30,8 @@ jobs:
       # Also opens /dev/kvm, makes runner a trusted user, and so gives the
       # daemon the kvm system feature.
       - uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31.11.5
-      # TODO: the vps's dumbpipe, from packages/dumbpipe.nix: see there. It is
-      # not in cache.nixos.org, so the first run after it changes builds it and
-      # keeps it in this repository's Actions cache. Drop these steps with that
-      # file, and take dumbpipe from nixpkgs again below.
+      # TODO: the vps's dumbpipe, from packages/dumbpipe.nix (see there). Drop
+      # these steps with that file, and take dumbpipe from nixpkgs below again.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -44,6 +42,8 @@ jobs:
         env:
           NIXPKGS: ${{ inputs.nixpkgs }}
         run: |
+          # It goes into a Nix expression and into $GITHUB_OUTPUT.
+          [[ $NIXPKGS =~ ^[0-9a-f]{40}$ ]]
           expr="(builtins.getFlake \"github:NixOS/nixpkgs/$NIXPKGS\").legacyPackages.x86_64-linux.callPackage ./packages/dumbpipe.nix { }"
           echo "expr=$expr" >>"$GITHUB_OUTPUT"
           echo "out=$(nix eval --impure --raw --expr "$expr")" >>"$GITHUB_OUTPUT"
@@ -57,8 +57,7 @@ jobs:
         env:
           EXPR: ${{ steps.dumbpipe.outputs.expr }}
         run: |
-          nix build --impure --no-link --expr "$EXPR"
-          nix copy --to "file://$HOME/dumbpipe-cache" "$(nix eval --impure --raw --expr "$EXPR")"
+          nix copy --impure --to "file://$HOME/dumbpipe-cache" --expr "$EXPR"
       - if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -83,7 +82,8 @@ jobs:
           PidFile none
           SetEnv PATH=/nix/var/nix/profiles/default/bin:/usr/local/bin:/usr/bin:/bin
           EOF
-          # Unsigned, but this run built it, or an earlier one did.
+          # Unsigned: this trusts whatever can write this repository's Actions
+          # cache, a gha-vm runner included, not only the step above.
           nix copy --no-check-sigs --from "file://$HOME/dumbpipe-cache" "$DUMBPIPE"
           nix profile add "github:NixOS/nixpkgs/$NIXPKGS#openssh" "$DUMBPIPE"
           # Unprivileged, so it can only log in as runner, and without the token.

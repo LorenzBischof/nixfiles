@@ -254,8 +254,8 @@ let
       up)
         mkdir -p "$state"
         [ -f "$key" ] || ssh-keygen -q -t ed25519 -N "" -C gha-vm -f "$key"
-        # The runner builds openssh and dumbpipe from our nixpkgs revision, so
-        # both ends run the same dumbpipe.
+        # The runner takes openssh and dumbpipe from our nixpkgs revision, and
+        # dumbpipe with the same override as ours, so both ends run the same one.
         url=$(gh workflow run vm.yml -R "$repo" -f ssh_key="$(<"$key.pub")" -f minutes="''${2:-60}" \
           -f nixpkgs=${inputs.nixpkgs.rev} | grep -o "https://github.com/$repo/actions/runs/[0-9]*$") ||
           { echo "gha-vm: gh gave no run URL" >&2; exit 1; }
