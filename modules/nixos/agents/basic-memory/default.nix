@@ -59,11 +59,10 @@ let
   # active exactly as long as the run. The hc terminal and the tab id are the
   # date. The last three runs stay open; older ones are closed before a new one.
   #
-  # Exits 75 (EX_TEMPFAIL) without running when the 5h or weekly window of
-  # the account the run would get (claude-account's first) has less than 10%
-  # left, which the unit below retries hourly. Only this scheduled run waits;
-  # a session started by hand or by an agent always gets an account. If the
-  # usage can't be read, the run goes ahead.
+  # Exits 75 (EX_TEMPFAIL) without running when the account the run would get
+  # has less than 10% left of its 5h or weekly window, which the unit below
+  # retries hourly. Only this scheduled run waits. If the usage isn't known,
+  # the run goes ahead.
   #
   # It starts in an empty folder of its own, not the notes folder, where a note
   # named CLAUDE.md would become instructions; Herdr names the space after it.
@@ -79,12 +78,11 @@ let
       llmAgents.herdr-core
     ];
     text = ''
-      if usage="$(${lib.getExe agents.wrappers.claude-account} usage)"; then
-        reset="$(jq -r '.[0].usage | [.five_hour, .seven_day | select(.utilization > 90) | .resets_at] | max // empty' <<<"$usage")"
-        if [ -n "$reset" ]; then
-          echo "Less than 10% usage left until $reset"
-          exit 75
-        fi
+      if dir="$(${lib.getExe agents.wrappers.claude-account})" &&
+        reset="$(jq -r '[.five_hour, .seven_day | select(.used_percentage > 90 and .resets_at > now) | .resets_at] | max // empty | todate' "$dir/rate-limits.json" 2>/dev/null)" &&
+        [ -n "$reset" ]; then
+        echo "Less than 10% usage left until $reset"
+        exit 75
       fi
 
       today="$(date +%F)"
