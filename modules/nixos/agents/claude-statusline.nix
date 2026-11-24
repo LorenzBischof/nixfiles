@@ -2,7 +2,7 @@
 # `prompt_cache` object Claude Code hands the status line (v2.1.251+). Claude
 # Code re-runs it when a warm cache reaches `expires_at`, so it turns cold on
 # its own, without a refresh interval.
-# It also saves `rate_limits` for claude-account.
+# It also saves `rate_limits` for the claude wrapper to pick an account.
 {
   writeShellApplication,
   jq,

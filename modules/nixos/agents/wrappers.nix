@@ -167,15 +167,8 @@ let
       )}
     '';
 
-  claudeAccount = writeShellApplication {
-    name = "claude-account";
-    runtimeInputs = [ jq ];
-    text = builtins.readFile ./claude-account.sh;
-  };
 in
 {
-  claude-account = claudeAccount;
-
   claude = writeShellApplication {
     name = "claude";
     runtimeInputs = [
@@ -185,10 +178,30 @@ in
     ];
     text = ''
       ${pathPrefix}
-      # Signing in stays where it was asked; anything else gets an account.
-      case "''${1:-}" in
-        auth | setup-token) ;;
-        *) dir=$(${lib.getExe claudeAccount}) && [ -n "$dir" ] && export CLAUDE_CONFIG_DIR="$dir" ;;
+      # Without a config folder, run on the ~/.claude-* account with the most
+      # weekly usage left per hour until its reset, from the rate-limits.json
+      # the status line saves; a full 5h window scores 0, no file a fresh week.
+      # All accounts share ~/.claude/projects: sessions, resume and memory.
+      if [ -z "''${CLAUDE_CONFIG_DIR:-}" ]; then
+        best=-1
+        for dir in "$HOME"/.claude-*/; do
+          [ -f "$dir.credentials.json" ] || continue
+          score=$(jq '
+            if (.five_hour.resets_at // 0) > now and .five_hour.used_percentage >= 100 then 0
+            elif (.seven_day.resets_at // 0) > now
+            then (100 - .seven_day.used_percentage) / ([(.seven_day.resets_at - now) / 3600, 1] | max)
+            else 100 / 168 end' "$dir/rate-limits.json" 2>/dev/null) || score=0.6
+          if jq -en "$score > $best" >/dev/null; then
+            best=$score
+            export CLAUDE_CONFIG_DIR=''${dir%/}
+          fi
+        done
+      fi
+      case "''${CLAUDE_CONFIG_DIR:-}" in
+        "$HOME"/.claude-*)
+          [ -e "$CLAUDE_CONFIG_DIR/projects" ] ||
+            ln -sn "$HOME/.claude/projects" "$CLAUDE_CONFIG_DIR/projects" 2>/dev/null || true
+          ;;
       esac
       ${ownedSettings ''"''${CLAUDE_CONFIG_DIR:-$HOME/.claude}"'' {
         "settings.json" = claudeSettings;
