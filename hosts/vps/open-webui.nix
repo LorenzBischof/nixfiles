@@ -117,6 +117,12 @@ in
 
       # Uploads to chats and knowledge.
       client_max_body_size 100m;
+
+      # Any page a tailnet user opens could frame this UI, signed in as them by
+      # the trusted header, and trick them into clicking. Open WebUI sends no
+      # framing headers of its own unless configured.
+      add_header X-Frame-Options DENY always;
+      add_header Content-Security-Policy "frame-ancestors 'none'" always;
     '';
     locations = {
       "/" = {
