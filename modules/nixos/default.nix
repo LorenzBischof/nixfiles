@@ -10,6 +10,7 @@
     ./alloy-validate.nix
     ./autoupgrade.nix
     ./common.nix
+    ./loopback-clients.nix
     ./monitoring-client.nix
     ./nginx.nix
     ./nixpkgs-age-monitor.nix

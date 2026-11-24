@@ -110,8 +110,10 @@ in
       RestartSec = "5s";
 
       # It reads and writes nothing on disk: the recipes reach it over HTTP
-      # from cook-server, so it needs no identity of its own.
+      # from cook-server, so it needs no identity of its own - only the group
+      # that may connect to cook-server.
       DynamicUser = true;
+      SupplementaryGroups = [ "cook" ];
       ProtectSystem = "strict";
       ProtectHome = true;
       PrivateTmp = true;
@@ -132,10 +134,8 @@ in
     };
   };
 
-  # Registered under the public MCP name only; mcp.nix serves the same set of
-  # locations again under the tailnet name, so this is the single place the
-  # server's path and port are stated. An exact match, so widening the vhost
-  # later cannot publish anything else; because `proxyPass` carries a URI, nginx
+  # claude.ai's public MCP name - see mcp.nix. An exact match, so widening the
+  # vhost later cannot publish anything else; because `proxyPass` carries a URI, nginx
   # replaces the matched path with the `/mcp` this server actually serves.
   #
   # Both locations in one definition: the attribute path holds an interpolated
@@ -266,4 +266,12 @@ in
     mcpPort
     uiPort
   ];
+  my.homelab.loopbackClients = {
+    ${toString mcpPort} = "mcp";
+    # cook-server has no auth of its own: only nginx (the browser UI) and the
+    # MCP server may connect to it.
+    ${toString uiPort} = "cook";
+  };
+  users.groups.cook = { };
+  users.users.${config.services.nginx.user}.extraGroups = [ "cook" ];
 }

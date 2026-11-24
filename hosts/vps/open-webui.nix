@@ -11,12 +11,9 @@ let
 
   authSocket = config.services.tailscaleAuth.socketPath;
 
-  # Loopback connections to Open WebUI from anyone but nginx; see the firewall.
-  fwRule = "OUTPUT -o lo -p tcp --dport ${toString port} -m owner ! --uid-owner nginx -j REJECT";
-
-  # MCP servers already running on this host (cooklang.nix, galaxus.nix). They
-  # bind loopback with no auth of their own, so they are reached directly - no
-  # nginx, no token. An empty `access_grants` would make a connection admin-only,
+  # MCP servers already running on this host (cooklang.nix, galaxus.nix),
+  # reached directly over loopback as a member of their `mcp` group - see
+  # mcp.nix. An empty `access_grants` would make a connection admin-only,
   # hence the grant to every user. `path` and `key` go unused for MCP, but the
   # admin panel's schema requires both.
   mcpServer = id: name: mcpPort: {
@@ -42,6 +39,8 @@ let
   };
 in
 {
+  systemd.services.open-webui.serviceConfig.SupplementaryGroups = [ "mcp" ];
+
   services.open-webui = {
     enable = true;
     host = "127.0.0.1";
@@ -84,25 +83,21 @@ in
   };
 
   # The trusted header is only as trustworthy as whoever can reach the port, and
-  # every process here can reach loopback - the agents included. Open WebUI's
-  # `serve` has no Unix-socket option, so loopback connections to it are refused
-  # for everyone but nginx, the one process that only ever sends a login
-  # tailscaled vouched for. Delete-then-add, because a firewall reload reruns
-  # this without flushing OUTPUT.
-  networking.firewall.extraCommands = ''
-    iptables -w -D ${fwRule} 2>/dev/null || true
-    iptables -w -A ${fwRule}
-  '';
-  networking.firewall.extraStopCommands = ''
-    iptables -w -D ${fwRule} 2>/dev/null || true
-  '';
+  # every process here can reach loopback - the agents included. So only nginx,
+  # which only ever sends a login tailscaled vouched for, may connect to it.
+  my.homelab.loopbackClients.${toString port} = "nginx-only";
+  # Only nginx is in it: the nginx group itself also holds acme and alloy.
+  users.groups.nginx-only = { };
 
   # The helper only, not `services.nginx.tailscaleAuth`: that one puts its
   # subrequest at `/auth`, which is a page of Open WebUI's own, so reloading it
   # would 404. It refuses tagged devices - this host is `tag:server`, so the
   # agents here cannot sign in as anyone by going through nginx either.
   services.tailscaleAuth.enable = true;
-  users.users.${config.services.nginx.user}.extraGroups = [ config.services.tailscaleAuth.group ];
+  users.users.${config.services.nginx.user}.extraGroups = [
+    config.services.tailscaleAuth.group
+    "nginx-only"
+  ];
 
   # Tailnet only: no listen address of its own.
   services.nginx.virtualHosts.${chatDomain} = {
