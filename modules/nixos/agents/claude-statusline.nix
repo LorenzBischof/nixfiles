@@ -15,7 +15,7 @@ writeShellApplication {
   ];
   text = ''
     read -r warm expires recache < <(jq -r '
-      .prompt_cache // {} |
+      .prompt_cache |
       [ (.warm // false), (.expires_at // 0), (.recache_tokens_if_cold // 0) ] | @tsv') || true
 
     now=$(date +%s)
