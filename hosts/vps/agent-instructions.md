@@ -39,17 +39,21 @@ git -C ~/REPO worktree add ~/.herdr/worktrees/REPO/BRANCH -b BRANCH origin/main
 
 ### Unrelated tasks
 
-When the user raises a task unrelated to the one you're on, don't take it up in this chat. Create its worktree as above, start a new agent there in a tab of its own, tell the user its terminal name, and carry on with your own task. A tangent of your current task stays with you.
+When the user raises a task unrelated to the one you're on, don't take it up in this chat: start a new agent in its own worktree and tab, tell the user its terminal name, and carry on with your own task.
 
 ```bash
-space=$(hc get "$HC_TERMINAL_ID" | jq -r '.labels."herdr.space" // empty')
+at=$HC_TERMINAL_ID space=
+while [ -n "$at" ] && [ -z "$space" ]; do   # your space, or your nearest ancestor's
+  info=$(hc get "$at") || break
+  space=$(jq -r '.labels."herdr.space" // empty' <<<"$info") at=$(jq -r '.parent // empty' <<<"$info")
+done
 hc run --bg --no-parent --name FOLDER --cwd ~/.herdr/worktrees/REPO/FOLDER \
   --label herdr.space="$space" --label herdr.tab=FOLDER claude "TASK"
 ```
 
-`FOLDER` is the worktree's folder name, lowercased and cut to 32 characters (hc names allow only 1-32 of `a-z 0-9 - _ .`, unique among live terminals). The labels make the app and Ovis open it as a new tab in your space. If `$space` comes out empty, your terminal has no `herdr.space` label: take your nearest ancestor's (`hc get` shows its `.parent`). `--no-parent` makes it the user's agent, not your helper: it outlives you and doesn't report to you, so give it the task in the user's words.
+`FOLDER` is the worktree's folder name, lowercased and cut to 32 characters (hc names allow only 1-32 of `a-z 0-9 - _ .`). `--no-parent` makes it the user's agent: it outlives you and doesn't report to you, so give it the task in the user's words.
 
-Separate worktrees don't stop two agents from changing the same files. If the new task touches what you are changing, tell the user rather than both editing it; conflicts elsewhere are fine and get resolved when merging.
+If the new task touches files you are changing, tell the user instead of starting it.
 
 Nix flakes only see files git tracks: `git add` new files before `nix build` or `nix flake check`.
 
