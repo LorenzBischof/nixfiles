@@ -13,7 +13,7 @@ let
 
   wrappers = pkgs.callPackage ./wrappers.nix {
     claude-code = llmAgents.claude-code;
-    codex = llmAgents.codex;
+    inherit (pkgs) codex;
     skillPackages = [
       (pkgs.callPackage ../../../packages/agent-skills { inherit (cfg) browser; })
       llmAgents.herdr-core
