@@ -19,7 +19,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
-    runs-on: ${{ matrix.target == 'vps' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    # TODO: arm has no -latest label (actions/runner-images#13885, still open
+    # as of 2026-11), and Dependabot doesn't bump runner labels. Move this to
+    # the next Ubuntu arm image by hand when ubuntu-latest moves; switch to the
+    # alias once it exists.
+    runs-on: ${{ matrix.target == 'vps' && 'ubuntu-26.04-arm' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
