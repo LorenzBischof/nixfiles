@@ -108,6 +108,25 @@ in
         # your environment?" dialog, which blocks an agent in an hc terminal
         # until someone answers it. "off" turns the whole setup feature off.
         skillOverrides."auto-mode-setup" = "off";
+        # Entries are prose rules for the classifier. Keep each one short and
+        # simple, and add one only for a block that actually happened: they
+        # tend to grow long and complicated. Name what the classifier can see
+        # in the command (branch names, URLs), and give an allow entry its
+        # reason. A list without "$defaults" drops the built-in rules, and an
+        # allow entry overrides the built-in blocks, so keep allow entries
+        # narrow. Before deploying, run `claude --settings FILE auto-mode
+        # critique` once, for ambiguity and redundancy; its suggestions to add
+        # more are rarely worth taking.
+        autoMode = {
+          environment = [
+            "$defaults"
+            "Source control: github.com/lorenzbischof-agents is the user's org of forks, each with its upstream's visibility."
+          ];
+          allow = [
+            "$defaults"
+            "Force-pushing a branch other than main or master to a repository under github.com/lorenzbischof-agents is allowed: only agents work on those branches."
+          ];
+        };
       };
       codex.config.tui.animations = lib.mkDefault false;
     };
