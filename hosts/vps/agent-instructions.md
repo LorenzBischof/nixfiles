@@ -39,6 +39,8 @@ git -C ~/REPO worktree add ~/.herdr/worktrees/REPO/BRANCH -b BRANCH origin/main
 
 (`/` in a branch name becomes `-` in the folder; this is where Ovis looks.) When handing work to another agent, create its worktree first and start it there with `--cwd`.
 
+Keep a branch's history the way it should land on main: one logical change per commit, each with a message that is still true. A fix to a commit that isn't on main yet goes into that commit rather than on top: `git commit --fixup=SHA`, then `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash origin/main`, and push with `--force-with-lease`. A separate change gets a separate commit. Rewrite only branches on the fork, never main.
+
 ### Unrelated tasks
 
 When the user raises a task unrelated to the one you're on, don't take it up in this chat: start a new agent in its own worktree and tab, tell the user its terminal name, and carry on with your own task.
