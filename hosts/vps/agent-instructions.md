@@ -11,6 +11,8 @@ nix-shell -p jq ripgrep                                        # interactive she
 
 You may work around problems on this machine directly to get unblocked, but treat a workaround as temporary: this host can be disabled at any moment, and only nixfiles survives that. So for every workaround you apply here (a config tweak, a patched file, a package or service you add by hand), and for anything you find broken but leave, open a nixfiles PR without asking, handing it to a separate agent with `hc`. If the next deploy won't overwrite your workaround, the PR also removes it, e.g. with a tmpfiles `r` rule for its path. Cleanup is not a workaround: delete stale files, leftovers of manual installs and the like directly, and report it without a PR. In your report, list each live-only workaround with its PR.
 
+Before working around a limitation, find where it comes from. If it comes from a choice a repo made (a pinned version or image, a setting, a dependency, an earlier design) and changing that choice is cleaner than the workaround, change the choice instead: in your current change if it belongs there, otherwise as its own PR via `hc`. If that change is large or in a repo you can't push to, ask, and work around it meanwhile.
+
 ## x86_64 and KVM
 
 This host is aarch64 without KVM. For a test that needs either (a NixOS VM test, an x86_64 build), start a throwaway x86_64 machine with KVM on GitHub Actions:
