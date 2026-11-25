@@ -77,6 +77,11 @@ jobs:
             fallback = true
             http-connections = 128
             max-substitution-jobs = 128
+            # Each build already uses every core, so more builds at once gain
+            # little and multiply the memory and CPU peak: four big Rust and C++
+            # builds in parallel left a 4-core runner unresponsive until GitHub
+            # gave up on it.
+            max-jobs = 2
             # Asked in priority order: the GHA cache (10), cache.nixos.org (40),
             # then S3 (50), so S3 only gets the paths neither has. S3's priority
             # is set here because without one nix takes the bucket's
@@ -266,6 +271,8 @@ jobs:
             fallback = true
             http-connections = 128
             max-substitution-jobs = 128
+            # As in the build job.
+            max-jobs = 2
             substituters = https://cache.nixos.org/
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
