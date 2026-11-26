@@ -13,6 +13,7 @@
   linkFarm,
   writeShellApplication,
   writeText,
+  callPackage,
   coreutils,
   util-linux,
   jq,
@@ -151,12 +152,12 @@ let
   # --mcp-config takes several values; --settings after it ends the list, so a
   # prompt is not read as one.
   claudeArgs =
-    orchestrator:
+    flagSettings: orchestrator:
     [
       "--mcp-config"
       (builtins.toJSON { inherit mcpServers; })
       "--settings"
-      (builtins.toJSON claudeFlagSettings)
+      (builtins.toJSON flagSettings)
     ]
     ++ lib.concatMap (dir: [
       "--plugin-dir"
@@ -199,21 +200,63 @@ let
       )}
     '';
 
+  mkClaude =
+    {
+      name,
+      preamble ? "",
+      flagSettings ? claudeFlagSettings,
+    }:
+    writeShellApplication {
+      inherit name;
+      runtimeInputs = [
+        coreutils
+        util-linux
+        jq
+      ];
+      text = ''
+        ${pathPrefix}
+        ${preamble}
+        ${ownedSettings ''"''${CLAUDE_CONFIG_DIR:-$HOME/.claude}"'' {
+          "settings.json" = claudeSettings;
+        }}
+        # TODO: settings.json still holds the status line the wrapper owned
+        # before claude-auto passed it as a flag; this drops it. Drop the line
+        # once every host has launched claude past 2026-12.
+        settings=''${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json
+        if jq -e '.statusLine.command? // "" | test("-claude-statusline/")' "$settings" >/dev/null 2>&1; then
+          tmp=$(mktemp "$settings.XXXXXX")
+          jq 'del(.statusLine)' "$settings" >"$tmp" && mv -f "$tmp" "$settings"
+        fi
+        # Subcommands reject session flags.
+        case "''${1:-}" in
+          mcp | plugin | plugins | update | upgrade | install | doctor | auth | setup-token)
+            exec ${lib.getExe claude-code} "$@" ;;
+        esac
+        # TODO: --plugin-dir rather than a --settings directory marketplace,
+        # because Claude keeps a marketplace's old store path for the first launch
+        # after a rebuild and drops EGM's agents (2.1.330, no upstream issue as of
+        # 2026-11). Switch once it follows the new path on that launch.
+        ${execFor (lib.getExe claude-code) (claudeArgs flagSettings)}
+      '';
+    };
+
 in
 {
-  claude = writeShellApplication {
-    name = "claude";
-    runtimeInputs = [
-      coreutils
-      util-linux
-      jq
-    ];
-    text = ''
-      ${pathPrefix}
-      # Without a config folder, run on the ~/.claude-* account with the most
-      # weekly usage left per hour until its reset, from the rate-limits.json
-      # the status line saves; a full 5h window scores 0, no file a fresh week.
-      # All accounts share ~/.claude/projects: sessions, resume and memory.
+  claude = mkClaude { name = "claude"; };
+
+  # claude with the status line. Without a config folder it runs on the
+  # ~/.claude-* account with the most weekly usage left per hour until its
+  # reset, from the rate-limits.json the status line saves; a full 5h window
+  # scores 0, no file a fresh week. All accounts share ~/.claude/projects.
+  claude-auto = mkClaude {
+    name = "claude-auto";
+    flagSettings = claudeFlagSettings // {
+      statusLine = {
+        type = "command";
+        command = lib.getExe (callPackage ./claude-statusline.nix { });
+      };
+    };
+    preamble = ''
       if [ -z "''${CLAUDE_CONFIG_DIR:-}" ]; then
         best=-1
         for dir in "$HOME"/.claude-*/; do
@@ -235,19 +278,6 @@ in
             ln -sn "$HOME/.claude/projects" "$CLAUDE_CONFIG_DIR/projects" 2>/dev/null || true
           ;;
       esac
-      ${ownedSettings ''"''${CLAUDE_CONFIG_DIR:-$HOME/.claude}"'' {
-        "settings.json" = claudeSettings;
-      }}
-      # Subcommands reject session flags.
-      case "''${1:-}" in
-        mcp | plugin | plugins | update | upgrade | install | doctor | auth | setup-token)
-          exec ${lib.getExe claude-code} "$@" ;;
-      esac
-      # TODO: --plugin-dir rather than a --settings directory marketplace,
-      # because Claude keeps a marketplace's old store path for the first launch
-      # after a rebuild and drops EGM's agents (2.1.330, no upstream issue as of
-      # 2026-11). Switch once it follows the new path on that launch.
-      ${execFor (lib.getExe claude-code) claudeArgs}
     '';
   };
 

@@ -10,10 +10,13 @@
 # keyring). Orca 1.4.272 has no command to revoke a paired device.
 #
 # On each start Orca also installs its hooks into ~/.claude/settings.json and
-# ~/.codex (marking the Codex ones trusted) and replaces Claude's statusLine,
-# which the claude wrapper puts back at launch. The agents run on
-# ~/.claude-<account>, so they may not load those hooks.
+# ~/.codex (marking the Codex ones trusted).
 # ORCA_AGENT_HOOKS_DISABLED and ORCA_DISABLE_CODEX_TRUST_RPC turn this off.
+#
+# Claude accounts for Orca are Orca's own: `orca account add` once per account
+# (it runs `claude auth login` into ~/.config/orca/claude-profiles, whose
+# settings carry Orca's hooks), then `orca account select` or Orca's account
+# switcher. Orca's terminals run plain `claude`, which uses the selected one.
 {
   config,
   lib,

@@ -21,7 +21,7 @@ When the worktree is clean and its commits are pushed, `git -C ~/REPO worktree r
 ## A new agent
 
 ```bash
-hc run --bg --name NAME --cwd ~/.herdr/worktrees/REPO/FOLDER claude "TASK"
+hc run --bg --name NAME --cwd ~/.herdr/worktrees/REPO/FOLDER claude-auto "TASK"
 ```
 
 Started without labels, it opens in a new tab. `NAME` is the worktree's folder name, lowercased and cut to 32 characters (hc names allow only 1-32 of `a-z 0-9 - _ .`). Tell the user that name.

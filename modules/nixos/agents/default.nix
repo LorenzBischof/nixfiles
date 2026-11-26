@@ -92,13 +92,14 @@ in
       readOnly = true;
       internal = true;
       default = wrappers;
-      description = "The claude and codex wrappers, for `.override` by sandboxing wrappers.";
+      description = "The agent wrappers, for `.override` by sandboxing wrappers.";
     };
   };
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [
       wrappers.claude
+      wrappers.claude-auto
       wrappers.codex
       # Agents reach for python3 for one-off scripting; without it they fall
       # back to awk and sed, which is where the fiddly mistakes come from.
@@ -122,10 +123,6 @@ in
         spinnerTipsEnabled = false;
         prefersReducedMotion = true;
         feedbackSurveyRate = 0;
-        statusLine = {
-          type = "command";
-          command = lib.getExe (pkgs.callPackage ./claude-statusline.nix { });
-        };
         # After 5 auto-mode denials Claude Code opens a "Teach auto mode about
         # your environment?" dialog, which blocks an agent in an hc terminal
         # until someone answers it. "off" turns the whole setup feature off.

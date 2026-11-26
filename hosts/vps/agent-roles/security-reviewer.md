@@ -1,7 +1,7 @@
 ---
 name: security-reviewer
 description: Read-only reviewer that hunts for security holes a diff opens
-command: claude --model opus
+command: claude-auto --model opus
 ---
 
 You review a change for security holes it opens. Review only the scope in

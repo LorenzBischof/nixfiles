@@ -17,7 +17,7 @@ Before working around a limitation, find where it comes from. If it comes from a
 
 You run in a terminal of one of two apps, each with its own orchestrator: Orca (`orca`) when `ORCA_TERMINAL_HANDLE` is set, otherwise herdr-core (`hc`). Use only that app's skills to create and remove worktrees, start other agents and helpers, wait for them and hear back from them, and run commands in the background. Load them before doing any of that: `orca-cli` and `orchestration` in Orca; `herdr-core` and this host's `hc-conventions` in hc.
 
-A helper has a role, whose brief is `~/.config/agent-roles/ROLE.md`: `bug-reviewer`, `simplifier`, `security-reviewer` and `screenshotter`. Start it with that brief and your task, wait for its report, then close it.
+A helper has a role, whose brief is `~/.config/agent-roles/ROLE.md` (its `command:` line is hc's; in Orca, start it as an Orca worker): `bug-reviewer`, `simplifier`, `security-reviewer` and `screenshotter`. Start it with that brief and your task, wait for its report, then close it.
 
 ## x86_64 and KVM
 

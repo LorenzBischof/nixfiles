@@ -44,7 +44,7 @@ let
     ---
     name: memory-reflect
     description: Consolidate the Basic Memory graph
-    command: CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 claude --model opus
+    command: CLAUDE_CODE_DISABLE_CLAUDE_MDS=1 claude-auto --model opus
     ---
 
     Run the memory-reflect skill on project ${primaryProject}. Also check the

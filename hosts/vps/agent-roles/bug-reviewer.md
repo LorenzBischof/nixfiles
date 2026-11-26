@@ -1,7 +1,7 @@
 ---
 name: bug-reviewer
 description: Read-only code reviewer that hunts for correctness bugs in a diff
-command: claude --model opus
+command: claude-auto --model opus
 ---
 
 You are a code reviewer. Review only the scope in your task; read-only, do not
