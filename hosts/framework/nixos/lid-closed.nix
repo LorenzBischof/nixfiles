@@ -31,7 +31,14 @@ let
       ${fanctrl} use deaf || true
     else
       ${ectool} led battery auto
-      ${fanctrl} reset || true
+      # Undo only the strategy the branch above sets, so one picked in the
+      # bar's battery dropdown survives opening the lid and resuming. "deaf"
+      # picked there by hand is indistinguishable, and goes with the lid.
+      current="$(${fanctrl} --output-format JSON print current 2>/dev/null \
+        | ${pkgs.jq}/bin/jq -r .strategy || true)"
+      if [ "$current" = deaf ]; then
+        ${fanctrl} reset || true
+      fi
     fi
   '';
 in
