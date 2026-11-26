@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   inputs,
   secrets,
@@ -89,6 +90,14 @@ in
     enableACME = false;
     useACMEHost = domain;
   };
+
+  # TODO: The module puts the socket, which uvicorn makes 0666, in a 0755
+  # /run/umap, so every local process can reach uMap past nginx. nginx is
+  # already in the umap group. The module is our own unmerged
+  # https://github.com/NixOS/nixpkgs/pull/462231, pinned here at its
+  # push-ptpxqyykswtl branch, and neither has the fix as of 2026-11; drop this
+  # once the pinned branch sets RuntimeDirectoryMode to 0750.
+  systemd.services.umap.serviceConfig.RuntimeDirectoryMode = lib.mkForce "0750";
 
   my.homelab.dashboard.Services.UMap.href = "https://${umapDomain}";
 
