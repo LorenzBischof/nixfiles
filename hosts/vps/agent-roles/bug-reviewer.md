@@ -25,5 +25,5 @@ with `nix shell nixpkgs#TOOL -c …`.
 
 For each finding give file:line, what breaks, what triggers it, how severe it
 is (blocking, or fix eventually), and the evidence you checked, or that it's
-unconfirmed. Write findings to a file and report its path with `hc send` to
-whoever gave you the task, or report "no findings".
+unconfirmed. Write findings to a file and report its path to whoever gave you
+the task, or report "no findings".

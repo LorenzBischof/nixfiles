@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   inputs,
   ...
@@ -144,8 +145,8 @@ let
 
   # Waits for the user to open the PR from a compare link the agent gave them,
   # then for its checks, and prints gh's check table once at the end. Run from
-  # the clone, after pushing BRANCH to the `fork` remote. Agents start it with
-  # hc-run-hidden and wait for it (see agent-instructions.md).
+  # the clone, after pushing BRANCH to the `fork` remote. Agents run it in the
+  # background through their orchestrator (see agent-instructions.md).
   prWatch = pkgs.writeShellApplication {
     name = "pr-watch";
     runtimeInputs = [
@@ -324,8 +325,7 @@ in
     # For `hc attach`.
     openssh.authorizedKeys.keys = config.users.users.lbischof.openssh.authorizedKeys.keys;
     packages = [
-      # For the agents' own workflows (see agent-instructions.md) and
-      # `hc attach` over SSH.
+      # For the agents' own workflows (hc-skill/) and `hc attach` over SSH.
       llmAgents.herdr-core
       gh
       prWatch
@@ -372,6 +372,10 @@ in
   # Both MCP servers run locally, so no DNS, TLS or nginx hop is needed.
   my.programs.agents = {
     enable = true;
+    # This host's hc conventions.
+    orchestratorSkills.hc = [
+      (pkgs.linkFarm "hc-conventions-skill" { "share/skills/vps" = ./hc-skill; })
+    ];
     # Local to this host over stdio, with no network service: the graph lives
     # in ~agent/basic-memory and only the agents here use it. A shared server
     # was tried and reverted (2026-11-13) for its unauthenticated REST API.
@@ -414,16 +418,18 @@ in
     "L+ /home/${user}/.config/git/config - - - - ${gitConfig}"
     "L+ /home/${user}/CLAUDE.md - - - - ${./agent-instructions.md}"
     "L+ /home/${user}/.codex/AGENTS.md - - - - ${./agent-instructions.md}"
-    # hc templates (`hc run bug-reviewer "…"`), linked one by one so the folder
-    # stays writable for templates still being tried out.
+    # The helper roles (agent-instructions.md), and the same files as hc
+    # templates (`hc run bug-reviewer "…"`). Linked one by one so the folders
+    # stay writable for roles still being tried out.
+    "d /home/${user}/.config/agent-roles 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/herdr-core 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/herdr-core/templates 0755 ${user} ${config.users.users.${user}.group} -"
     # Removes the link left from when bug-reviewer was called reviewer; drop
     # once the vps has switched past this.
     "r /home/${user}/.config/herdr-core/templates/reviewer.md"
-    "L+ /home/${user}/.config/herdr-core/templates/bug-reviewer.md - - - - ${./hc-templates/bug-reviewer.md}"
-    "L+ /home/${user}/.config/herdr-core/templates/simplifier.md - - - - ${./hc-templates/simplifier.md}"
-    "L+ /home/${user}/.config/herdr-core/templates/screenshotter.md - - - - ${./hc-templates/screenshotter.md}"
-    "L+ /home/${user}/.config/herdr-core/templates/security-reviewer.md - - - - ${./hc-templates/security-reviewer.md}"
-  ];
+  ]
+  ++ lib.concatMap (role: [
+    "L+ /home/${user}/.config/agent-roles/${role} - - - - ${./agent-roles + "/${role}"}"
+    "L+ /home/${user}/.config/herdr-core/templates/${role} - - - - ${./agent-roles + "/${role}"}"
+  ]) (lib.attrNames (builtins.readDir ./agent-roles));
 }
