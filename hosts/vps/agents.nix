@@ -1,43 +1,12 @@
 {
   config,
+  lib,
   pkgs,
   inputs,
   ...
 }:
 let
-  domain = config.my.homelab.domain;
   llmAgents = pkgs.llm-agents;
-
-  # Coding agents driven from a phone over the tailnet, through ovis's web UI.
-  # It runs on herdr-core (`hc`) rather than herdr's own TUI server: hc keeps
-  # each terminal in a "holder" user service of its own, apart from the core,
-  # so a core restart or upgrade leaves the agents running, and it starts those
-  # units itself through systemd-run. herdr's server instead holds every pane
-  # in its one process, and under a systemd unit its upgrade path kills them
-  # all - https://github.com/herdrdev/herdr/issues/4972.
-  ovis = llmAgents.ovis.override {
-    runtime = "herdr-core";
-    # TODO: on herdr-core, Claude Code's grey prompt suggestion is refused as
-    # "input box may not be empty" whenever hc's coloured and plain screen reads
-    # differ by a row anywhere, far above the input box included. The patch
-    # compares only the box rows when hc gives no scroll info.
-    # https://github.com/devswha/ovis/issues/4321, no upstream fix yet (still
-    # the whole-screen check on main and in v0.5.9 as of 2026-11). Drop once
-    # ovis ships a fix for it.
-    #
-    # TODO: chat mode shows no prompt cache state. The second patch reads until
-    # when the Claude prompt cache stays warm from the transcript, beside the
-    # context ring it already reads there, and shows that time next to the ring.
-    # No upstream issue or PR (none on devswha/ovis as of 2026-11). Drop once
-    # ovis shows the cache state itself.
-    ovis-unwrapped = llmAgents.ovis.unwrapped.overrideAttrs (old: {
-      patches = (old.patches or [ ]) ++ [
-        ./ovis-claude-suggestion.patch
-        ./ovis-cache-mark.patch
-      ];
-    });
-  };
-  port = 7317;
 
   # A normal login user, not a system user: hc needs a lingering user manager
   # to start its units under. Not lbischof, whose passwordless sudo would hand
@@ -176,8 +145,8 @@ let
 
   # Waits for the user to open the PR from a compare link the agent gave them,
   # then for its checks, and prints gh's check table once at the end. Run from
-  # the clone, after pushing BRANCH to the `fork` remote. Agents start it with
-  # hc-run-hidden and wait for it (see agent-instructions.md).
+  # the clone, after pushing BRANCH to the `fork` remote. Agents run it in the
+  # background through their orchestrator (see agent-instructions.md).
   prWatch = pkgs.writeShellApplication {
     name = "pr-watch";
     runtimeInputs = [
@@ -349,17 +318,14 @@ in
   users.users.${user} = {
     inherit uid;
     isNormalUser = true;
-    # The user manager, and so ovis and every terminal, start at boot and
-    # outlive every SSH session. hc would enable this itself if it were off.
+    # The user manager, and so every front end and terminal, starts at boot
+    # and outlives every SSH session. hc would enable this itself if it were
+    # off.
     linger = true;
     # For `hc attach`.
-    openssh.authorizedKeys.keys = config.users.users.lbischof.openssh.authorizedKeys.keys ++ [
-      # The Herdr phone app, which reaches hc over SSH (`hc connect`).
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBH8bxoqLrAa1VDpuTVGVrMpqAFxhj3WtvuaktzrHYRL herdr-mobile"
-    ];
+    openssh.authorizedKeys.keys = config.users.users.lbischof.openssh.authorizedKeys.keys;
     packages = [
-      ovis
-      # On PATH as well as inside the ovis wrapper, for `hc attach` over SSH.
+      # For the agents' own workflows (hc-skill/) and `hc attach` over SSH.
       llmAgents.herdr-core
       gh
       prWatch
@@ -368,6 +334,18 @@ in
       pkgs.git
       pkgs.jq
       pkgs.ripgrep
+    ];
+  };
+
+  # Shared with herdr.nix and orca.nix.
+  _module.args.agentUser = {
+    name = user;
+    # systemd-run, and the tools the terminals inherit. Profiles rather than
+    # store paths, so package bumps reach new terminals without touching the
+    # units.
+    path = [
+      "/etc/profiles/per-user/${user}"
+      "/run/current-system/sw"
     ];
   };
 
@@ -391,55 +369,13 @@ in
     };
   };
 
-  systemd.user.services.ovis = {
-    description = "ovis web UI for herdr-core terminals";
-    unitConfig.ConditionUser = user;
-    wantedBy = [ "default.target" ];
-    # systemd-run for hc, and the tools its terminals inherit. Profiles rather
-    # than store paths, so package bumps reach new terminals without touching
-    # the unit.
-    path = [
-      "/etc/profiles/per-user/${user}"
-      "/run/current-system/sw"
-    ];
-    environment = {
-      # Loopback only; nginx below is the one way in.
-      HOST = "127.0.0.1";
-      PORT = toString port;
-      OVIS_TELEMETRY = "0";
-      # No account.ovis.sh sign-in, so no relay or hosted app on top of the
-      # tailnet. The relay is off by default as well.
-      OVIS_ACCOUNT_SERVICE_URL = "off";
-    };
-    serviceConfig = {
-      # OVIS_TOKEN. Without it every process on this host is loopback to ovis
-      # and gets in unpaired - galaxus-mcp, cook-server and nginx included.
-      EnvironmentFile = config.age.secrets.ovis-token.path;
-      ExecStart = "${ovis}/bin/ovis";
-      # The terminals live in hc's units, so restarting this costs nothing.
-      Restart = "always";
-      RestartSec = "5s";
-    };
-  };
-
-  # The phone's way in. No listen address of its own, so it answers only on
-  # the tailnet address from configuration.nix. recommendedProxySettings adds
-  # the forwarding headers by which ovis tells a proxied request from a local
-  # one, so it asks for the token or a paired device.
-  services.nginx.virtualHosts."ovis.${domain}" = {
-    forceSSL = true;
-    useACMEHost = domain;
-    locations."/" = {
-      proxyPass = "http://127.0.0.1:${toString port}";
-      proxyWebsockets = true;
-      # Live updates are SSE and must not be buffered.
-      extraConfig = "proxy_buffering off;";
-    };
-  };
-
   # Both MCP servers run locally, so no DNS, TLS or nginx hop is needed.
   my.programs.agents = {
     enable = true;
+    # This host's hc conventions.
+    orchestratorSkills.hc = [
+      (pkgs.linkFarm "hc-conventions-skill" { "share/skills/vps" = ./hc-skill; })
+    ];
     # Local to this host over stdio, with no network service: the graph lives
     # in ~agent/basic-memory and only the agents here use it. A shared server
     # was tried and reverted (2026-11-13) for its unauthenticated REST API.
@@ -482,20 +418,18 @@ in
     "L+ /home/${user}/.config/git/config - - - - ${gitConfig}"
     "L+ /home/${user}/CLAUDE.md - - - - ${./agent-instructions.md}"
     "L+ /home/${user}/.codex/AGENTS.md - - - - ${./agent-instructions.md}"
-    # hc templates (`hc run bug-reviewer "…"`), linked one by one so the folder
-    # stays writable for templates still being tried out.
+    # The helper roles (agent-instructions.md), and the same files as hc
+    # templates (`hc run bug-reviewer "…"`). Linked one by one so the folders
+    # stay writable for roles still being tried out.
+    "d /home/${user}/.config/agent-roles 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/herdr-core 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/herdr-core/templates 0755 ${user} ${config.users.users.${user}.group} -"
     # Removes the link left from when bug-reviewer was called reviewer; drop
     # once the vps has switched past this.
     "r /home/${user}/.config/herdr-core/templates/reviewer.md"
-    "L+ /home/${user}/.config/herdr-core/templates/bug-reviewer.md - - - - ${./hc-templates/bug-reviewer.md}"
-    "L+ /home/${user}/.config/herdr-core/templates/simplifier.md - - - - ${./hc-templates/simplifier.md}"
-    "L+ /home/${user}/.config/herdr-core/templates/screenshotter.md - - - - ${./hc-templates/screenshotter.md}"
-    "L+ /home/${user}/.config/herdr-core/templates/security-reviewer.md - - - - ${./hc-templates/security-reviewer.md}"
-  ];
-
-  my.homelab.ports = [ port ];
-  # ovis: nginx only.
-  my.homelab.loopbackClients.${toString port}.users = [ config.services.nginx.user ];
+  ]
+  ++ lib.concatMap (role: [
+    "L+ /home/${user}/.config/agent-roles/${role} - - - - ${./agent-roles + "/${role}"}"
+    "L+ /home/${user}/.config/herdr-core/templates/${role} - - - - ${./agent-roles + "/${role}"}"
+  ]) (lib.attrNames (builtins.readDir ./agent-roles));
 }

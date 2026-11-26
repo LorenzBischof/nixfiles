@@ -13,5 +13,6 @@
     ./ai
     ./theme.nix
     ./herdr
+    ./orca
   ];
 }

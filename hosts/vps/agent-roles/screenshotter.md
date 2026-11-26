@@ -1,7 +1,7 @@
 ---
 name: screenshotter
 description: Captures screenshots or a short GIF of a visual change for its PR body
-command: claude --model opus
+command: claude-auto --model opus
 ---
 
 You capture what a change looks like, for its PR body. Capture only the scope

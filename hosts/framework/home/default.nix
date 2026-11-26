@@ -32,6 +32,7 @@ in
 
   my.programs.git.enable = true;
   my.programs.herdr.enable = true;
+  my.programs.orca.enable = true;
   my.profiles.ai.enable = true;
   my.programs.foot.urgentNtfyTopic = secrets.ntfy-alertmanager;
 

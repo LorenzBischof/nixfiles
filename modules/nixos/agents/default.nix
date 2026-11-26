@@ -11,14 +11,23 @@ let
   cfg = config.my.programs.agents;
   llmAgents = pkgs.llm-agents;
 
+  # Orca's own skills are stubs that load the version-matched guide from the
+  # orca executable at runtime. `skills install` writes them the way the app's
+  # "Update skills" does, without a network or a running Orca.
+  orcaSkills = pkgs.runCommand "orca-skills" { nativeBuildInputs = [ llmAgents.orca ]; } ''
+    export HOME=$TMPDIR
+    orca skills install --skill orca-cli --skill orchestration --agent universal
+    mkdir -p $out/share/skills
+    cp -r $HOME/.agents/skills $out/share/skills/orca
+  '';
+
   wrappers = pkgs.callPackage ./wrappers.nix {
     claude-code = llmAgents.claude-code;
     inherit (pkgs) codex;
     skillPackages = [
       (pkgs.callPackage ../../../packages/agent-skills { inherit (cfg) browser; })
-      llmAgents.herdr-core
     ];
-    inherit (cfg) mcpServers plugins;
+    inherit (cfg) orchestratorSkills mcpServers plugins;
     claudeSettings = cfg.claude.settings;
     claudeFlagSettings = { };
     codexConfig = cfg.codex.config;
@@ -34,6 +43,15 @@ in
       type = lib.types.attrsOf (lib.types.attrsOf lib.types.anything);
       default = { };
       description = "MCP servers in Claude's .mcp.json shape; translated for Codex.";
+    };
+    orchestratorSkills = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.listOf lib.types.package);
+      default = { };
+      description = ''
+        Skill packages loaded only inside that terminal app: `orca` in an Orca
+        terminal, `hc` everywhere else. Each app's agents use its own
+        orchestrator, and the other's skills would only compete with it.
+      '';
     };
     browser = lib.mkOption {
       type = lib.types.package;
@@ -74,13 +92,14 @@ in
       readOnly = true;
       internal = true;
       default = wrappers;
-      description = "The claude and codex wrappers, for `.override` by sandboxing wrappers.";
+      description = "The agent wrappers, for `.override` by sandboxing wrappers.";
     };
   };
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [
       wrappers.claude
+      wrappers.claude-auto
       wrappers.codex
       # Agents reach for python3 for one-off scripting; without it they fall
       # back to awk and sed, which is where the fiddly mistakes come from.
@@ -88,6 +107,10 @@ in
     ];
     my.programs.agents = {
       plugins.egm = inputs.egm;
+      orchestratorSkills = {
+        hc = [ llmAgents.herdr-core ];
+        orca = [ orcaSkills ];
+      };
       claude.settings = lib.mapAttrs (_: lib.mkDefault) {
         attribution = {
           commit = "";
@@ -100,10 +123,6 @@ in
         spinnerTipsEnabled = false;
         prefersReducedMotion = true;
         feedbackSurveyRate = 0;
-        statusLine = {
-          type = "command";
-          command = lib.getExe (pkgs.callPackage ./claude-statusline.nix { });
-        };
         # After 5 auto-mode denials Claude Code opens a "Teach auto mode about
         # your environment?" dialog, which blocks an agent in an hc terminal
         # until someone answers it. "off" turns the whole setup feature off.

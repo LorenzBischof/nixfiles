@@ -3,14 +3,17 @@
 # readers need too (plugin hooks and skills read the files, never the flags)
 # are merged into the user's files at launch instead, see ownedSettings below.
 # Our skills ship as one more plugin, so both CLIs load everything the
-# same way, at the price of a namespace (`nixos:grill-me`). Instructions are
-# left to ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md and the repositories.
+# same way, at the price of a namespace (`nixos:grill-me`). The skills of the
+# terminal app's orchestrator ship as a plugin of their own per app, and the
+# wrapper loads only the one for the app it starts in. Instructions are left
+# to ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md and the repositories.
 {
   lib,
   runCommand,
   linkFarm,
   writeShellApplication,
   writeText,
+  callPackage,
   coreutils,
   util-linux,
   jq,
@@ -18,6 +21,9 @@
   codex,
   # In nixpkgs' installAgentSkills layout; their bin/ goes on PATH.
   skillPackages,
+  # { hc = [ … ]; orca = [ … ]; }: skill packages per orchestrator, in the same
+  # layout. A launch in an Orca terminal gets orca's, any other launch hc's.
+  orchestratorSkills,
   # Name -> a directory with both a .claude-plugin and a .codex-plugin manifest,
   # or { claude = dir; codex = dir; } where the two differ (null leaves one out).
   plugins,
@@ -41,16 +47,22 @@ let
     description = "Skills from nixfiles";
   };
 
-  skillsPlugin = runCommand "${name}-skills-plugin" { } ''
-    mkdir -p $out/skills $out/.claude-plugin $out/.codex-plugin
-    for pkg in ${lib.escapeShellArgs skillPackages}; do
-      cp -rL "$pkg"/share/skills/*/* $out/skills/
-    done
-    echo ${lib.escapeShellArg (builtins.toJSON manifest)} > $out/.claude-plugin/plugin.json
-    echo ${
-      lib.escapeShellArg (builtins.toJSON (manifest // { skills = "./skills/"; }))
-    } > $out/.codex-plugin/plugin.json
-  '';
+  mkSkillsPlugin =
+    manifest: packages:
+    runCommand "${manifest.name}-skills-plugin" { } ''
+      mkdir -p $out/skills $out/.claude-plugin $out/.codex-plugin
+      for pkg in ${lib.escapeShellArgs packages}; do
+        cp -rL "$pkg"/share/skills/*/* $out/skills/
+      done
+      echo ${lib.escapeShellArg (builtins.toJSON manifest)} > $out/.claude-plugin/plugin.json
+      echo ${
+        lib.escapeShellArg (builtins.toJSON (manifest // { skills = "./skills/"; }))
+      } > $out/.codex-plugin/plugin.json
+    '';
+  skillsPlugin = mkSkillsPlugin manifest skillPackages;
+  orchestratorPlugins = lib.mapAttrs (
+    orchestrator: mkSkillsPlugin (manifest // { name = orchestrator; })
+  ) orchestratorSkills;
 
   allPlugins =
     lib.mapAttrs (
@@ -63,12 +75,10 @@ let
           codex = dir;
         }
     ) plugins
-    // {
-      ${name} = {
-        claude = skillsPlugin;
-        codex = skillsPlugin;
-      };
-    };
+    // lib.mapAttrs (_: dir: {
+      claude = dir;
+      codex = dir;
+    }) ({ ${name} = skillsPlugin; } // orchestratorPlugins);
   pluginsFor =
     harness: lib.filterAttrs (_: dir: dir != null) (lib.mapAttrs (_: dirs: dirs.${harness}) allPlugins);
   claudePlugins = pluginsFor "claude";
@@ -109,41 +119,64 @@ let
     else
       builtins.toJSON value;
 
-  codexSettings = lib.recursiveUpdate {
-    # Codex has no `type`; it tells the transport from `url` or `command`.
-    mcp_servers = lib.mapAttrs (_: server: removeAttrs server [ "type" ]) mcpServers;
-    features.plugins = true;
-    marketplaces.${name} = {
-      source_type = "local";
-      source = "${marketplace}";
-    };
-    plugins = lib.mapAttrs' (
-      plugin: _: lib.nameValuePair "${plugin}@${name}" { enabled = true; }
-    ) codexPlugins;
-  } codexConfig;
+  # The skills plugins of every orchestrator but this one.
+  others = orchestrator: lib.remove orchestrator (lib.attrNames orchestratorPlugins);
 
-  codexArgs = lib.concatLists (
-    lib.mapAttrsToList (key: value: [
-      "-c"
-      "${key}=${toToml value}"
-    ]) codexSettings
-  );
+  codexSettings =
+    orchestrator:
+    lib.recursiveUpdate {
+      # Codex has no `type`; it tells the transport from `url` or `command`.
+      mcp_servers = lib.mapAttrs (_: server: removeAttrs server [ "type" ]) mcpServers;
+      features.plugins = true;
+      marketplaces.${name} = {
+        source_type = "local";
+        source = "${marketplace}";
+      };
+      # The others are turned off rather than left out, so one a user enabled
+      # in their own config.toml stays off too.
+      plugins = lib.mapAttrs' (
+        plugin: _:
+        lib.nameValuePair "${plugin}@${name}" { enabled = !lib.elem plugin (others orchestrator); }
+      ) codexPlugins;
+    } codexConfig;
+
+  codexArgs =
+    orchestrator:
+    lib.concatLists (
+      lib.mapAttrsToList (key: value: [
+        "-c"
+        "${key}=${toToml value}"
+      ]) (codexSettings orchestrator)
+    );
 
   # --mcp-config takes several values; --settings after it ends the list, so a
   # prompt is not read as one.
-  claudeArgs = [
-    "--mcp-config"
-    (builtins.toJSON { inherit mcpServers; })
-    "--settings"
-    (builtins.toJSON claudeFlagSettings)
-  ]
-  ++ lib.concatMap (dir: [
-    "--plugin-dir"
-    "${dir}"
-  ]) (lib.attrValues claudePlugins);
+  claudeArgs =
+    flagSettings: orchestrator:
+    [
+      "--mcp-config"
+      (builtins.toJSON { inherit mcpServers; })
+      "--settings"
+      (builtins.toJSON flagSettings)
+    ]
+    ++ lib.concatMap (dir: [
+      "--plugin-dir"
+      "${dir}"
+    ]) (lib.attrValues (removeAttrs claudePlugins (others orchestrator)));
 
   pathPrefix = ''
-    export PATH=${lib.makeBinPath skillPackages}:"$PATH"
+    export PATH=${
+      lib.makeBinPath (skillPackages ++ lib.concatLists (lib.attrValues orchestratorSkills))
+    }:"$PATH"
+  '';
+
+  # Orca marks its terminals with ORCA_TERMINAL_HANDLE; everything else, hc's
+  # terminals and plain shells alike, gets hc.
+  execFor = command: args: ''
+    if [ -n "''${ORCA_TERMINAL_HANDLE:-}" ]; then
+      exec ${command} ${lib.escapeShellArgs (args "orca")} "$@"
+    fi
+    exec ${command} ${lib.escapeShellArgs (args "hc")} "$@"
   '';
 
   # Each owned key replaces the user's whole key of that name, and the rest of
@@ -167,21 +200,63 @@ let
       )}
     '';
 
+  mkClaude =
+    {
+      name,
+      preamble ? "",
+      flagSettings ? claudeFlagSettings,
+    }:
+    writeShellApplication {
+      inherit name;
+      runtimeInputs = [
+        coreutils
+        util-linux
+        jq
+      ];
+      text = ''
+        ${pathPrefix}
+        ${preamble}
+        ${ownedSettings ''"''${CLAUDE_CONFIG_DIR:-$HOME/.claude}"'' {
+          "settings.json" = claudeSettings;
+        }}
+        # TODO: settings.json still holds the status line the wrapper owned
+        # before claude-auto passed it as a flag; this drops it. Drop the line
+        # once every host has launched claude past 2026-12.
+        settings=''${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json
+        if jq -e '.statusLine.command? // "" | test("-claude-statusline/")' "$settings" >/dev/null 2>&1; then
+          tmp=$(mktemp "$settings.XXXXXX")
+          jq 'del(.statusLine)' "$settings" >"$tmp" && mv -f "$tmp" "$settings"
+        fi
+        # Subcommands reject session flags.
+        case "''${1:-}" in
+          mcp | plugin | plugins | update | upgrade | install | doctor | auth | setup-token)
+            exec ${lib.getExe claude-code} "$@" ;;
+        esac
+        # TODO: --plugin-dir rather than a --settings directory marketplace,
+        # because Claude keeps a marketplace's old store path for the first launch
+        # after a rebuild and drops EGM's agents (2.1.330, no upstream issue as of
+        # 2026-11). Switch once it follows the new path on that launch.
+        ${execFor (lib.getExe claude-code) (claudeArgs flagSettings)}
+      '';
+    };
+
 in
 {
-  claude = writeShellApplication {
-    name = "claude";
-    runtimeInputs = [
-      coreutils
-      util-linux
-      jq
-    ];
-    text = ''
-      ${pathPrefix}
-      # Without a config folder, run on the ~/.claude-* account with the most
-      # weekly usage left per hour until its reset, from the rate-limits.json
-      # the status line saves; a full 5h window scores 0, no file a fresh week.
-      # All accounts share ~/.claude/projects: sessions, resume and memory.
+  claude = mkClaude { name = "claude"; };
+
+  # claude with the status line. Without a config folder it runs on the
+  # ~/.claude-* account with the most weekly usage left per hour until its
+  # reset, from the rate-limits.json the status line saves; a full 5h window
+  # scores 0, no file a fresh week. All accounts share ~/.claude/projects.
+  claude-auto = mkClaude {
+    name = "claude-auto";
+    flagSettings = claudeFlagSettings // {
+      statusLine = {
+        type = "command";
+        command = lib.getExe (callPackage ./claude-statusline.nix { });
+      };
+    };
+    preamble = ''
       if [ -z "''${CLAUDE_CONFIG_DIR:-}" ]; then
         best=-1
         for dir in "$HOME"/.claude-*/; do
@@ -203,19 +278,6 @@ in
             ln -sn "$HOME/.claude/projects" "$CLAUDE_CONFIG_DIR/projects" 2>/dev/null || true
           ;;
       esac
-      ${ownedSettings ''"''${CLAUDE_CONFIG_DIR:-$HOME/.claude}"'' {
-        "settings.json" = claudeSettings;
-      }}
-      # Subcommands reject session flags.
-      case "''${1:-}" in
-        mcp | plugin | plugins | update | upgrade | install | doctor | auth | setup-token)
-          exec ${lib.getExe claude-code} "$@" ;;
-      esac
-      # TODO: --plugin-dir rather than a --settings directory marketplace,
-      # because Claude keeps a marketplace's old store path for the first launch
-      # after a rebuild and drops EGM's agents (2.1.330, no upstream issue as of
-      # 2026-11). Switch once it follows the new path on that launch.
-      exec ${lib.getExe claude-code} ${lib.escapeShellArgs claudeArgs} "$@"
     '';
   };
 
@@ -250,7 +312,7 @@ in
         mv -T "$tmp" "$cache/${name}"
       fi
       exec {lock}>&-
-      exec ${lib.getExe codex} ${lib.escapeShellArgs codexArgs} "$@"
+      ${execFor (lib.getExe codex) codexArgs}
     '';
   };
 }
