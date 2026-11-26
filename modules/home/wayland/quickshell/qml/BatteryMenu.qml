@@ -4,8 +4,8 @@ import QtQuick
 import Quickshell.Services.UPower
 
 // Contents of the battery dropdown: the numbers behind the bar's single glyph,
-// and the one power decision worth making from here -- which profile the
-// machine runs at.
+// and the two power decisions worth making from here -- which profile the
+// machine runs at, and how eagerly the fan answers the heat that makes.
 Column {
     id: root
 
@@ -16,6 +16,8 @@ Column {
     required property int percentage
     required property bool charging
     required property bool full
+
+    required property bool active
 
     // UPower reports the rate as a magnitude -- it takes the absolute value of
     // the kernel's power_now -- and quickshell passes the property through
@@ -176,5 +178,10 @@ Column {
         icon: PowerProfiles.degradationReason === PerformanceDegradationReason.HighTemperature ? "󰔏" : "󰀄"
         text: PowerProfiles.degradationReason === PerformanceDegradationReason.HighTemperature ? "Throttled: too hot" : "Throttled: on a lap"
         interactive: false
+    }
+
+    FanControl {
+        width: parent.width
+        active: root.active
     }
 }
