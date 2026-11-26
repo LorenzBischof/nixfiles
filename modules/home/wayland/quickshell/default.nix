@@ -460,11 +460,21 @@ let
     }
   '';
 
-  shellConfig = pkgs.runCommand "quickshell-bar" { } ''
-    mkdir -p $out
-    cp ${./qml}/*.qml $out/
-    cp ${configQml} $out/Config.qml
-  '';
+  # The passthru is for .claude/skills/quickshell-bar/lint.sh, which reads both
+  # inputs with nix eval rather than building this x86_64-only config.
+  shellConfig =
+    pkgs.runCommand "quickshell-bar"
+      {
+        passthru = {
+          qml = ./qml;
+          config = configQml;
+        };
+      }
+      ''
+        mkdir -p $out
+        cp ${./qml}/*.qml $out/
+        cp ${configQml} $out/Config.qml
+      '';
 in
 {
   programs.quickshell = {
