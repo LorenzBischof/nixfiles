@@ -185,8 +185,16 @@ in
 
   services.openssh = {
     enable = true;
-    settings.PasswordAuthentication = false;
-    settings.KbdInteractiveAuthentication = false;
+    # Keys only from /etc/ssh/authorized_keys.d, which this config writes, so
+    # nothing running as lbischof can plant a key that outlives a deploy.
+    authorizedKeysInHomedir = false;
+    settings = {
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+      # Root and service accounts can't log in, even with a key in their home
+      # and a nologin shell, which still allows port forwarding.
+      AllowUsers = [ "lbischof" ];
+    };
   };
 
   services.resolved.enable = true;
