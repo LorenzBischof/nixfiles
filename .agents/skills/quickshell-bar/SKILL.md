@@ -72,9 +72,10 @@ bar or with filenames for just those:
 
 Do not point `qmllint` at `qml/` directly. `Config.qml` is not there — it is
 generated — and the singleton needs a `qmldir` that the runtime never requires,
-so a naive run reports nothing but unresolved types. The script builds the
-config, lints the built copy, and takes `qmllint`, Qt's QML modules and
-quickshell's own from the same nixpkgs the bar runs against.
+so a naive run reports nothing but unresolved types. The script puts the
+sources next to the generated config without building the bar, lints that
+copy, and takes `qmllint`, Qt's QML modules and quickshell's own from the same
+nixpkgs the bar runs against. It works on aarch64 hosts too.
 
 **A file with a `dropdown:` component or a `Repeater` delegate needs `pragma
 ComponentBehavior: Bound` as its first line.** Both reach their parent through
@@ -116,11 +117,12 @@ runtime with `<Name> was not found`.
 Design glyphs resolved by fontconfig fallback to `nerd-fonts.dejavu-sans-mono`
 (`hosts/framework/home/default.nix`). That package's cmap is what decides
 whether a codepoint draws or shows tofu, so check it there — and search it by
-glyph name to find one in the first place:
+glyph name to find one in the first place. `ttx` comes from nixpkgs for this
+machine, since the framework's is x86_64 and will not run on an aarch64 host.
 
 ```bash
 font=$(nix build --no-link --print-out-paths '.#nixosConfigurations.framework.pkgs.nerd-fonts.dejavu-sans-mono')
-ttx=$(nix build --no-link --print-out-paths '.#nixosConfigurations.framework.pkgs.python3Packages.fonttools')/bin/ttx
+ttx=$(nix build --no-link --print-out-paths --inputs-from . 'nixpkgs#python3Packages.fonttools')/bin/ttx
 "$ttx" -t cmap -o - "$font"/share/fonts/truetype/NerdFonts/DejaVuSansM/DejaVuSansMNerdFontMono-Regular.ttf \
   | grep -E 'name="md-(leaf|rocket_launch)"'
 # <map code="0xf032a" name="md-leaf"/>
