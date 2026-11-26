@@ -15,6 +15,7 @@
     ./open-webui.nix
     ./mcp.nix
     ./agents.nix
+    ./herdr.nix
     ../../modules/nixos
   ];
   nixpkgs.config.allowUnfree = true;
