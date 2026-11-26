@@ -36,6 +36,7 @@ in
     ./outline.nix
     ./umap.nix
     ./gpslogger.nix
+    ./egress.nix
     ../../modules/nixos
   ];
 

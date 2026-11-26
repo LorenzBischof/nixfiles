@@ -57,6 +57,7 @@ in
       ReadWritePaths = [ outDir ];
       ProtectHome = true;
       PrivateTmp = true;
+      PrivateNetwork = true;
       NoNewPrivileges = true;
       ProtectKernelTunables = true;
       ProtectControlGroups = true;
