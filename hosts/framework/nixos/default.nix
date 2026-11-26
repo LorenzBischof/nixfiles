@@ -247,11 +247,37 @@
   #  ./analog-input-headset-mic.conf;
   programs.noisetorch.enable = true;
 
-  services.syncthing = {
-    enable = true;
-    user = "lbischof";
-    dataDir = "/home/lbischof";
-    openDefaultPorts = true;
+  services.syncthing =
+    let
+      tailscaleIp = "100.70.164.5";
+    in
+    {
+      enable = true;
+      user = "lbischof";
+      dataDir = "/home/lbischof";
+      # Devices and folders are managed in the GUI. Without these, setting any
+      # option below makes syncthing-init delete every one of them.
+      overrideDevices = false;
+      overrideFolders = false;
+      # Tailnet only: this laptop joins networks it can't trust. Bound to the
+      # Tailscale IP, which is also what global discovery announces; the nas
+      # dials it there too. The bind alone doesn't keep other networks out
+      # (Linux accepts a local address on any interface): the tailscale0-only
+      # firewall rule below does. Syncthing retries the bind until tailscale0
+      # has the address.
+      settings.options = {
+        listenAddresses = [
+          "tcp://${tailscaleIp}:22000"
+          "quic://${tailscaleIp}:22000"
+        ];
+        localAnnounceEnabled = false;
+        natEnabled = false;
+        relaysEnabled = false;
+      };
+    };
+  networking.firewall.interfaces.tailscale0 = {
+    allowedTCPPorts = [ 22000 ];
+    allowedUDPPorts = [ 22000 ];
   };
 
   users.mutableUsers = false;

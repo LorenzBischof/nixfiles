@@ -18,9 +18,21 @@ in
       };
       options = {
         urAccepted = -1;
+        # Don't ask the router to forward 22000 from the internet. Phones
+        # sync over the LAN at home and over relays away from it.
+        natEnabled = false;
       };
       devices = {
-        framework.id = secrets.syncthing-devices.framework;
+        # framework listens on its tailnet IP only, so dial it there. It
+        # announces only that IP, so "dynamic" follows it if it changes.
+        framework = {
+          id = secrets.syncthing-devices.framework;
+          addresses = [
+            "tcp://100.70.164.5:22000"
+            "quic://100.70.164.5:22000"
+            "dynamic"
+          ];
+        };
         pixel-7.id = secrets.syncthing-devices.pixel-7;
         macbook.id = secrets.syncthing-devices.macbook;
         scanner.id = secrets.syncthing-devices.scanner;
