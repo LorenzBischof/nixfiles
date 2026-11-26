@@ -418,6 +418,10 @@ in
       settings = {
         server = {
           domain = "grafana.${domain}";
+          # The default is built from protocol and http_port, which would make
+          # it socket://…:3000.
+          root_url = "https://grafana.${domain}/";
+          protocol = "socket";
         };
         auth.disable_login_form = true;
         "auth.anonymous" = {
@@ -509,7 +513,7 @@ in
       useACMEHost = domain;
       enableAuthelia = true;
       locations."/" = {
-        proxyPass = "http://127.0.0.1:${toString config.services.grafana.settings.server.http_port}";
+        proxyPass = "http://unix:${config.services.grafana.settings.server.socket}";
         proxyWebsockets = true;
         enableAuthelia = true;
       };
@@ -546,10 +550,10 @@ in
 
   my.homelab.ports = [
     config.services.prometheus.port
-    config.services.grafana.settings.server.http_port
     config.services.prometheus.exporters.restic.port
     config.services.prometheus.exporters.node.port
   ];
+  systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "grafana" ];
   my.homelab.dashboard.Monitoring = {
     Grafana = {
       href = "https://${config.services.grafana.settings.server.domain}";

@@ -7,13 +7,15 @@
 }:
 let
   domain = config.my.homelab.domain;
+  socket = "/run/hedgedoc/hedgedoc.sock";
   hedgedocDomain = "hedgedoc.${domain}";
 in
 {
   services.hedgedoc = {
     enable = true;
     settings = {
-      port = 52918;
+      # Group-writable through the module's UMask.
+      path = socket;
       domain = hedgedocDomain;
       email = false;
       allowAnonymous = true;
@@ -34,7 +36,7 @@ in
       extraConfig = ''
         rewrite ^/$ /homepage permanent;
       '';
-      proxyPass = "http://localhost:${toString config.services.hedgedoc.settings.port}";
+      proxyPass = "http://unix:${socket}";
       proxyWebsockets = true;
       enableAuthelia = true;
     };
@@ -56,6 +58,6 @@ in
     config.services.hedgedoc.settings.db.storage
     config.services.hedgedoc.settings.uploadsPath
   ];
-  my.homelab.ports = [ config.services.hedgedoc.settings.port ];
+  systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "hedgedoc" ];
   #my.homelab.dashboard.Services.Notes.href = "https://${hedgedocDomain}";
 }
