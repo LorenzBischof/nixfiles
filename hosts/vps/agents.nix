@@ -317,9 +317,9 @@ in
   users.users.${user} = {
     inherit uid;
     isNormalUser = true;
-    # The user manager, and so the front ends (herdr.nix) and every
-    # terminal, start at boot and outlive every SSH session. hc would enable
-    # this itself if it were off.
+    # The user manager, and so every front end and terminal, starts at boot
+    # and outlives every SSH session. hc would enable this itself if it were
+    # off.
     linger = true;
     # For `hc attach`.
     openssh.authorizedKeys.keys = config.users.users.lbischof.openssh.authorizedKeys.keys;
@@ -337,8 +337,7 @@ in
     ];
   };
 
-  # For the front ends beside this file (herdr.nix): they run as this user
-  # and hand its tools to the terminals they start.
+  # Shared with herdr.nix and orca.nix.
   _module.args.agentUser = {
     name = user;
     # systemd-run, and the tools the terminals inherit. Profiles rather than

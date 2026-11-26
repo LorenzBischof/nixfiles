@@ -16,6 +16,7 @@
     ./mcp.nix
     ./agents.nix
     ./herdr.nix
+    ./orca.nix
     ../../modules/nixos
   ];
   nixpkgs.config.allowUnfree = true;
