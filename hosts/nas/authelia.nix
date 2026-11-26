@@ -7,10 +7,11 @@
 }:
 let
   inherit (config.my.homelab) domain;
+  socket = "/run/authelia-main/authelia.sock";
   autheliaLocation = pkgs.writeText "authelia-location.conf" ''
     ## Essential Proxy Configuration
     internal;
-    proxy_pass http://localhost:9091/api/verify;
+    proxy_pass http://unix:${socket}:/api/verify;
     ## Headers
     ## The headers starting with X-* are required.
     proxy_set_header X-Original-URL $scheme://$http_host$request_uri;
@@ -114,6 +115,8 @@ in
       };
       settings = {
         log.level = "info";
+        # umask 0117 leaves the socket 0660, for the authelia-main group.
+        server.address = "unix://${socket}?umask=0117";
         authentication_backend.file.path = config.age.secrets.authelia-users.path;
         access_control.default_policy = "one_factor";
         session.cookies = [
@@ -144,12 +147,13 @@ in
       enable = true;
       user = "authelia-main";
     };
-    my.homelab.ports = [ 9091 ];
+    systemd.services.authelia-main.serviceConfig.RuntimeDirectory = "authelia-main";
+    systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "authelia-main" ];
     services.nginx.virtualHosts."auth.${domain}" = {
       forceSSL = true;
       useACMEHost = domain;
       locations."/" = {
-        proxyPass = "http://127.0.0.1:9091";
+        proxyPass = "http://unix:${socket}";
         proxyWebsockets = true;
       };
     };

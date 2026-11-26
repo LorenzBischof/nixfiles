@@ -7,14 +7,18 @@
 }:
 let
   domain = config.my.homelab.domain;
+  socket = "/run/syncthing/gui.sock";
 in
 {
   services.syncthing = {
     enable = true;
     openDefaultPorts = true;
+    guiAddress = "unix://${socket}";
     settings = {
       gui = {
         insecureSkipHostcheck = true;
+        # Without it the socket follows the umask, 0755, and nginx can't connect.
+        unixSocketPermissions = "660";
       };
       options = {
         urAccepted = -1;
@@ -92,7 +96,7 @@ in
     useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
-      proxyPass = "http://${toString config.services.syncthing.guiAddress}";
+      proxyPass = "http://unix:${socket}";
       proxyWebsockets = true;
       enableAuthelia = true;
     };
@@ -102,8 +106,6 @@ in
 
   services.restic.backups.daily.paths = [ config.services.syncthing.dataDir ];
 
-  my.homelab.ports = [
-    (builtins.elemAt (builtins.split ":" config.services.syncthing.guiAddress) 1)
-  ];
+  systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "syncthing" ];
   my.homelab.dashboard.Services.Syncthing.href = "https://syncthing.${domain}";
 }

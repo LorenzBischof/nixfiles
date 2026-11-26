@@ -8,6 +8,7 @@ let
   backupDir = "/var/cache/paperless-backup";
   domain = config.my.homelab.domain;
   paperlessDomain = "paperless.${domain}";
+  socket = "/run/paperless-web/paperless.sock";
 in
 {
   services.paperless = {
@@ -21,12 +22,25 @@ in
       PAPERLESS_CSRF_TRUSTED_ORIGINS = "https://${paperlessDomain}";
     };
   };
+  # TODO: The module only takes a TCP address and port; granian reads the
+  # socket from its environment and then ignores GRANIAN_HOST/GRANIAN_PORT.
+  # No nixpkgs issue or PR as of 2026-11; drop this once the module has a
+  # socket option.
+  systemd.services.paperless-web = {
+    environment = {
+      GRANIAN_UDS = socket;
+      GRANIAN_UDS_PERMISSIONS = "0660";
+    };
+    serviceConfig.RuntimeDirectory = "paperless-web";
+  };
+  systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "paperless" ];
+
   services.nginx.virtualHosts."${paperlessDomain}" = {
     forceSSL = true;
     useACMEHost = domain;
     enableAuthelia = true;
     locations."/" = {
-      proxyPass = "http://127.0.0.1:${toString config.services.paperless.port}";
+      proxyPass = "http://unix:${socket}";
       proxyWebsockets = true;
       enableAuthelia = true;
     };
@@ -55,7 +69,6 @@ in
     };
   services.restic.backups.daily.paths = [ backupDir ];
 
-  my.homelab.ports = [ config.services.paperless.port ];
   my.homelab.dashboard.Services.Paperless.href = "https://${paperlessDomain}";
 
 }

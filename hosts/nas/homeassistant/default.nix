@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   secrets,
   ...
 }:
@@ -140,16 +141,25 @@ in
 
   services.esphome = {
     enable = true;
-    # Only reachable through nginx; both default to 0.0.0.0.
-    address = "127.0.0.1";
+    enableUnixSocket = true;
+    # Defaults to 0.0.0.0.
     remoteBuildAddress = "127.0.0.1";
   };
+
+  systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "esphome" ];
+  # The dashboard creates its socket by the umask, and the module's 0077 shuts
+  # nginx out. Opening only the socket keeps the umask for the state files.
+  systemd.services.esphome.serviceConfig.ExecStartPost =
+    pkgs.writeShellScript "esphome-socket-mode" ''
+      until [ -S /run/esphome/esphome.sock ]; do sleep 0.1; done
+      chmod 0660 /run/esphome/esphome.sock
+    '';
 
   services.nginx.virtualHosts."esphome.${domain}" = {
     forceSSL = true;
     useACMEHost = domain;
     locations."/" = {
-      proxyPass = "http://127.0.0.1:${toString config.services.esphome.port}";
+      proxyPass = "http://unix:/run/esphome/esphome.sock";
       proxyWebsockets = true;
     };
   };
