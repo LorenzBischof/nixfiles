@@ -27,6 +27,17 @@ in
         default = false;
         description = "Whether to enable nginx with homelab configuration";
       };
+      firewallInterface = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "tailscale0";
+        description = ''
+          Open 80 and 443 only on this interface; null opens them on all.
+          Binding nginx to that interface's address alone doesn't keep other
+          networks out: Linux accepts a packet for any local address on any
+          interface.
+        '';
+      };
       acme = {
         enable = lib.mkOption {
           type = lib.types.bool;
@@ -113,10 +124,17 @@ in
         443
       ];
 
-      networking.firewall.allowedTCPPorts = [
-        80
-        443
-      ];
+      networking.firewall =
+        let
+          ports = [
+            80
+            443
+          ];
+        in
+        if cfg.nginx.firewallInterface == null then
+          { allowedTCPPorts = ports; }
+        else
+          { interfaces.${cfg.nginx.firewallInterface}.allowedTCPPorts = ports; };
 
       security.acme = lib.mkIf cfg.nginx.acme.enable {
         acceptTerms = true;

@@ -12,6 +12,8 @@ in
     domain = lib.mkDefault secrets.prod-domain;
     nginx = {
       enable = true;
+      # The LAN is untrusted: everything behind nginx is for the tailnet only.
+      firewallInterface = "tailscale0";
       acme = {
         enable = true;
         dnsProvider = "cloudflare";
