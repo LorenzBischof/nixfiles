@@ -33,6 +33,7 @@ BarModule {
         percentage: root.percentage
         charging: root.charging
         full: root.full
+        active: root.dropdownOpen
     }
 
     // A critical battery blinks until it is plugged in.

@@ -2,10 +2,17 @@
   config,
   lib,
   pkgs,
+  osConfig,
   ...
 }:
 let
   colors = lib.mapAttrs (_: c: "#${c}") config.my.theme.palette;
+
+  # fw-fanctrl is a Framework service, configured at the system level. Without it
+  # the path is empty and the battery dropdown leaves its fan section out.
+  fwFanctrl = lib.optionalString osConfig.hardware.fw-fanctrl.enable (
+    lib.getExe osConfig.hardware.fw-fanctrl.package
+  );
 
   idleInhibitUnit = "idle-inhibit.service";
 
@@ -450,6 +457,7 @@ let
         readonly property string idleInhibitStatus: ${builtins.toJSON (lib.getExe idleInhibitStatus)}
         readonly property string idleInhibitToggle: ${builtins.toJSON (lib.getExe idleInhibitToggle)}
         readonly property string idleInhibitWatch: ${builtins.toJSON (lib.getExe idleInhibitWatch)}
+        readonly property string fwFanctrl: ${builtins.toJSON fwFanctrl}
 
         FontMetrics {
             id: metrics

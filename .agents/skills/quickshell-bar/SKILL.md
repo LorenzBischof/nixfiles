@@ -14,9 +14,10 @@ non-obvious; everything else follows the existing components.
 
 The bar runs for weeks at a time, so a module that asks "has it changed yet?"
 on a timer pays that cost forever and still shows a stale value in between.
-Every module here is driven by something that announces the change instead, and
-there is no polling timer left in the tree — the one repeating `Timer` is an
-animation, gated on being on screen.
+Every module here is driven by something that announces the change instead.
+The one poll is `FanControl`, and only while the battery dropdown is open:
+fw-fanctrl's socket answers requests and announces nothing, and a fan readout
+nobody is looking at needs no refreshing.
 
 Find the announcement before reaching for an interval. Most of it is already
 done for you: `UPower`, `Pipewire`, `Networking`, `Bluetooth` and `I3` are
