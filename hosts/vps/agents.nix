@@ -175,7 +175,8 @@ let
   };
 
   # Waits for the user to open the PR from a compare link the agent gave them,
-  # then for its checks, and prints gh's check table once at the end. Run from
+  # then for its checks and CodeRabbit's review, and prints the path of a file
+  # with CodeRabbit's comments and gh's check table once at the end. Run from
   # the clone, after pushing BRANCH to the `fork` remote. Agents start it with
   # hc-run-hidden and wait for it (see agent-instructions.md).
   prWatch = pkgs.writeShellApplication {
@@ -217,6 +218,42 @@ let
         timeout "$((left > 0 ? left : 1))" gh pr checks "$n" -R "$repo" --watch --interval 60 >/dev/null || true
         [ "$SECONDS" -lt "$end" ] || break
       done
+      # Only CodeRabbit's comments: anyone can write a comment, but no user
+      # account can take a `[bot]` login.
+      mine='(.user.login == "coderabbitai[bot]")'
+      # CodeRabbit sets no check, so wait up to 20 minutes for its review of
+      # the head commit, or for its notice that it is out of reviews. A PR it
+      # hasn't commented on within 10 minutes is in a repo without it.
+      start=$SECONDS reviewed="" limited=""
+      wait_end=$((SECONDS + 1200))
+      [ "$wait_end" -lt "$end" ] || wait_end=$end
+      while [ "$SECONDS" -lt "$wait_end" ]; do
+        reviewed=$(gh api --paginate "repos/$repo/pulls/$n/reviews" \
+          -q ".[] | select($mine and .commit_id == \"$head\") | .id")
+        comments=$(gh api --paginate "repos/$repo/issues/$n/comments" -q ".[] | select($mine) | .html_url")
+        limited=$(gh api --paginate "repos/$repo/issues/$n/comments" \
+          -q ".[] | select($mine and (.body | contains(\"rate limited by coderabbit.ai\"))) | .html_url")
+        [ -z "$reviewed$limited" ] || break
+        [ -n "$comments" ] || [ "$SECONDS" -lt "$((start + 600))" ] || break
+        sleep 60
+      done
+      # The notice sits in a summary comment CodeRabbit edits in place, so it
+      # can be left over from an earlier push.
+      [ -n "$reviewed" ] || [ -z "$limited" ] || echo "CodeRabbit is out of reviews: $limited"
+      # Its reviews and top-level inline comments, for every commit. Replies,
+      # where anyone can have it answer in words they choose, are left out, and
+      # so is the summary comment, which restates the diff. HTML comments, also
+      # an unclosed one, are cut: the browser hides them from the user.
+      out=''${XDG_STATE_HOME:-$HOME/.local/state}/pr-watch/''${repo//\//-}-$n.md
+      mkdir -p "''${out%/*}"
+      strip='.body | gsub("(?s)<!--.*?-->"; "") | gsub("(?s)<!--.*"; "")'
+      {
+        gh api --paginate "repos/$repo/pulls/$n/reviews" \
+          -q ".[] | select($mine and (.body // \"\") != \"\") | \"# Review of \(.commit_id)\n\(.html_url)\n\n\($strip)\n\""
+        gh api --paginate "repos/$repo/pulls/$n/comments" \
+          -q ".[] | select($mine and .in_reply_to_id == null) | \"# \(.path):\(.line // .original_line) at \(.commit_id)\n\(.html_url)\n\n\($strip)\n\""
+      } >"$out"
+      if [ -s "$out" ]; then echo "CodeRabbit's comments: $out"; else echo "no CodeRabbit comments"; fi
       # A run held for a maintainer's approval has no checks, so gh pr checks
       # can't show it.
       gh run list -R "$repo" --commit "$head" --status action_required --json name,url \
