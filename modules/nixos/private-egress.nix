@@ -39,12 +39,19 @@ in
     #
     # TODO: root is exempt, and tailscaled is root: its LocalAPI socket is
     # 0666 on Linux by design, and its `dial` endpoint (`tailscale nc`)
-    # checks no permission, so any local user can have tailscaled connect
-    # to these ranges (and to any loopback port) for them. No upstream issue
-    # as of 2026-11 (tailscale 1.104.6). Drop once tailscaled gates `dial`
-    # behind write permission, or close it here by making /run/tailscale
-    # 0750 with a group only tailscale-nginx-auth joins (agents and ovis
-    # then lose `tailscale status`).
+    # checks no permission. Given an IP, it dials only Tailscale routes itself
+    # (others come back as Dial-Self, for the caller to dial): tailnet peers,
+    # TCP or UDP, as far as the tailnet ACLs let this node, 100.100.100.100
+    # on every port, and with accept-routes on, subnet routes. Given a DNS
+    # name, it checks only the first answer, then resolves again and races
+    # every answer as root - the TOCTOU tsdial's UserDialPlan warns about -
+    # so a name answering a tailnet IP and 127.0.0.1 or 169.254.169.254
+    # reaches loopback, the metadata endpoint and these ranges too (read in
+    # the source, not tried). tailscale 1.104.6, 2026-11; not reported
+    # upstream. Drop once tailscaled gates `dial` behind write permission, or
+    # close it here by making /run/tailscale 0750 with a group only
+    # tailscale-nginx-auth joins (agents and ovis then lose `tailscale
+    # status`).
     networking.nftables.tables.private_egress = {
       family = "inet";
       content = ''
