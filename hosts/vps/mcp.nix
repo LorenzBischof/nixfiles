@@ -12,10 +12,7 @@ let
 in
 {
   # The MCP servers here bind loopback with no auth of their own, so each
-  # service file lets only their clients connect (loopbackClients): the agents
-  # and nginx (for claude.ai's public name below) by uid, and Open WebUI, a
-  # DynamicUser, through this group.
-  users.groups.mcp = { };
+  # service file lets only their clients connect (my.services).
 
   # claude.ai's name for every MCP server here: each service file adds its own
   # `locations."= /<name>"`, so a new server needs no DNS record, cert change

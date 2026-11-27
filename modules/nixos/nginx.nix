@@ -65,15 +65,32 @@ in
 
   config = lib.mkIf cfg.nginx.enable (
     let
-      duplicatePorts = lib.pipe options.my.homelab.ports.definitionsWithLocations [
-        # Expand entries with multiple ports into individual port entries
-        (lib.concatMap (
+      # Each port with the file that claims it: my.homelab.ports, and the
+      # merged ports of each my.services entry, named with the files that
+      # define it.
+      claims =
+        lib.concatMap (
           entry:
           map (port: {
-            file = entry.file;
-            port = port;
+            inherit (entry) file;
+            inherit port;
           }) entry.value
-        ))
+        ) options.my.homelab.ports.definitionsWithLocations
+        ++ lib.concatLists (
+          lib.mapAttrsToList (
+            name: service:
+            map (port: {
+              file = "my.services.${name} (${
+                lib.concatMapStringsSep ", " (entry: entry.file) (
+                  lib.filter (entry: entry.value ? ${name}) options.my.services.definitionsWithLocations
+                )
+              })";
+              inherit port;
+            }) (service.ports or [ ])
+          ) config.my.services
+        );
+
+      duplicatePorts = lib.pipe claims [
         (lib.groupBy (entry: toString entry.port))
         (lib.filterAttrs (port: entries: builtins.length entries > 1))
         (lib.mapAttrsToList (

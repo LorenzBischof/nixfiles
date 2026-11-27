@@ -386,8 +386,8 @@ in
   users.users.${user} = {
     inherit uid;
     isNormalUser = true;
-    # The user manager, and so ovis and every terminal, start at boot and
-    # outlive every SSH session. hc would enable this itself if it were off.
+    # The user manager, and so every terminal, start at boot and outlive every
+    # SSH session. hc would enable this itself if it were off.
     linger = true;
     # For `hc attach`.
     openssh.authorizedKeys.keys = config.users.users.lbischof.openssh.authorizedKeys.keys ++ [
@@ -428,10 +428,18 @@ in
     };
   };
 
-  systemd.user.services.ovis = {
+  # A system service running as the agent, so my.services lets only nginx
+  # reach its port; it reaches hc's sockets and user manager as the agents do.
+  # hc starts its server and terminals through `systemd-run --user`, so they
+  # stay in user.slice, but what ovis runs itself (CLI sign-ins, git) runs
+  # here. Its egress is the agent's all the same: anything it starts through
+  # the user manager has the agent's network, so my.services can't hold it to
+  # its loopback targets.
+  systemd.services.ovis = {
     description = "ovis web UI for herdr-core terminals";
-    unitConfig.ConditionUser = user;
-    wantedBy = [ "default.target" ];
+    wantedBy = [ "multi-user.target" ];
+    requires = [ "user@${toString uid}.service" ];
+    after = [ "user@${toString uid}.service" ];
     # systemd-run for hc, and the tools its terminals inherit. Profiles rather
     # than store paths, so package bumps reach new terminals without touching
     # the unit.
@@ -447,8 +455,16 @@ in
       # No account.ovis.sh sign-in, so no relay or hosted app on top of the
       # tailnet. The relay is off by default as well.
       OVIS_ACCOUNT_SERVICE_URL = "off";
+      XDG_RUNTIME_DIR = "/run/user/${toString uid}";
+      DBUS_SESSION_BUS_ADDRESS = "unix:path=/run/user/${toString uid}/bus";
     };
     serviceConfig = {
+      User = user;
+      Group = config.users.users.${user}.group;
+      # TODO: ovis was a user service until this commit, and a switch leaves a
+      # user unit running after its file is gone, holding the port. Our own
+      # leftover, no upstream issue. Drop once the vps has switched past this.
+      ExecStartPre = "+-${config.systemd.package}/bin/systemctl --machine=${user}@.host --user stop ovis.service";
       # OVIS_TOKEN. Without it every process on this host is loopback to ovis
       # and gets in unpaired - galaxus-mcp, cook-server and nginx included.
       EnvironmentFile = config.age.secrets.ovis-token.path;
@@ -532,7 +548,10 @@ in
     "L+ /home/${user}/.config/herdr-core/templates/security-reviewer.md - - - - ${./hc-templates/security-reviewer.md}"
   ];
 
-  my.homelab.ports = [ port ];
-  # ovis: nginx only.
-  my.homelab.loopbackClients.${toString port}.users = [ config.services.nginx.user ];
+  my.services.ovis = {
+    ports = [ port ];
+    clients = [ "nginx" ];
+    # The CLI sign-ins it runs itself.
+    internet = true;
+  };
 }

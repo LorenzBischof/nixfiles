@@ -250,9 +250,16 @@
         };
       };
       formatter = forAllSystems (system: treefmtEval.${system}.config.build.wrapper);
-      checks = forAllSystems (system: {
-        formatting = treefmtEval.${system}.config.build.check self;
-      });
+      checks = forAllSystems (
+        system:
+        {
+          formatting = treefmtEval.${system}.config.build.check self;
+        }
+        # VM tests need KVM, which the aarch64 runners and vps lack.
+        // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          services = import ./tests/services.nix { pkgs = pkgsFor.${system}; };
+        }
+      );
       packages = forAllSystems (
         system:
         let

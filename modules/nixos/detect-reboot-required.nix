@@ -11,7 +11,13 @@ let
   cfg = config.my.services.detect-reboot-required;
 in
 {
-  options.my.services.detect-reboot-required.enable = lib.mkEnableOption "detect-reboot-required";
+  # my.services is one option (services.nix), so its entries are declared
+  # through its type.
+  options.my.services = lib.mkOption {
+    type = lib.types.submodule {
+      options.detect-reboot-required.enable = lib.mkEnableOption "detect-reboot-required";
+    };
+  };
   config = lib.mkIf cfg.enable {
     systemd.user.services.detect-reboot-required = {
       script = ''

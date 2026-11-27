@@ -110,10 +110,8 @@ in
       RestartSec = "5s";
 
       # It reads and writes nothing on disk: the recipes reach it over HTTP
-      # from cook-server, so it needs no identity of its own - only the group
-      # that may connect to cook-server.
+      # from cook-server, so it needs no identity of its own.
       DynamicUser = true;
-      SupplementaryGroups = [ "cook" ];
       ProtectSystem = "strict";
       ProtectHome = true;
       PrivateTmp = true;
@@ -262,25 +260,27 @@ in
     };
   };
 
-  my.homelab.ports = [
-    mcpPort
-    uiPort
-  ];
-  my.homelab.loopbackClients = {
+  my.services = {
     # The same clients as every MCP server here - see mcp.nix.
-    ${toString mcpPort} = {
-      users = [
-        "agent"
-        config.services.nginx.user
+    cooklang-mcp = {
+      ports = [ mcpPort ];
+      clients = [
+        "nginx"
+        "open-webui"
       ];
-      groups = [ "mcp" ];
+      users = [ "agent" ];
+      # fetch_recipe reads recipe pages off the web.
+      internet = true;
     };
     # cook-server has no auth of its own: only nginx (the browser UI) and the
-    # MCP server may connect to it.
-    ${toString uiPort} = {
-      users = [ config.services.nginx.user ];
-      groups = [ "cook" ];
+    # MCP server may connect to it. It reads the recipes from disk and needs
+    # no network.
+    cook-server = {
+      ports = [ uiPort ];
+      clients = [
+        "nginx"
+        "cooklang-mcp"
+      ];
     };
   };
-  users.groups.cook = { };
 }

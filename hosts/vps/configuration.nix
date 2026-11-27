@@ -63,6 +63,8 @@
 
   networking.hostName = "vps";
   networking.networkmanager.enable = true;
+  # my.services matches services by cgroup, which needs nftables.
+  networking.nftables.enable = true;
 
   time.timeZone = "Europe/Zurich";
   i18n.defaultLocale = "en_US.UTF-8";
