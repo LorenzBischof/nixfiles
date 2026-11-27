@@ -466,10 +466,6 @@ in
     serviceConfig = {
       User = user;
       Group = config.users.users.${user}.group;
-      # TODO: ovis was a user service until this commit, and a switch leaves a
-      # user unit running after its file is gone, holding the port. Our own
-      # leftover, no upstream issue. Drop once the vps has switched past this.
-      ExecStartPre = "+-${config.systemd.package}/bin/systemctl --machine=${user}@.host --user stop ovis.service";
       # OVIS_TOKEN. Without it every process on this host is loopback to ovis
       # and gets in unpaired - galaxus-mcp, cook-server and nginx included.
       EnvironmentFile = config.age.secrets.ovis-token.path;
@@ -544,9 +540,6 @@ in
     # stays writable for templates still being tried out.
     "d /home/${user}/.config/herdr-core 0755 ${user} ${config.users.users.${user}.group} -"
     "d /home/${user}/.config/herdr-core/templates 0755 ${user} ${config.users.users.${user}.group} -"
-    # Removes the link left from when bug-reviewer was called reviewer; drop
-    # once the vps has switched past this.
-    "r /home/${user}/.config/herdr-core/templates/reviewer.md"
     "L+ /home/${user}/.config/herdr-core/templates/bug-reviewer.md - - - - ${./hc-templates/bug-reviewer.md}"
     "L+ /home/${user}/.config/herdr-core/templates/simplifier.md - - - - ${./hc-templates/simplifier.md}"
     "L+ /home/${user}/.config/herdr-core/templates/screenshotter.md - - - - ${./hc-templates/screenshotter.md}"

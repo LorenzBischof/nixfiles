@@ -98,7 +98,6 @@ pkgs.testers.runNixOSTest {
 
   testScript = ''
     curl = "${pkgs.curl}/bin/curl"
-    iptables = "${pkgs.iptables}/bin/iptables -w"
 
     def fetch(port, host="127.0.0.1"):
         return f"{curl} -sS --max-time 5 -o /dev/null http://{host}:{port}/"
@@ -170,17 +169,6 @@ pkgs.testers.runNixOSTest {
         for path in ("/run/nscd", "/run/dbus"):
             machine.succeed(f"ls -A {path} | grep -q .")
             machine.succeed(f"nsenter -t {pid} -m -- sh -c '! ls -A {path} 2>/dev/null | grep -q .'")
-
-    with subtest("the iptables rules this replaced are removed"):
-        machine.succeed(
-            f"{iptables} -N loopback-refuse && {iptables} -A loopback-refuse -j REJECT"
-            f" && {iptables} -N loopback-clients && {iptables} -A loopback-clients -j loopback-refuse"
-            f" && {iptables} -I OUTPUT -o lo -p tcp --syn -j loopback-clients"
-        )
-        machine.succeed("systemctl restart nftables")
-        listening(3001)
-        machine.fail(f"{iptables} -S | grep loopback")
-        check(3001)
 
     with subtest("a restarted client unit is let in again"):
         machine.succeed("systemctl restart client")
