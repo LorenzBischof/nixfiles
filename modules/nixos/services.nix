@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 let
@@ -81,25 +80,6 @@ let
     }) clients;
 
   daemonReload = "${config.systemd.package}/bin/systemctl daemon-reload";
-
-  # TODO: the iptables rules this replaced (d4225b2's per-port REJECTs, then
-  # bb0b2da's loopback-clients chain) survive in iptables-nft's `ip filter`
-  # table and would refuse clients that lost the groups they name. Delete
-  # them once the new table is in place. Our own leftover, no upstream issue.
-  # Drop once the vps has switched past this commit.
-  dropIptablesLeftovers = pkgs.writeShellScript "drop-iptables-loopback-leftovers" ''
-    iptables=${pkgs.iptables}/bin/iptables
-    $iptables -w -S OUTPUT 2>/dev/null \
-      | grep -e '-j loopback-clients' -e '^-A OUTPUT -o lo .*--gid-owner .*--suppl-groups -j REJECT' \
-      | sed 's/^-A /-D /' \
-      | while read -r rule; do
-          $iptables -w $rule || echo "could not delete stale rule: $rule" >&2
-        done
-    for chain in loopback-clients loopback-refuse; do
-      $iptables -w -F $chain 2>/dev/null && $iptables -w -X $chain
-    done
-    true
-  '';
 
   entry = lib.types.submodule {
     options = {
@@ -244,10 +224,7 @@ in
             wants = [ "user.slice" ];
             after = [ "user.slice" ];
             serviceConfig = {
-              ExecStartPost = [
-                "-${dropIptablesLeftovers}"
-                daemonReload
-              ];
+              ExecStartPost = [ daemonReload ];
               ExecReload = lib.mkAfter [ daemonReload ];
             };
           };
