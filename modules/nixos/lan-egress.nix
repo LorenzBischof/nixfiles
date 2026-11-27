@@ -1,6 +1,6 @@
 { config, lib, ... }:
 let
-  cfg = config.my.system.privateEgress;
+  cfg = config.my.system.egress;
 
   isV6 = lib.hasInfix ":";
   dns =
@@ -9,11 +9,12 @@ let
       "${family} daddr { ${lib.concatStringsSep ", " addrs} } meta l4proto { tcp, udp } th dport 53 accept";
 in
 {
-  options.my.system.privateEgress = {
-    enable = lib.mkEnableOption ''
-      refusing new connections from non-root processes to private, CGNAT
-      (tailnet) and link-local addresses off the host. Refusals:
-      `journalctl -k -g private-egress-refused`
+  options.my.system.egress = {
+    denyLAN = lib.mkEnableOption ''
+      refusing new connections from non-root processes to the LAN: private,
+      CGNAT (tailnet), link-local and ULA addresses off the host. A
+      my.services entry with `egress.lan` is let through. Refusals:
+      `journalctl -k -g lan-egress-refused`
     '';
     dnsServers = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -26,13 +27,18 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
+  config = lib.mkIf cfg.denyLAN {
     assertions = [
       {
         assertion = config.networking.nftables.enable;
-        message = "my.system.privateEgress needs networking.nftables.enable.";
+        message = "my.system.egress.denyLAN needs networking.nftables.enable.";
       }
     ];
+
+    # The build-time check can't load `socket cgroupv2`; see services.nix.
+    networking.nftables.preCheckRuleset = ''
+      sed -i '/socket cgroupv2/d' ruleset.conf
+    '';
 
     # New connections only: replies to inbound ones and the kernel's own
     # packets (resets, ICMP errors) aren't `ct state new`.
@@ -52,20 +58,32 @@ in
     # close it here by making /run/tailscale 0750 with a group only
     # tailscale-nginx-auth joins (agents and ovis then lose `tailscale
     # status`).
-    networking.nftables.tables.private_egress = {
+    networking.nftables.tables.lan_egress = {
       family = "inet";
       content = ''
+        # Filled by my.services (services.nix) through NFTSet=.
+        set lan {
+          type cgroupsv2
+        }
+
         chain output {
           type filter hook output priority filter; policy accept;
           oif lo accept
           ${dns "ip" (lib.filter (a: !isV6 a) cfg.dnsServers)}
           ${dns "ip6" (lib.filter isV6 cfg.dnsServers)}
+          # resolved asks the resolvers DHCP hands out, which can be any
+          # address in these ranges; it runs as its own user.
+          ${lib.optionalString config.services.resolved.enable "meta skuid ${toString config.ids.uids.systemd-resolve} meta l4proto { tcp, udp } th dport 53 accept"}
+          # A DHCP renewal goes to the server by unicast, from dhcpcd's own
+          # user. Port 68 is privileged, so only a DHCP client sends from it.
+          udp sport 68 udp dport 67 accept
+          socket cgroupv2 level 2 @lan accept
           ct state new meta skuid != 0 ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, 169.254.0.0/16 } jump refuse
           ct state new meta skuid != 0 ip6 daddr { fc00::/7, fe80::/10 } jump refuse
         }
 
         chain refuse {
-          limit rate 10/minute log prefix "private-egress-refused: " flags skuid
+          limit rate 10/minute log prefix "lan-egress-refused: " flags skuid
           meta l4proto tcp reject with tcp reset
           reject
         }

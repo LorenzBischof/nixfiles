@@ -68,12 +68,12 @@
   networking.nftables.enable = true;
   # Agents, builds and services reach neither the VCN, the tailnet nor OCI's
   # metadata endpoint, which hands out the instance principal's key - except
-  # through tailscaled, see private-egress.nix.
-  my.system.privateEgress = {
-    enable = true;
+  # through tailscaled, see lan-egress.nix.
+  my.system.egress = {
+    denyLAN = true;
     # OCI's resolver, from DHCP: resolv.conf falls back to it whenever
     # tailscaled isn't managing DNS. The metadata service is HTTP on 80.
-    dnsServers = options.my.system.privateEgress.dnsServers.default ++ [ "169.254.169.254" ];
+    dnsServers = options.my.system.egress.dnsServers.default ++ [ "169.254.169.254" ];
   };
 
   time.timeZone = "Europe/Zurich";

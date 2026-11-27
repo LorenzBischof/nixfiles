@@ -104,7 +104,12 @@ let
 
   assertions =
     name:
-    { users, ingress, ... }:
+    {
+      users,
+      ingress,
+      egress,
+      ...
+    }:
     [
       {
         assertion = declared name;
@@ -118,6 +123,11 @@ let
         # The drop-ins hiding the DNS paths go to the units found here.
         assertion = isSlice name -> members name != [ ];
         message = "my.services.${name}: no system service has Slice=${name}.";
+      }
+      {
+        # Without the internet, its IP filter refuses the LAN too.
+        assertion = egress.lan -> egress.internet;
+        message = "my.services.${name}.egress.lan needs egress.internet.";
       }
     ]
     ++ map (user: {
@@ -154,6 +164,7 @@ let
       "cgroup:inet:loopback:${clientsSet name}"
     ]
     ++ lib.optional e.egress.internet "cgroup:inet:loopback:online"
+    ++ lib.optional (e.egress.lan && config.my.system.egress.denyLAN) "cgroup:inet:lan_egress:lan"
     ++ map (port: "cgroup:inet:loopback:${localhostSet port}") e.egress.localhost;
 
   # Every set a slice's cgroup goes in, its own and as a client.
@@ -210,6 +221,15 @@ let
             loopback either: its IP filter holds both directions.
           '';
         };
+        lan = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Whether the service may reach the private ranges that
+            `my.system.egress.denyLAN` refuses (the LAN, the tailnet,
+            link-local and ULA). Needs `internet`.
+          '';
+        };
         localhost = lib.mkOption {
           type = lib.types.listOf lib.types.port;
           default = [ ];
@@ -225,6 +245,9 @@ let
   };
 in
 {
+  # For egress.lan.
+  imports = [ ./lan-egress.nix ];
+
   options.my.services = lib.mkOption {
     type = lib.types.submodule { freeformType = lib.types.attrsOf entry; };
     default = { };

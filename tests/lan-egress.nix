@@ -1,6 +1,7 @@
-# my.system.privateEgress (private-egress.nix): non-root processes reach no
-# private address off the host, except a listed resolver on port 53; root,
-# the host's own addresses and replies to inbound connections pass.
+# my.system.egress.denyLAN (lan-egress.nix): non-root processes reach no
+# private address off the host, except a listed resolver on port 53, resolved
+# on port 53 and a my.services entry with egress.lan; root, the host's own
+# addresses and replies to inbound connections pass.
 { pkgs }:
 let
   web = port: "${pkgs.python3}/bin/python3 -m http.server --bind :: ${toString port}";
@@ -14,7 +15,7 @@ let
   };
 in
 pkgs.testers.runNixOSTest {
-  name = "private-egress";
+  name = "lan-egress";
 
   nodes.remote = {
     imports = [ (ula "fd00::2") ];
@@ -33,25 +34,49 @@ pkgs.testers.runNixOSTest {
 
   nodes.machine = {
     imports = [
-      ../modules/nixos/private-egress.nix
+      ../modules/nixos/lan-egress.nix
+      ../modules/nixos/services.nix
       (ula "fd00::1")
     ];
-    my.system.privateEgress = {
-      enable = true;
+    my.system.egress = {
+      denyLAN = true;
       dnsServers = [ "192.168.1.2" ];
+    };
+    services.resolved.enable = true;
+    my.services = {
+      lan.egress = {
+        internet = true;
+        lan = true;
+      };
+      online.egress.internet = true;
     };
     users.users.alice = {
       isNormalUser = true;
       uid = 1001;
     };
-    # A non-root server, for replies to inbound connections.
-    systemd.services.web = {
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        ExecStart = web 3000;
-        DynamicUser = true;
+    systemd.services =
+      let
+        # Non-root, like the services my.services declares.
+        sleeper = {
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
+            DynamicUser = true;
+          };
+        };
+      in
+      {
+        # A non-root server, for replies to inbound connections.
+        web = {
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            ExecStart = web 3000;
+            DynamicUser = true;
+          };
+        };
+        lan = sleeper;
+        online = sleeper;
       };
-    };
     networking = {
       nftables.enable = true;
       firewall.allowedTCPPorts = [ 3000 ];
@@ -63,6 +88,11 @@ pkgs.testers.runNixOSTest {
 
     def fetch(url):
         return f"{curl} -sS --max-time 5 -o /dev/null {url}"
+
+    # A process of the unit itself, as its user: join its cgroup, then connect.
+    def in_unit(unit, url):
+        uid = machine.succeed(f"stat -c %u /proc/$(systemctl show -P MainPID {unit})").strip()
+        return f"sh -c 'echo $$ > /sys/fs/cgroup$(systemctl show -P ControlGroup {unit}.service)/cgroup.procs && exec setpriv --reuid={uid} --regid={uid} --clear-groups -- {fetch(url)}'"
 
     def refused(name, cmd):
         with subtest(f"{name} is refused"):
@@ -80,7 +110,18 @@ pkgs.testers.runNixOSTest {
         refused(f"a DynamicUser service on {name}", f"systemd-run -q --wait --pipe -p DynamicUser=yes -- {fetch(url)}")
         with subtest(f"root reaches {name}"):
             machine.succeed(fetch(url))
-    machine.succeed("journalctl -k -g 'private-egress-refused: .*DPT=80'")
+    machine.succeed("journalctl -k -g 'lan-egress-refused: .*DPT=80'")
+
+    with subtest("a my.services entry with egress.lan reaches the LAN"):
+        machine.wait_for_unit("lan.service")
+        machine.wait_for_unit("online.service")
+        for url in ("http://192.168.1.2/", "http://[fd00::2]/"):
+            machine.succeed(in_unit("lan", url))
+            refused(f"an online service without egress.lan on {url}", in_unit("online", url))
+
+    with subtest("resolved reaches any resolver on port 53 only"):
+        machine.succeed(f"setpriv --reuid=systemd-resolve --regid=systemd-resolve --clear-groups -- {fetch('http://[fd00::2]:53/')}")
+        refused("resolved's user on port 80", f"setpriv --reuid=systemd-resolve --regid=systemd-resolve --clear-groups -- {fetch('http://[fd00::2]/')}")
 
     with subtest("a listed resolver is reachable on port 53 only"):
         machine.succeed(f"runuser -u alice -- {fetch('http://192.168.1.2:53/')}")
