@@ -176,6 +176,13 @@ in
     };
   };
 
+  my.services.home-assistant = {
+    ports = [ 8123 ];
+    ingress.from = [ "nginx" ];
+    # Devices on the LAN, Sonos fetching media from it, cloud integrations.
+    egress.internet = true;
+  };
+
   # Required by Lifx
   networking.firewall.allowedUDPPorts = [ 56700 ];
 

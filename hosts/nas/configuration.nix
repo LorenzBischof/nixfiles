@@ -199,6 +199,9 @@ in
 
   services.resolved.enable = true;
 
+  # my.services matches services by cgroup, which needs nftables.
+  networking.nftables.enable = true;
+
   services.tailscale = {
     enable = true;
     openFirewall = true;

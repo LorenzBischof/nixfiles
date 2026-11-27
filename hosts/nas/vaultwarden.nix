@@ -35,6 +35,11 @@ in
 
   services.restic.backups.daily.paths = [ backupDir ];
 
-  my.homelab.ports = [ config.services.vaultwarden.config.ROCKET_PORT ];
+  my.services.vaultwarden = {
+    ports = [ config.services.vaultwarden.config.ROCKET_PORT ];
+    ingress.from = [ "nginx" ];
+    # Site icons and push notifications.
+    egress.internet = true;
+  };
   my.homelab.dashboard.Services.Bitwarden.href = "https://${vaultwardenDomain}";
 }

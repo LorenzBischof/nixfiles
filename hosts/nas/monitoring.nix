@@ -6,6 +6,7 @@
 }:
 let
   inherit (config.my.homelab) domain;
+  ntfyPort = 8111;
 
   # Delay must exceed the re-send interval so each re-send reschedules the held
   # ntfy message before it delivers; on failure it fires up to one delay later.
@@ -454,7 +455,7 @@ in
       enable = true;
       settings = {
         http = {
-          addr = "127.0.0.1:8111";
+          addr = "127.0.0.1:${toString ntfyPort}";
         };
         ntfy = {
           baseurl = "https://ntfy.sh";
@@ -548,11 +549,44 @@ in
     config.services.prometheus.port
   ];
 
-  my.homelab.ports = [
-    config.services.prometheus.port
-    config.services.prometheus.exporters.restic.port
-    config.services.prometheus.exporters.node.port
-  ];
+  my.services = {
+    prometheus = {
+      ports = [ config.services.prometheus.port ];
+      ingress.from = [
+        "nginx"
+        "grafana"
+      ];
+      # Scrapes vps and takes remote_write over the tailnet.
+      egress.internet = true;
+    };
+    prometheus-node-exporter = {
+      ports = [ config.services.prometheus.exporters.node.port ];
+      ingress.from = [ "prometheus" ];
+      # Its systemd collector asks systemd over D-Bus, which offline hides.
+      egress.internet = true;
+    };
+    prometheus-restic-exporter = {
+      ports = [ config.services.prometheus.exporters.restic.port ];
+      ingress.from = [ "prometheus" ];
+      # Reads the restic repository.
+      egress.internet = true;
+    };
+    alertmanager = {
+      ports = [ config.services.prometheus.alertmanager.port ];
+      ingress.from = [
+        "nginx"
+        "prometheus"
+      ];
+      # Pings healthchecks.io.
+      egress.internet = true;
+    };
+    alertmanager-ntfy = {
+      ports = [ ntfyPort ];
+      ingress.from = [ "alertmanager" ];
+      # Publishes to ntfy.sh.
+      egress.internet = true;
+    };
+  };
   systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "grafana" ];
   my.homelab.dashboard.Monitoring = {
     Grafana = {

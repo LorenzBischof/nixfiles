@@ -50,6 +50,8 @@ in
     };
   };
 
+  # Not in my.services: the module puts immich-server in its own slice, where
+  # it would escape the rules for declared services. Users are still kept out.
   my.homelab.ports = [ config.services.immich.port ];
   my.homelab.dashboard.Media.Photos.href = "https://${immichDomain}";
 }
