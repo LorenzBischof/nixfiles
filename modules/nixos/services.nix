@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -8,8 +9,20 @@ let
   # (nixpkgs-age-monitor, …) declare entries of their own, without `ports`.
   cfg = lib.filterAttrs (_: s: s ? ports) config.my.services;
 
-  # systemd's NFTSet= allows no `-` in a set name.
-  clientsSet = name: "clients_${lib.replaceStrings [ "-" ] [ "_" ] name}";
+  # systemd's NFTSet= allows no `-` or `.` in a set name.
+  clientsSet = name: "clients_${lib.replaceStrings [ "-" "." ] [ "_" "_" ] name}";
+
+  # An entry names a service (`nginx`) or a slice (`system-immich.slice`).
+  # The rules match a socket by its cgroup at level 2: a unit directly in
+  # system.slice, or a slice directly in it, which holds every unit in it.
+  isSlice = lib.hasSuffix ".slice";
+  sliceBase = lib.removeSuffix ".slice";
+  # The services a slice entry holds.
+  members =
+    slice:
+    lib.attrNames (
+      lib.filterAttrs (_: s: (s.serviceConfig.Slice or null) == slice) config.systemd.services
+    );
 
   # Set on a new connection from user.slice in output, read in input once the
   # receiving socket is known. Outside tailscaled's 0xff0000 mask.
@@ -30,7 +43,8 @@ let
       "${lib.toLower proto} dport { ${lib.concatMapStringsSep ", " toString ports} } accept";
 
   # One rule per port: from a client's cgroup (level 2 is the unit,
-  # system.slice/nginx.service, so its child cgroups match too) or a listed uid.
+  # system.slice/nginx.service, so its child cgroups match too, or a slice) or
+  # a listed uid.
   serverRules =
     name:
     { ports, users, ... }:
@@ -59,10 +73,34 @@ let
   localhostPorts = lib.unique (lib.concatMap (s: s.egress.localhost) (lib.attrValues cfg));
 
   # `requires` below declares the unit too, so look for an ExecStart, which
-  # only a real service has (`script` sets one too).
+  # only a real service has (`script` sets one too). A slice the module system
+  # declares only through this module has no description.
   declared =
     name:
-    config.systemd.services ? ${name} && config.systemd.services.${name}.serviceConfig ? ExecStart;
+    if isSlice name then
+      config.systemd.slices ? ${sliceBase name}
+      && config.systemd.slices.${sliceBase name}.description != ""
+    else
+      config.systemd.services ? ${name} && config.systemd.services.${name}.serviceConfig ? ExecStart;
+
+  # NFTSet= adds the unit's own cgroup, and the rules match at level 2: a
+  # template instance, a unit with Slice= or a nested slice sits deeper, so
+  # it would escape every rule.
+  matchable =
+    name:
+    if isSlice name then
+      builtins.match "system-[^-]+\\.slice" name != null
+    else
+      !(lib.hasInfix "@" name || config.systemd.services.${name}.serviceConfig ? Slice);
+  unmatchable =
+    name:
+    if isSlice name then
+      "a nested slice can't be held to its rules; declare the slice directly in system.slice"
+    else
+      "a template instance or a unit with Slice= can't be held to its rules; declare its slice${
+        lib.optionalString (config.systemd.services.${name}.serviceConfig ? Slice)
+          " (${config.systemd.services.${name}.serviceConfig.Slice})"
+      } instead";
 
   assertions =
     name:
@@ -70,14 +108,16 @@ let
     [
       {
         assertion = declared name;
-        message = "my.services.${name}: no such system service.";
+        message = "my.services.${name}: no such system service, or no slice declared with a description.";
       }
       {
-        # NFTSet= adds the unit's own cgroup, and the rules match the unit at
-        # level 2: a template instance or a unit with Slice= sits deeper, so
-        # it would escape every rule for declared services.
-        assertion = !(lib.hasInfix "@" name || config.systemd.services.${name}.serviceConfig ? Slice);
-        message = "my.services.${name}: a template instance or a unit with Slice= can't be held to its rules.";
+        assertion = !declared name || matchable name;
+        message = "my.services.${name}: ${unmatchable name}.";
+      }
+      {
+        # The drop-ins hiding the DNS paths go to the units found here.
+        assertion = isSlice name -> members name != [ ];
+        message = "my.services.${name}: no system service has Slice=${name}.";
       }
     ]
     ++ map (user: {
@@ -85,12 +125,53 @@ let
       message = "my.services.${name}.users: ${user} is not a user with a fixed uid.";
     }) users
     # Setting NFTSet= on a misspelled name would quietly create a unit.
-    ++ map (client: {
-      assertion = declared client;
-      message = "my.services.${name}.ingress.from: ${client} is not a system service.";
-    }) ingress.from;
+    ++ lib.concatMap (client: [
+      {
+        assertion = declared client;
+        message = "my.services.${name}.ingress.from: ${client} is not a system service or slice.";
+      }
+      {
+        assertion = !declared client || matchable client;
+        message = "my.services.${name}.ingress.from: ${client}: ${unmatchable client}.";
+      }
+    ]) ingress.from;
+
+  # Where an entry's own settings go: the service, or the slice. A slice's
+  # resource control (NFTSet=, the IP filter) holds every unit in it.
+  onUnit =
+    name: attrs:
+    if isSlice name then { slices.${sliceBase name} = attrs; } else { services.${name} = attrs; };
+  configKey = name: if isSlice name then "sliceConfig" else "serviceConfig";
 
   daemonReload = "${config.systemd.package}/bin/systemctl daemon-reload";
+
+  # The sets an entry's own cgroup goes in. A client of itself too: ovis's
+  # supervisor checks its server's health over the port.
+  ownSets =
+    name: e:
+    [
+      "cgroup:inet:loopback:services"
+      "cgroup:inet:loopback:${clientsSet name}"
+    ]
+    ++ lib.optional e.egress.internet "cgroup:inet:loopback:online"
+    ++ map (port: "cgroup:inet:loopback:${localhostSet port}") e.egress.localhost;
+
+  # Every set a slice's cgroup goes in, its own and as a client.
+  sliceSets =
+    slice:
+    lib.optionals (cfg ? ${slice}) (ownSets slice cfg.${slice})
+    ++ lib.mapAttrsToList (name: _: "cgroup:inet:loopback:${clientsSet name}") (
+      lib.filterAttrs (_: e: lib.elem slice e.ingress.from) cfg
+    );
+  slices = lib.unique (
+    lib.filter isSlice (lib.attrNames cfg ++ lib.concatMap (e: e.ingress.from) (lib.attrValues cfg))
+  );
+
+  offlinePaths = [
+    "-/run/nscd"
+    "-/run/dbus"
+    "-/run/systemd/resolve"
+  ];
 
   entry = lib.types.submodule {
     options = {
@@ -99,7 +180,7 @@ let
         default = [ ];
         description = ''
           The TCP ports the service listens on. Over loopback only its
-          `ingress.from` and users may connect to them.
+          clients and users may connect to them.
         '';
       };
       users = lib.mkOption {
@@ -112,9 +193,11 @@ let
         default = [ ];
         example = [ "nginx" ];
         description = ''
-          System services that may connect, matched by their cgroup. Only a
-          unit directly in system.slice matches (no template instance, no
-          Slice=), and a dropped one loses access only once restarted.
+          System services or slices that may connect, matched by their
+          cgroup. Only a unit directly in system.slice (no template instance,
+          no Slice=) or a slice directly in it matches. A dropped service
+          loses access once restarted, a dropped slice once the table
+          reloads, which the switch does.
         '';
       };
       egress = {
@@ -146,10 +229,12 @@ in
     type = lib.types.submodule { freeformType = lib.types.attrsOf entry; };
     default = { };
     description = ''
-      Services by systemd unit name, closed by default: over loopback a
+      Services by systemd unit name, or slices by their name with `.slice`
+      (one entry for every unit in it), closed by default: over loopback a
       declared service reaches only the services whose `ingress.from` lists
       it and is reached only by its own `ingress.from` and users, and
-      without `egress.internet` nothing else, DNS included. Independently, users and their Nix builds reach no
+      without `egress.internet` nothing else, DNS included. Independently,
+      users and their Nix builds reach no
       system service over loopback beyond the ports the firewall opens; a
       socket-activated one (its socket is PID 1's) isn't covered. Refusals:
       `journalctl -k -g loopback-refused`.
@@ -187,6 +272,10 @@ in
     networking.nftables.tables.loopback = {
       family = "inet";
       content = ''
+        # A slice isn't restarted when the sets it goes in change, and its
+        # cgroup stays in the old ones. Listed here, a change reloads the
+        # table, which empties them, and nftables' daemon-reload refills them.
+        ${lib.concatMapStrings (slice: "# ${slice}: ${toString (sliceSets slice)}\n") slices}
         set services {
           type cgroupsv2
         }
@@ -251,7 +340,7 @@ in
       sed -i '/socket cgroupv2/d' ruleset.conf
     '';
 
-    systemd.services = lib.mkMerge (
+    systemd = lib.mkMerge (
       [
         {
           # Every load of the ruleset declares the sets anew, empty, and
@@ -260,7 +349,7 @@ in
           # second, clients are refused and declared services aren't held to
           # their loopback targets. The table names user.slice, which must
           # exist when it loads.
-          nftables = {
+          services.nftables = {
             wants = [ "user.slice" ];
             after = [ "user.slice" ];
             serviceConfig = {
@@ -268,51 +357,68 @@ in
               ExecReload = lib.mkAfter [ daemonReload ];
             };
           };
+
+          # The DNS paths aren't resource control, so a slice can't hide them
+          # from what it holds: each unit in it gets a drop-in. Through
+          # systemd.packages, since naming the units in systemd.services by
+          # their Slice= would be defined by itself.
+          packages = lib.concatLists (
+            lib.mapAttrsToList (
+              name: e:
+              lib.optionals (isSlice name && !e.egress.internet) (
+                map (
+                  unit:
+                  pkgs.writeTextDir "lib/systemd/system/${unit}.service.d/my-services-offline.conf" ''
+                    [Service]
+                    InaccessiblePaths=${toString offlinePaths}
+                    # A unit's own IPAddressAllow= would win over the slice's
+                    # deny, so empty it and repeat the slice's filter.
+                    IPAddressAllow=
+                    IPAddressAllow=127.0.0.1 ::1
+                    IPAddressDeny=any
+                  ''
+                ) (members name)
+              )
+            ) cfg
+          );
         }
-        # Never running without the table. A switch only reloads nftables,
-        # atomically, so a failed reload keeps the old table and stops nothing.
-        (lib.mapAttrs (
-          name:
-          { egress, ... }:
-          {
-            requires = [ "nftables.service" ];
-            after = [ "nftables.service" ];
-            serviceConfig = {
-              # A client of itself too: ovis's supervisor checks its server's
-              # health over the port.
-              NFTSet = [
-                "cgroup:inet:loopback:services"
-                "cgroup:inet:loopback:${clientsSet name}"
-              ]
-              ++ lib.optional egress.internet "cgroup:inet:loopback:online"
-              ++ map (port: "cgroup:inet:loopback:${localhostSet port}") egress.localhost;
-            }
-            # In the kernel's cgroup BPF, so independent of the table. DNS goes
-            # out through nscd, D-Bus (to resolved) and resolved's socket too.
-            // lib.optionalAttrs (!egress.internet) {
-              IPAddressDeny = [ "any" ];
-              IPAddressAllow = [
-                "127.0.0.1"
-                "::1"
-              ];
-              InaccessiblePaths = [
-                "-/run/nscd"
-                "-/run/dbus"
-                "-/run/systemd/resolve"
-              ];
-            };
-          }
-        ) cfg)
       ]
+      ++ lib.mapAttrsToList (
+        name: e:
+        onUnit name {
+          # Never running without the table: a slice's units stop with it. A
+          # switch only reloads nftables, atomically, so a failed reload keeps
+          # the old table and stops nothing.
+          requires = [ "nftables.service" ];
+          after = [ "nftables.service" ];
+          ${configKey name} = {
+            NFTSet = ownSets name e;
+          }
+          # In the kernel's cgroup BPF, so independent of the table.
+          // lib.optionalAttrs (!e.egress.internet) {
+            IPAddressDeny = [ "any" ];
+            IPAddressAllow = [
+              "127.0.0.1"
+              "::1"
+            ];
+          }
+          # DNS goes out through nscd, D-Bus (to resolved) and resolved's
+          # socket too.
+          // lib.optionalAttrs (!e.egress.internet && !isSlice name) {
+            InaccessiblePaths = offlinePaths;
+          };
+        }
+      ) cfg
       ++ lib.concatLists (
         lib.mapAttrsToList (
-          name: c:
+          name: e:
           # A switch that drops a client restarts it, since its NFTSet= changed,
           # and it comes back in no set. Adding or removing a service restarts
           # its clients for the same reason, nginx included.
-          map (client: {
-            ${client}.serviceConfig.NFTSet = [ "cgroup:inet:loopback:${clientsSet name}" ];
-          }) c.ingress.from
+          map (
+            client:
+            onUnit client { ${configKey client}.NFTSet = [ "cgroup:inet:loopback:${clientsSet name}" ]; }
+          ) e.ingress.from
         ) cfg
       )
     );

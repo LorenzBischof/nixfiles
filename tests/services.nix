@@ -53,7 +53,23 @@ let
           wantedBy = [ "multi-user.target" ];
           serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 -m http.server --bind 0.0.0.0 3006";
         };
+        # Two units of one slice, declared together through it, offline.
+        grouped-server = {
+          wantedBy = [ "multi-user.target" ];
+          serviceConfig = {
+            ExecStart = server 3008;
+            Slice = "system-group.slice";
+          };
+        };
+        # Its own allow mustn't win over the slice's deny.
+        grouped = pkgs.lib.recursiveUpdate sleeper {
+          serviceConfig = {
+            Slice = "system-group.slice";
+            IPAddressAllow = "any";
+          };
+        };
       };
+    systemd.slices.system-group.description = "Declared through my.services";
     networking.firewall.allowedTCPPorts = [ 3006 ];
 
     my.services = {
@@ -64,11 +80,18 @@ let
       };
       online = {
         ports = [ 3007 ];
-        ingress.from = [ "offline" ];
+        ingress.from = [
+          "offline"
+          "system-group.slice"
+        ];
         egress.localhost = [ 3006 ];
         egress.internet = true;
       };
       offline = { };
+      "system-group.slice" = {
+        ports = [ 3008 ];
+        ingress.from = [ "client" ];
+      };
     };
   };
 in
@@ -93,6 +116,11 @@ pkgs.testers.runNixOSTest {
         my.services.test-server.ports = lib.mkForce [ 3003 ];
       };
 
+      # The slice taken off online's clients.
+      specialisation.slice-revoked.configuration = {
+        my.services.online.ingress.from = lib.mkForce [ "offline" ];
+      };
+
       # The client taken off, the port kept.
       specialisation.revoked.configuration = {
         my.services.test-server.ingress.from = lib.mkForce [ ];
@@ -110,7 +138,7 @@ pkgs.testers.runNixOSTest {
     # A process of the unit itself: join its cgroup, then connect. Its IP
     # filter comes with the cgroup, its mount namespace doesn't.
     def in_unit(unit, port, host="127.0.0.1"):
-        return f"sh -c 'echo $$ > /sys/fs/cgroup/system.slice/{unit}.service/cgroup.procs && exec {fetch(port, host)}'"
+        return f"sh -c 'echo $$ > /sys/fs/cgroup$(systemctl show -P ControlGroup {unit}.service)/cgroup.procs && exec {fetch(port, host)}'"
 
     # A process of a user's own, in user.slice like a login or an agent.
     def as_user(user, port, host="127.0.0.1"):
@@ -186,6 +214,22 @@ pkgs.testers.runNixOSTest {
             machine.succeed(f"ls -A {path} | grep -q .")
             machine.succeed(f"nsenter -t {pid} -m -- sh -c '! ls -A {path} 2>/dev/null | grep -q .'")
 
+    with subtest("a slice entry holds every unit in it"):
+        listening(3008)
+        machine.succeed(in_unit("client", 3008))
+        machine.succeed(in_unit("grouped", 3008))
+        refused("unlisted unit on the slice's port", in_unit("other", 3008))
+        refused("bob in user.slice on the slice's port", as_user("bob", 3008))
+        # As a client: online lists the slice.
+        machine.succeed(in_unit("grouped", 3007))
+        refused("a unit in the slice on an undeclared system service", in_unit("grouped", 3005))
+        machine.fail(in_unit("grouped", 80, "remote"))
+        pid = machine.succeed("systemctl show -P MainPID grouped").strip()
+        for path in ("/run/nscd", "/run/dbus"):
+            machine.succeed(f"nsenter -t {pid} -m -- sh -c '! ls -A {path} 2>/dev/null | grep -q .'")
+        status, out = machine.execute("sh -c 'echo $$ > /sys/fs/cgroup/system.slice/system-group.slice/grouped.service/cgroup.procs && ${pkgs.dig}/bin/dig +time=2 +tries=1 @127.0.0.53 remote'")
+        assert status != 0 and ("refused" in out or "timed out" in out), f"a unit in an offline slice reached the stub: {status}: {out}"
+
     with subtest("a restarted client unit is let in again"):
         machine.succeed("systemctl restart client")
         check(3001)
@@ -202,8 +246,9 @@ pkgs.testers.runNixOSTest {
     with subtest("stopping nftables takes the server down"):
         machine.succeed("systemctl stop nftables")
         machine.fail("systemctl is-active test-server")
+        machine.fail("systemctl is-active grouped-server")
         refused("unlisted unit with nftables stopped", in_unit("other", 3001))
-        machine.succeed("systemctl start test-server offline online")
+        machine.succeed("systemctl start test-server offline online grouped-server grouped")
         machine.succeed("systemctl is-active nftables")
         listening(3001)
         check(3001)
@@ -229,6 +274,14 @@ pkgs.testers.runNixOSTest {
         switch("specialisation/moved")
         listening(3003)
         check(3003)
+
+    with subtest("a switch that takes a slice off a service's clients"):
+        switch("")
+        listening(3007)
+        machine.succeed(in_unit("grouped", 3007))
+        switch("specialisation/slice-revoked")
+        refused("a slice taken off a service's clients", in_unit("grouped", 3007))
+        machine.succeed(in_unit("offline", 3007))
 
     with subtest("a switch that takes the client off, leaving the table as it was"):
         switch("")
