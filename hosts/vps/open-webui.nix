@@ -84,9 +84,9 @@ in
   # which only ever sends a login tailscaled vouched for, may connect to it.
   my.services.open-webui = {
     ports = [ port ];
-    clients = [ "nginx" ];
+    ingress.from = [ "nginx" ];
     # The model providers are on the internet.
-    internet = true;
+    egress.internet = true;
   };
 
   # The helper only, not `services.nginx.tailscaleAuth`: that one puts its

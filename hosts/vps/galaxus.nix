@@ -131,12 +131,12 @@ in
   # The same clients as every MCP server here - see mcp.nix.
   my.services.galaxus-mcp = {
     ports = [ mcpPort ];
-    clients = [
+    ingress.from = [
       "nginx"
       "open-webui"
     ];
     users = [ "agent" ];
     # It searches Galaxus.
-    internet = true;
+    egress.internet = true;
   };
 }

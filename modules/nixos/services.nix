@@ -53,6 +53,11 @@ let
   toStub = "ip daddr 127.0.0.53 meta l4proto { tcp, udp } th dport 53";
   stubRule = rule: lib.optionalString config.services.resolved.enable "${toStub} ${rule}";
 
+  # One set per localhost port, holding the declared services that may reach
+  # it.
+  localhostSet = port: "localhost_${toString port}";
+  localhostPorts = lib.unique (lib.concatMap (s: s.egress.localhost) (lib.attrValues cfg));
+
   # `requires` below declares the unit too, so look for an ExecStart, which
   # only a real service has (`script` sets one too).
   declared =
@@ -61,7 +66,7 @@ let
 
   assertions =
     name:
-    { users, clients, ... }:
+    { users, ingress, ... }:
     [
       {
         assertion = declared name;
@@ -82,8 +87,8 @@ let
     # Setting NFTSet= on a misspelled name would quietly create a unit.
     ++ map (client: {
       assertion = declared client;
-      message = "my.services.${name}.clients: ${client} is not a system service.";
-    }) clients;
+      message = "my.services.${name}.ingress.from: ${client} is not a system service.";
+    }) ingress.from;
 
   daemonReload = "${config.systemd.package}/bin/systemctl daemon-reload";
 
@@ -94,16 +99,7 @@ let
         default = [ ];
         description = ''
           The TCP ports the service listens on. Over loopback only its
-          clients and users may connect to them.
-        '';
-      };
-      clients = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
-        description = ''
-          System services that may connect, matched by their cgroup. Only a
-          unit directly in system.slice matches (no template instance, no
-          Slice=), and a dropped client loses access only once restarted.
+          `ingress.from` and users may connect to them.
         '';
       };
       users = lib.mkOption {
@@ -111,14 +107,36 @@ let
         default = [ ];
         description = "Users whose every process may connect, matched by uid.";
       };
-      internet = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
+      ingress.from = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [ "nginx" ];
         description = ''
-          Whether the service may reach anything beyond loopback, DNS
-          included. Over loopback it reaches only the services that list it
-          as a client either way.
+          System services that may connect, matched by their cgroup. Only a
+          unit directly in system.slice matches (no template instance, no
+          Slice=), and a dropped one loses access only once restarted.
         '';
+      };
+      egress = {
+        internet = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Whether the service may reach anything beyond loopback, DNS
+            included. Without it the service isn't reachable from beyond
+            loopback either: its IP filter holds both directions.
+          '';
+        };
+        localhost = lib.mkOption {
+          type = lib.types.listOf lib.types.port;
+          default = [ ];
+          example = [ 443 ];
+          description = ''
+            TCP ports on 127.0.0.1 of undeclared listeners that the service
+            may reach, such as an nginx vhost listening there alone. A
+            declared service's port stays limited to its `ingress.from`.
+          '';
+        };
       };
     };
   };
@@ -129,9 +147,9 @@ in
     default = { };
     description = ''
       Services by systemd unit name, closed by default: over loopback a
-      declared service reaches only the services listing it as a client and is
-      reached only by its clients and users, and without `internet` nothing
-      else, DNS included. Independently, users and their Nix builds reach no
+      declared service reaches only the services whose `ingress.from` lists
+      it and is reached only by its own `ingress.from` and users, and
+      without `egress.internet` nothing else, DNS included. Independently, users and their Nix builds reach no
       system service over loopback beyond the ports the firewall opens; a
       socket-activated one (its socket is PID 1's) isn't covered. Refusals:
       `journalctl -k -g loopback-refused`.
@@ -156,6 +174,11 @@ in
         assertion = lib.allUnique allPorts;
         message = "my.services: two services share a port.";
       }
+      {
+        # The rules refuse a declared port to all but its clients first.
+        assertion = !lib.any (port: lib.elem port allPorts) localhostPorts;
+        message = "my.services: an egress.localhost entry names a declared service's port; list the service in its ingress.from instead.";
+      }
     ]
     ++ lib.concatLists (lib.mapAttrsToList assertions cfg);
 
@@ -170,11 +193,11 @@ in
         set online {
           type cgroupsv2
         }
-        ${lib.concatMapStrings (name: ''
-          set ${clientsSet name} {
+        ${lib.concatMapStrings (set: ''
+          set ${set} {
             type cgroupsv2
           }
-        '') (lib.attrNames cfg)}
+        '') (map clientsSet (lib.attrNames cfg) ++ map localhostSet localhostPorts)}
         chain output {
           type filter hook output priority filter; policy accept;
           oif lo ct state new jump new_on_lo
@@ -183,7 +206,13 @@ in
         chain new_on_lo {
           ${stubRule "socket cgroupv2 level 2 @online accept"}
           ${lib.concatStringsSep "\n  " (lib.concatLists (lib.mapAttrsToList serverRules cfg))}
-          tcp dport { ${lib.concatMapStringsSep ", " toString allPorts} } jump refuse
+          ${lib.optionalString (allPorts != [ ])
+            "tcp dport { ${lib.concatMapStringsSep ", " toString allPorts} } jump refuse"
+          }
+          ${lib.concatMapStringsSep "\n  " (
+            port:
+            "ip daddr 127.0.0.1 tcp dport ${toString port} socket cgroupv2 level 2 @${localhostSet port} accept"
+          ) localhostPorts}
           # A declared service reaches no other port on this host.
           socket cgroupv2 level 2 @services jump refuse
           # A user's process, or a build of theirs (a fixed-output build has the
@@ -244,7 +273,7 @@ in
         # atomically, so a failed reload keeps the old table and stops nothing.
         (lib.mapAttrs (
           name:
-          { internet, ... }:
+          { egress, ... }:
           {
             requires = [ "nftables.service" ];
             after = [ "nftables.service" ];
@@ -255,11 +284,12 @@ in
                 "cgroup:inet:loopback:services"
                 "cgroup:inet:loopback:${clientsSet name}"
               ]
-              ++ lib.optional internet "cgroup:inet:loopback:online";
+              ++ lib.optional egress.internet "cgroup:inet:loopback:online"
+              ++ map (port: "cgroup:inet:loopback:${localhostSet port}") egress.localhost;
             }
             # In the kernel's cgroup BPF, so independent of the table. DNS goes
             # out through nscd, D-Bus (to resolved) and resolved's socket too.
-            // lib.optionalAttrs (!internet) {
+            // lib.optionalAttrs (!egress.internet) {
               IPAddressDeny = [ "any" ];
               IPAddressAllow = [
                 "127.0.0.1"
@@ -282,7 +312,7 @@ in
           # its clients for the same reason, nginx included.
           map (client: {
             ${client}.serviceConfig.NFTSet = [ "cgroup:inet:loopback:${clientsSet name}" ];
-          }) c.clients
+          }) c.ingress.from
         ) cfg
       )
     );

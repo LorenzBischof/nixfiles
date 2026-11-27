@@ -548,8 +548,8 @@ in
 
   my.services.ovis = {
     ports = [ port ];
-    clients = [ "nginx" ];
+    ingress.from = [ "nginx" ];
     # The CLI sign-ins it runs itself.
-    internet = true;
+    egress.internet = true;
   };
 }

@@ -59,13 +59,14 @@ let
     my.services = {
       test-server = {
         ports = [ 3001 ];
-        clients = [ "client" ];
+        ingress.from = [ "client" ];
         users = [ "alice" ];
       };
       online = {
         ports = [ 3007 ];
-        clients = [ "offline" ];
-        internet = true;
+        ingress.from = [ "offline" ];
+        egress.localhost = [ 3006 ];
+        egress.internet = true;
       };
       offline = { };
     };
@@ -94,7 +95,7 @@ pkgs.testers.runNixOSTest {
 
       # The client taken off, the port kept.
       specialisation.revoked.configuration = {
-        my.services.test-server.clients = lib.mkForce [ ];
+        my.services.test-server.ingress.from = lib.mkForce [ ];
       };
     };
 
@@ -174,6 +175,9 @@ pkgs.testers.runNixOSTest {
         machine.succeed(in_unit("online", 3007))
         refused("offline on an undeclared system service", in_unit("offline", 3005))
         refused("online on an undeclared system service", in_unit("online", 3005))
+        machine.succeed(in_unit("online", 3006))
+        refused("online on its localhost port through the machine's own address", in_unit("online", 3006, "machine"))
+        refused("offline on a localhost port it doesn't list", in_unit("offline", 3006))
         machine.succeed(in_unit("online", 80, "remote"))
         machine.fail(in_unit("offline", 80, "remote"))
         machine.succeed(in_unit("other", 80, "remote"))
