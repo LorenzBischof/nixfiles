@@ -15,8 +15,13 @@ let
   };
 in
 {
-  options.my.services.detect-syncthing-conflicts.enable =
-    lib.mkEnableOption "detect syncthing conflicts";
+  # my.services is one option (services.nix), so its entries are declared
+  # through its type.
+  options.my.services = lib.mkOption {
+    type = lib.types.submodule {
+      options.detect-syncthing-conflicts.enable = lib.mkEnableOption "detect syncthing conflicts";
+    };
+  };
   config = lib.mkIf cfg.enable {
 
     environment.systemPackages = [

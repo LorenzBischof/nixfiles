@@ -11,7 +11,7 @@
     ./autoupgrade.nix
     ./common.nix
     ./llm-agents.nix
-    ./loopback-clients.nix
+    ./services.nix
     ./monitoring-client.nix
     ./nginx.nix
     ./nixpkgs-age-monitor.nix

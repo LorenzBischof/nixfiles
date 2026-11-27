@@ -31,8 +31,12 @@ let
   '';
 in
 {
-  options.my.services.nixpkgs-age-monitor = {
-    enable = lib.mkEnableOption "nixpkgs age monitoring";
+  # my.services is one option (services.nix), so its entries are declared
+  # through its type.
+  options.my.services = lib.mkOption {
+    type = lib.types.submodule {
+      options.nixpkgs-age-monitor.enable = lib.mkEnableOption "nixpkgs age monitoring";
+    };
   };
 
   config = lib.mkIf cfg.enable {

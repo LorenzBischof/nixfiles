@@ -128,13 +128,15 @@ in
     };
   };
 
-  my.homelab.ports = [ mcpPort ];
   # The same clients as every MCP server here - see mcp.nix.
-  my.homelab.loopbackClients.${toString mcpPort} = {
-    users = [
-      "agent"
-      config.services.nginx.user
+  my.services.galaxus-mcp = {
+    ports = [ mcpPort ];
+    clients = [
+      "nginx"
+      "open-webui"
     ];
-    groups = [ "mcp" ];
+    users = [ "agent" ];
+    # It searches Galaxus.
+    internet = true;
   };
 }

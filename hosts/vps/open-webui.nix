@@ -12,10 +12,9 @@ let
   authSocket = config.services.tailscaleAuth.socketPath;
 
   # MCP servers already running on this host (cooklang.nix, galaxus.nix),
-  # reached directly over loopback as a member of their `mcp` group - see
-  # mcp.nix. An empty `access_grants` would make a connection admin-only,
-  # hence the grant to every user. `path` and `key` go unused for MCP, but the
-  # admin panel's schema requires both.
+  # reached directly over loopback - see mcp.nix. An empty `access_grants`
+  # would make a connection admin-only, hence the grant to every user. `path`
+  # and `key` go unused for MCP, but the admin panel's schema requires both.
   mcpServer = id: name: mcpPort: {
     type = "mcp";
     url = "http://127.0.0.1:${mcpPort}/mcp";
@@ -39,8 +38,6 @@ let
   };
 in
 {
-  systemd.services.open-webui.serviceConfig.SupplementaryGroups = [ "mcp" ];
-
   services.open-webui = {
     enable = true;
     host = "127.0.0.1";
@@ -85,7 +82,12 @@ in
   # The trusted header is only as trustworthy as whoever can reach the port, and
   # every process here can reach loopback - the agents included. So only nginx,
   # which only ever sends a login tailscaled vouched for, may connect to it.
-  my.homelab.loopbackClients.${toString port}.users = [ config.services.nginx.user ];
+  my.services.open-webui = {
+    ports = [ port ];
+    clients = [ "nginx" ];
+    # The model providers are on the internet.
+    internet = true;
+  };
 
   # The helper only, not `services.nginx.tailscaleAuth`: that one puts its
   # subrequest at `/auth`, which is a page of Open WebUI's own, so reloading it
@@ -147,6 +149,4 @@ in
       '';
     };
   };
-
-  my.homelab.ports = [ port ];
 }
