@@ -53,7 +53,7 @@ index 68f9071..eb80290 100644
      }
    }
 diff --git a/shared/protocol.ts b/shared/protocol.ts
-index 7798c4c..3313e7c 100644
+index 0fb0440..2889547 100644
 --- a/shared/protocol.ts
 +++ b/shared/protocol.ts
 @@ -784,6 +784,11 @@ export interface ConversationMetadata {
@@ -69,10 +69,10 @@ index 7798c4c..3313e7c 100644
     * The provider the conversation runs at, as omp, omo, gjc and pi name it (`anthropic`,
     * `openai-codex`): set by a model change and by each answer, absent when none is named.
 diff --git a/src/components/Composer.css b/src/components/Composer.css
-index c81726b..3a51c80 100644
+index c81726b..bfe3a63 100644
 --- a/src/components/Composer.css
 +++ b/src/components/Composer.css
-@@ -297,6 +297,12 @@
+@@ -297,6 +297,13 @@
    stroke-linecap: round;
  }
  
@@ -82,37 +82,44 @@ index c81726b..3a51c80 100644
 +  font-variant-numeric: tabular-nums;
 +}
 +
++.composer-cache.is-cold,
  .composer-context.is-low {
    color: var(--status-blocked);
  }
 diff --git a/src/components/Composer.tsx b/src/components/Composer.tsx
-index 341f993..d39462d 100644
+index 341f993..0adb228 100644
 --- a/src/components/Composer.tsx
 +++ b/src/components/Composer.tsx
-@@ -167,6 +167,22 @@ function ContextRing({ context }: { context: NonNullable<ConversationMetadata["c
+@@ -167,6 +167,28 @@ function ContextRing({ context }: { context: NonNullable<ConversationMetadata["c
    </span>;
  }
  
-+/** Until when the Claude prompt cache stays warm; gone once it has gone cold. */
++/** Until when the Claude prompt cache stays warm, then a warning that it has gone cold. */
 +function CacheMark({ cache }: { cache: NonNullable<ConversationMetadata["cache"]> }) {
 +  const t = useT();
 +  const [now, setNow] = useState(() => Date.now());
++  // re-armed until the wall clock has passed the expiry: a timer can fire before Date.now() gets there
 +  useEffect(() => {
 +    const left = cache.expires_at - Date.now();
-+    setNow(Date.now());
-+    if (left <= 0) return;
++    if (left <= 0) { if (now < cache.expires_at) setNow(Date.now()); return; }
 +    const timer = setTimeout(() => setNow(Date.now()), left);
 +    return () => clearTimeout(timer);
-+  }, [cache.expires_at]);
-+  if (cache.expires_at <= now) return null;
-+  const until = new Date(cache.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-+  return <span className="composer-cache" title={t("Prompt cache warm until {time}", { time: until })}>{until}</span>;
++  }, [cache.expires_at, now]);
++  const expiry = new Date(cache.expires_at);
++  const until = expiry.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
++  const cold = cache.expires_at <= now;
++  // a cold mark stays up for days on an idle conversation, so name the day once it is not today's
++  const since = cold && expiry.toDateString() !== new Date(now).toDateString()
++    ? expiry.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : until;
++  return <span className={`composer-cache${cold ? " is-cold" : ""}`}
++    title={cold ? t("Prompt cache cold since {time}", { time: since }) : t("Prompt cache warm until {time}", { time: until })}>
++    {cold ? t("cold|prompt cache") : until}</span>;
 +}
 +
  function useMediaQuery(query: string): boolean {
    const [matches, setMatches] = useState(() => window.matchMedia?.(query).matches === true);
    useEffect(() => {
-@@ -1097,7 +1113,7 @@ export function Composer({
+@@ -1097,7 +1119,7 @@ export function Composer({
      return () => observer.disconnect();
    }, [strip?.branch, strip?.folder, strip?.path, worktree, facesLoaded, t]);
    useLayoutEffect(fitStatus, [fitStatus, agent, metadata?.model, metadata?.reasoning_effort,
@@ -121,7 +128,7 @@ index 341f993..d39462d 100644
      plan?.done, plan?.total, plan?.current, statusCompact, facesLoaded, t]);
    const menuId = `composer-menu-${paneId}`;
    const menuClose = (
-@@ -1455,6 +1471,7 @@ export function Composer({
+@@ -1455,6 +1477,7 @@ export function Composer({
                  </span>
                </span>}
                {metadata?.context && <ContextRing context={metadata.context} />}
