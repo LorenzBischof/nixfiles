@@ -9,6 +9,8 @@ let
   common = {
     imports = [ ../modules/nixos/services.nix ];
     networking.nftables.enable = true;
+    # Its stub on 127.0.0.53, as on the nas.
+    services.resolved.enable = true;
 
     users.users = {
       alice = {
@@ -98,6 +100,8 @@ pkgs.testers.runNixOSTest {
 
   testScript = ''
     curl = "${pkgs.curl}/bin/curl"
+    # Straight to resolved's stub, past nscd. resolved answers from /etc/hosts.
+    resolves = "${pkgs.dig}/bin/dig +time=2 +tries=1 +short @127.0.0.53 remote | ${pkgs.gnugrep}/bin/grep -qxE '[0-9.]+'"
 
     def fetch(port, host="127.0.0.1"):
         return f"{curl} -sS --max-time 5 -o /dev/null http://{host}:{port}/"
@@ -155,6 +159,14 @@ pkgs.testers.runNixOSTest {
         machine.succeed(in_unit("other", 3005))
         # A build runs in nix-daemon's cgroup, with the nixbld group.
         refused("a nix build user on an undeclared system service", f"setpriv --reuid=30001 --regid=30000 --clear-groups -- {fetch(3005)}")
+
+    with subtest("resolved's stub answers users, builds and online services"):
+        machine.wait_for_unit("systemd-resolved.service")
+        machine.succeed(f"systemd-run -q --wait --pipe --uid=bob --slice=user.slice -- ${pkgs.bash}/bin/sh -c '{resolves}'")
+        machine.succeed(f"setpriv --reuid=30001 --regid=30000 --clear-groups -- sh -c '{resolves}'")
+        machine.succeed(f"sh -c 'echo $$ > /sys/fs/cgroup/system.slice/online.service/cgroup.procs && {resolves}'")
+        status, out = machine.execute("sh -c 'echo $$ > /sys/fs/cgroup/system.slice/offline.service/cgroup.procs && ${pkgs.dig}/bin/dig +time=2 +tries=1 @127.0.0.53 remote'")
+        assert status != 0 and ("refused" in out or "timed out" in out), f"offline service reached the stub: {status}: {out}"
 
     with subtest("a declared service reaches its targets and nothing else"):
         listening(3007)

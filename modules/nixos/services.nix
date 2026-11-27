@@ -47,6 +47,12 @@ let
 
   allPorts = lib.concatMap (s: s.ports) (lib.attrValues cfg);
 
+  # resolved's stub, where resolv.conf points: what doesn't ask nscd (a
+  # fixed-output build, a Go binary built without cgo) resolves through it.
+  # An offline service's IP filter doesn't keep it out, so the table does.
+  toStub = "ip daddr 127.0.0.53 meta l4proto { tcp, udp } th dport 53";
+  stubRule = rule: lib.optionalString config.services.resolved.enable "${toStub} ${rule}";
+
   # `requires` below declares the unit too, so look for an ExecStart, which
   # only a real service has (`script` sets one too).
   declared =
@@ -161,6 +167,9 @@ in
         set services {
           type cgroupsv2
         }
+        set online {
+          type cgroupsv2
+        }
         ${lib.concatMapStrings (name: ''
           set ${clientsSet name} {
             type cgroupsv2
@@ -172,6 +181,7 @@ in
         }
 
         chain new_on_lo {
+          ${stubRule "socket cgroupv2 level 2 @online accept"}
           ${lib.concatStringsSep "\n  " (lib.concatLists (lib.mapAttrsToList serverRules cfg))}
           tcp dport { ${lib.concatMapStringsSep ", " toString allPorts} } jump refuse
           # A declared service reaches no other port on this host.
@@ -189,6 +199,7 @@ in
         }
 
         chain user_to_system {
+          ${stubRule "accept"}
           ${acceptOpen "TCP"}
           ${acceptOpen "UDP"}
           jump refuse
@@ -243,7 +254,8 @@ in
               NFTSet = [
                 "cgroup:inet:loopback:services"
                 "cgroup:inet:loopback:${clientsSet name}"
-              ];
+              ]
+              ++ lib.optional internet "cgroup:inet:loopback:online";
             }
             # In the kernel's cgroup BPF, so independent of the table. DNS goes
             # out through nscd, D-Bus (to resolved) and resolved's socket too.
