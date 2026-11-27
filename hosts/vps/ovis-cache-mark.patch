@@ -136,42 +136,6 @@ index 341f993..0adb228 100644
                {usage !== undefined && isCurrent(usage) && usageLimit !== undefined && <span
                  className={`composer-usage${usageLimit.used_percent >= HIGH_PERCENT ? " is-high" : ""}${usage.recorded ? " is-recorded" : ""}`}
                  title={`${usageName(usage)}${usageRecorded ? `\n${usageRecorded.join("\n")}` : ""}\n${usageDetail}`}
-diff --git a/src/lib/i18n/composer.ja.ts b/src/lib/i18n/composer.ja.ts
-index 64ebc4d..a96a895 100644
---- a/src/lib/i18n/composer.ja.ts
-+++ b/src/lib/i18n/composer.ja.ts
-@@ -7,6 +7,7 @@
-  * Register and fixed terms follow ../i18n.ja.ts; a key another feature also uses goes there.
-  */
- export const COMPOSER_JA: Record<string, string> = {
-+  "Prompt cache warm until {time}": "プロンプトキャッシュは {time} まで有効",
-   "Next question": "次の質問",
-   "Edit queued message": "キュー内のメッセージを編集",
-   "Sent to Pi · waiting for transcript": "Pi に送信済み · 会話への記録を待っています",
-diff --git a/src/lib/i18n/composer.ko.ts b/src/lib/i18n/composer.ko.ts
-index d533486..c1e2b9b 100644
---- a/src/lib/i18n/composer.ko.ts
-+++ b/src/lib/i18n/composer.ko.ts
-@@ -7,6 +7,7 @@
-  * Register and fixed terms follow ../i18n.ko.ts; a key another feature also uses goes there.
-  */
- export const COMPOSER_KO: Record<string, string> = {
-+  "Prompt cache warm until {time}": "프롬프트 캐시 유지: {time}까지",
-   "Next question": "다음 질문",
-   "Edit queued message": "대기 중인 메시지 편집",
-   "Sent to Pi · waiting for transcript": "Pi로 보냄 · 대화 기록을 기다리는 중",
-diff --git a/src/lib/i18n/composer.zh.ts b/src/lib/i18n/composer.zh.ts
-index 5b62f22..8792ebc 100644
---- a/src/lib/i18n/composer.zh.ts
-+++ b/src/lib/i18n/composer.zh.ts
-@@ -7,6 +7,7 @@
-  * Register and fixed terms follow ../i18n.zh.ts; a key another feature also uses goes there.
-  */
- export const COMPOSER_ZH: Record<string, string> = {
-+  "Prompt cache warm until {time}": "提示缓存保持至 {time}",
-   "Next question": "下一个问题",
-   "Edit queued message": "编辑排队消息",
-   "Sent to Pi · waiting for transcript": "已发送到 Pi · 正在等待写入对话记录",
 diff --git a/src/lib/useChatCallbacks.ts b/src/lib/useChatCallbacks.ts
 index 94d3b61..253599a 100644
 --- a/src/lib/useChatCallbacks.ts
