@@ -557,7 +557,10 @@ in
         "grafana"
       ];
       # Scrapes vps and takes remote_write over the tailnet.
-      egress.internet = true;
+      egress = {
+        internet = true;
+        lan = true;
+      };
     };
     prometheus-node-exporter = {
       ports = [ config.services.prometheus.exporters.node.port ];

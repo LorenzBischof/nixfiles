@@ -10,6 +10,13 @@ let
   socket = "/run/syncthing/gui.sock";
 in
 {
+  # The GUI is on the socket. Peers on the LAN and the tailnet, relays and
+  # discovery on the internet.
+  my.services.syncthing.egress = {
+    internet = true;
+    lan = true;
+  };
+
   services.syncthing = {
     enable = true;
     openDefaultPorts = true;

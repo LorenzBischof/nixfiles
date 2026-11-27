@@ -2,7 +2,9 @@
 
 Not reachable from the sandboxed shell — run commands with the sandbox
 disabled. Reachable from the framework laptop's own WiFi, and from `nas`
-(see SSH section in `AGENTS.md`) for LAN-level checks (ARP, ping).
+(see SSH section in `AGENTS.md`) for LAN-level checks (ARP, ping). The nas
+refuses the LAN to non-root processes (`my.system.egress.denyLAN`), so
+run them there with `sudo`.
 
 ## API access
 
@@ -32,8 +34,8 @@ The router's own status can lie (see bug below), so cross-check from `nas`
 what's really associated at layer 2:
 
 ```bash
-ping -c1 -W1 192.168.0.X                                                        # single host
-for i in $(seq 1 254); do (ping -c1 -W1 192.168.0.$i >/dev/null 2>&1 &); done    # full sweep
+sudo ping -c1 -W1 192.168.0.X                                                        # single host
+for i in $(seq 1 254); do (sudo ping -c1 -W1 192.168.0.$i >/dev/null 2>&1 &); done    # full sweep
 ip neigh show | grep -i <mac-or-address>
 ```
 
