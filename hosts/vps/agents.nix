@@ -299,6 +299,11 @@ let
       up)
         mkdir -p "$state"
         [ -f "$key" ] || ssh-keygen -q -t ed25519 -N "" -C gha-vm -f "$key"
+        # The run takes vm.yml, and dumbpipe.nix with it, from the fork's main,
+        # which nothing keeps in sync: refuse one behind upstream's.
+        sync=$(gh api "repos/LorenzBischof/nixfiles/compare/main...lorenzbischof-agents:nixfiles:main" -q .status) || sync=""
+        [[ $sync =~ ^(identical|ahead)$ ]] ||
+          { echo "gha-vm: $repo's main is ''${sync:-unknown} against upstream's; sync it: git push fork origin/main:main" >&2; exit 1; }
         # The runner takes openssh and dumbpipe from our nixpkgs revision, and
         # dumbpipe with the same override as ours, so both ends run the same one.
         url=$(gh workflow run vm.yml -R "$repo" -f ssh_key="$(<"$key.pub")" -f minutes="''${2:-60}" \
