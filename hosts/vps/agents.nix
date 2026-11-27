@@ -27,7 +27,8 @@ let
     #
     # TODO: chat mode shows no prompt cache state. The second patch reads until
     # when the Claude prompt cache stays warm from the transcript, beside the
-    # context ring it already reads there, and shows that time next to the ring.
+    # context ring it already reads there, and shows that time next to the ring,
+    # or a warning once the cache has gone cold.
     # No upstream issue or PR (none on devswha/ovis as of 2026-11). Drop once
     # ovis shows the cache state itself.
     ovis-unwrapped = llmAgents.ovis.unwrapped.overrideAttrs (old: {
