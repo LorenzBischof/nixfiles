@@ -21,6 +21,20 @@ in
     };
   };
 
-  my.homelab.ports = [ config.services.scrutiny.settings.web.listen.port ];
+  # Both listen on every address and need nothing beyond loopback.
+  my.services = {
+    scrutiny = {
+      ports = [ config.services.scrutiny.settings.web.listen.port ];
+      ingress.from = [
+        "nginx"
+        # Posts the SMART data.
+        "scrutiny-collector"
+      ];
+    };
+    influxdb2 = {
+      ports = [ config.services.scrutiny.settings.web.influxdb.port ];
+      ingress.from = [ "scrutiny" ];
+    };
+  };
   my.homelab.dashboard.Monitoring.Scrutiny.href = "https://scrutiny.${domain}";
 }

@@ -34,6 +34,9 @@ in
     serviceConfig.RuntimeDirectory = "paperless-web";
   };
   systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "paperless" ];
+  # Every unit of it offline: it serves on the socket, keeps its database in
+  # SQLite and imports no mail, and its workers OCR untrusted documents.
+  my.services."system-paperless.slice" = { };
 
   services.nginx.virtualHosts."${paperlessDomain}" = {
     forceSSL = true;

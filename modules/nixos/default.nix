@@ -15,7 +15,7 @@
     ./monitoring-client.nix
     ./nginx.nix
     ./nixpkgs-age-monitor.nix
-    ./private-egress.nix
+    ./lan-egress.nix
     ./detect-reboot-required.nix
     ./detect-syncthing-conflicts
   ];

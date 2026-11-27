@@ -147,6 +147,15 @@ in
   };
 
   systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "esphome" ];
+  # Its dashboard is on a unix socket, its remote build server for itself
+  # alone. It flashes devices on the LAN and downloads toolchains.
+  my.services.esphome = {
+    ports = [ config.services.esphome.remoteBuildPort ];
+    egress = {
+      internet = true;
+      lan = true;
+    };
+  };
   # The dashboard creates its socket by the umask, and the module's 0077 shuts
   # nginx out. Opening only the socket keeps the umask for the state files.
   systemd.services.esphome.serviceConfig.ExecStartPost =
@@ -155,10 +164,13 @@ in
       chmod 0660 /run/esphome/esphome.sock
     '';
 
+  # The dashboard has no login of its own, and it holds the devices' keys.
   services.nginx.virtualHosts."esphome.${domain}" = {
     forceSSL = true;
     useACMEHost = domain;
+    enableAuthelia = true;
     locations."/" = {
+      enableAuthelia = true;
       proxyPass = "http://unix:/run/esphome/esphome.sock";
       proxyWebsockets = true;
     };
@@ -173,6 +185,16 @@ in
     locations."/" = {
       proxyPass = "http://localhost:8123";
       proxyWebsockets = true;
+    };
+  };
+
+  my.services.home-assistant = {
+    ports = [ 8123 ];
+    ingress.from = [ "nginx" ];
+    # Devices on the LAN, Sonos fetching media from it, cloud integrations.
+    egress = {
+      internet = true;
+      lan = true;
     };
   };
 

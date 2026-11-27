@@ -199,6 +199,14 @@ in
 
   services.resolved.enable = true;
 
+  # my.services matches services by cgroup, which needs nftables.
+  networking.nftables.enable = true;
+  # The LAN is untrusted, and the tailnet is other hosts': a service reaches
+  # them only with my.services' egress.lan.
+  # TODO: except through tailscaled's LocalAPI (see lan-egress.nix); left
+  # open as of 2026-11 so `tailscale status` works without sudo.
+  my.system.egress.denyLAN = true;
+
   services.tailscale = {
     enable = true;
     openFirewall = true;

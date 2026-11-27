@@ -50,6 +50,11 @@ in
     };
   };
 
-  my.homelab.ports = [ config.services.immich.port ];
+  # Offline: its own logins, reverse geocoding from the data it ships, and
+  # machine learning off. The browser fetches the map tiles.
+  my.services."system-immich.slice" = {
+    ports = [ config.services.immich.port ];
+    ingress.from = [ "nginx" ];
+  };
   my.homelab.dashboard.Media.Photos.href = "https://${immichDomain}";
 }

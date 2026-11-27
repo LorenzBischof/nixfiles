@@ -149,7 +149,12 @@ in
     };
     systemd.services.authelia-main.serviceConfig.RuntimeDirectory = "authelia-main";
     systemd.services.nginx.serviceConfig.SupplementaryGroups = [ "authelia-main" ];
+    # Also alone on 127.0.0.1, where its name resolves on this host: an OIDC
+    # client here reaches it through egress.localhost without reaching every
+    # other vhost on the tailnet address.
+    networking.hosts."127.0.0.1" = [ "auth.${domain}" ];
     services.nginx.virtualHosts."auth.${domain}" = {
+      listenAddresses = config.services.nginx.defaultListenAddresses ++ [ "127.0.0.1" ];
       forceSSL = true;
       useACMEHost = domain;
       locations."/" = {

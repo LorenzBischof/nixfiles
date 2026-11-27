@@ -24,14 +24,12 @@ in
   };
   config =
     let
-      port = builtins.substring 1 (
-        builtins.stringLength config.services.nixhome.address - 1
-      ) config.services.nixhome.address;
+      port = 7037;
     in
     {
       services.nixhome = {
         enable = true;
-        address = ":7037";
+        address = ":${toString port}";
         settings.apps = lib.concatMapAttrs (section: items: {
           "${section}" = lib.mapAttrsToList (name: value: {
             url = value.href;
@@ -44,12 +42,16 @@ in
         useACMEHost = domain;
         enableAuthelia = true;
         locations."/" = {
-          proxyPass = "http://127.0.0.1:${port}";
+          proxyPass = "http://127.0.0.1:${toString port}";
           proxyWebsockets = true;
           enableAuthelia = true;
         };
       };
-      my.homelab.ports = [ port ];
+      my.services.nixhome = {
+        ports = [ port ];
+        # Offline: it would fetch the apps' icons, but none is set.
+        ingress.from = [ "nginx" ];
+      };
 
     };
 }

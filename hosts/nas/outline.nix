@@ -64,6 +64,12 @@ in
   #   config.services.hedgedoc.settings.uploadsPath
   # ];
 
-  my.homelab.ports = [ config.services.outline.port ];
+  my.services.outline = {
+    ports = [ config.services.outline.port ];
+    ingress.from = [ "nginx" ];
+    # OIDC: Authelia, alone on 127.0.0.1 (authelia.nix).
+    egress.localhost = [ 443 ];
+    egress.internet = true;
+  };
   my.homelab.dashboard.Services.Notes.href = "https://${outlineDomain}";
 }

@@ -47,6 +47,12 @@ in
     }
   ];
 
-  my.homelab.ports = [ config.services.dawarich.webPort ];
+  my.services.dawarich-web = {
+    ports = [ config.services.dawarich.webPort ];
+    ingress.from = [ "nginx" ];
+    # OIDC: Authelia, alone on 127.0.0.1 (authelia.nix).
+    egress.localhost = [ 443 ];
+    egress.internet = true;
+  };
   my.homelab.dashboard.Services.Dawarich.href = "https://${dawarichDomain}";
 }

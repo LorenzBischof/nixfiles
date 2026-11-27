@@ -264,20 +264,20 @@ in
     # The same clients as every MCP server here - see mcp.nix.
     cooklang-mcp = {
       ports = [ mcpPort ];
-      clients = [
+      ingress.from = [
         "nginx"
         "open-webui"
       ];
       users = [ "agent" ];
       # fetch_recipe reads recipe pages off the web.
-      internet = true;
+      egress.internet = true;
     };
     # cook-server has no auth of its own: only nginx (the browser UI) and the
     # MCP server may connect to it. It reads the recipes from disk and needs
     # no network.
     cook-server = {
       ports = [ uiPort ];
-      clients = [
+      ingress.from = [
         "nginx"
         "cooklang-mcp"
       ];

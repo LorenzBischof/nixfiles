@@ -120,14 +120,34 @@ in
     };
   };
 
-  my.homelab.ports = [
-    config.services.audiobookshelf.port
-    config.services.radarr.settings.server.port
-    config.services.sonarr.settings.server.port
-    config.services.readarr.settings.server.port
-    6789
-    8096
-  ];
+  # Each fetches metadata or downloads off the internet.
+  my.services =
+    let
+      web = port: {
+        ports = [ port ];
+        ingress.from = [ "nginx" ];
+        egress.internet = true;
+      };
+    in
+    {
+      jellyfin = web 8096;
+      radarr = web config.services.radarr.settings.server.port;
+      sonarr = web config.services.sonarr.settings.server.port;
+      readarr = web config.services.readarr.settings.server.port;
+      # OIDC: Authelia, alone on 127.0.0.1 (authelia.nix).
+      audiobookshelf = lib.recursiveUpdate (web config.services.audiobookshelf.port) {
+        egress.localhost = [ 443 ];
+      };
+      # The *arrs hand it their downloads.
+      nzbget = web 6789 // {
+        ingress.from = [
+          "nginx"
+          "radarr"
+          "sonarr"
+          "readarr"
+        ];
+      };
+    };
 
   my.homelab.dashboard.Media = {
     Jellyfin.href = "https://jellyfin.${domain}";

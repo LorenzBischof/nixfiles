@@ -258,7 +258,7 @@
         # VM tests need KVM, which the aarch64 runners and vps lack.
         // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
           services = import ./tests/services.nix { pkgs = pkgsFor.${system}; };
-          private-egress = import ./tests/private-egress.nix { pkgs = pkgsFor.${system}; };
+          lan-egress = import ./tests/lan-egress.nix { pkgs = pkgsFor.${system}; };
         }
       );
       packages = forAllSystems (
