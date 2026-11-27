@@ -182,6 +182,9 @@ let
     "-/run/nscd"
     "-/run/dbus"
     "-/run/systemd/resolve"
+    # tailscaled's LocalAPI, open to all, dials the tailnet and
+    # 100.100.100.100 for any caller (see lan-egress.nix).
+    "-/run/tailscale"
   ];
 
   entry = lib.types.submodule {
@@ -426,7 +429,7 @@ in
             ];
           }
           # DNS goes out through nscd, D-Bus (to resolved) and resolved's
-          # socket too.
+          # socket too, and anywhere through tailscaled's LocalAPI.
           // lib.optionalAttrs (!e.egress.internet && !isSlice name) {
             InaccessiblePaths = offlinePaths;
           };

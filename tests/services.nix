@@ -71,6 +71,11 @@ let
       };
     systemd.slices.system-group.description = "Declared through my.services";
     networking.firewall.allowedTCPPorts = [ 3006 ];
+    # Stands in for tailscaled's LocalAPI socket.
+    systemd.tmpfiles.rules = [
+      "d /run/tailscale 0755 root root -"
+      "f /run/tailscale/tailscaled.sock 0666 root root -"
+    ];
 
     my.services = {
       test-server = {
@@ -210,7 +215,7 @@ pkgs.testers.runNixOSTest {
         machine.fail(in_unit("offline", 80, "remote"))
         machine.succeed(in_unit("other", 80, "remote"))
         pid = machine.succeed("systemctl show -P MainPID offline").strip()
-        for path in ("/run/nscd", "/run/dbus"):
+        for path in ("/run/nscd", "/run/dbus", "/run/tailscale"):
             machine.succeed(f"ls -A {path} | grep -q .")
             machine.succeed(f"nsenter -t {pid} -m -- sh -c '! ls -A {path} 2>/dev/null | grep -q .'")
 
@@ -225,7 +230,7 @@ pkgs.testers.runNixOSTest {
         refused("a unit in the slice on an undeclared system service", in_unit("grouped", 3005))
         machine.fail(in_unit("grouped", 80, "remote"))
         pid = machine.succeed("systemctl show -P MainPID grouped").strip()
-        for path in ("/run/nscd", "/run/dbus"):
+        for path in ("/run/nscd", "/run/dbus", "/run/tailscale"):
             machine.succeed(f"nsenter -t {pid} -m -- sh -c '! ls -A {path} 2>/dev/null | grep -q .'")
         status, out = machine.execute("sh -c 'echo $$ > /sys/fs/cgroup/system.slice/system-group.slice/grouped.service/cgroup.procs && ${pkgs.dig}/bin/dig +time=2 +tries=1 @127.0.0.53 remote'")
         assert status != 0 and ("refused" in out or "timed out" in out), f"a unit in an offline slice reached the stub: {status}: {out}"
